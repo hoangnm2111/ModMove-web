@@ -2,16 +2,10 @@ name: Web CI Pipeline (ReactJS)
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'release/**'
+    branches: [ main, develop ]
   pull_request:
-    branches:
-      - main
-      - develop
-  workflow_dispatch:
+    branches: [ main, develop ]
+  workflow_dispatch: {}
 
 jobs:
   build-and-test:
@@ -19,46 +13,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: đŸ“¥ Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: đŸŸ¢ Setup Node.js 20.x
+      - name: Setup Node.js 20.x
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: '**/package-lock.json'
 
-      - name: đŸ“¦ Install NPM Dependencies
+      - name: Install Dependencies
         run: |
           if [ -f package-lock.json ]; then
             npm ci
           elif [ -f package.json ]; then
             npm install
           else
-            echo "â„¹ï¸ package.json not yet committed. Ready for code push."
+            echo "package.json not committed yet. Environment check OK."
           fi
 
-      - name: đŸ” ESLint Code Quality Check
+      - name: ESLint Code Quality Check
         run: |
           if [ -f package.json ] && grep -q '"lint"' package.json; then
             npm run lint
           else
-            echo "â„¹ï¸ Lint script not yet configured. Linter ready."
+            echo "Lint script not configured yet. Linter ready."
           fi
 
-      - name: đŸ§ª Run React Unit Tests
+      - name: Run React Unit Tests
         run: |
           if [ -f package.json ] && grep -q '"test"' package.json; then
             npm test -- --watchAll=false
           else
-            echo "â„¹ï¸ Test script not yet configured. Test runner ready."
+            echo "Test script not configured yet. Test runner ready."
           fi
 
-      - name: đŸ”¨ Production Web Build
+      - name: Production Web Build
         run: |
           if [ -f package.json ] && grep -q '"build"' package.json; then
             npm run build
           else
-            echo "â„¹ï¸ Build script not yet configured. Builder ready."
+            echo "Build script not configured yet. Builder ready."
           fi
