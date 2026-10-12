@@ -1,0 +1,31 @@
+name: âœ¨ Feature Request
+description: Suggest an idea or feature for ModMove
+title: "[FEAT] <Short description>"
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: "Feature proposal for ModMove Delivery & Moving System."
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: What feature are you proposing?
+    validations:
+      required: true
+  - type: dropdown
+    id: epic
+    attributes:
+      label: Epic / Feature ID
+      options:
+        - "FE-01: User Access Management"
+        - "FE-02: Driver Onboarding Management"
+        - "FE-03: Shipment Booking"
+        - "FE-04: Smart Driver Matching"
+        - "FE-05: Live Trip Tracking"
+        - "FE-06: Shipping Management & POD"
+        - "FE-07: Payment Settlement (PayOS)"
+        - "FE-08: Trip Feedback Management"
+        - "FE-09: Driver Earnings Management"
+        - "FE-10: Platform Administration"
+        - "FE-11: Incident Management"
