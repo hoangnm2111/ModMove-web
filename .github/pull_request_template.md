@@ -1,10 +1,10 @@
-## đŸ“Œ Description
+## 📌 Description
 <!-- Provide a brief summary of the changes introduced in this Pull Request -->
 
 **Jira Ticket / Issue ID:** `#`
 **Feature ID:** `FE-` (e.g., `FE-01`, `FE-03`)
 
-## đŸ”„ Type of Change
+## 🔄 Type of Change
 - [ ] `feat`: New feature for user / driver / dispatcher / admin
 - [ ] `fix`: Bug fix
 - [ ] `refactor`: Code refactoring without functionality changes
@@ -12,7 +12,7 @@
 - [ ] `docs`: Documentation updates
 - [ ] `chore`: Build config, dependencies, CI/CD pipeline
 
-## âœ… Quality Checklist (Branching & CI Rules)
+## ✅ Quality Checklist (Branching & CI Rules)
 - [ ] My code strictly adheres to the project coding style conventions.
 - [ ] I have performed a self-review of my own code.
 - [ ] I have commented complex or critical business logic.
