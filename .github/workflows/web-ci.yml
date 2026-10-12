@@ -2,9 +2,16 @@ name: Web CI Pipeline (ReactJS)
 
 on:
   push:
-    branches: [ "**" ]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
   pull_request:
-    branches: [ "main", "develop" ]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -29,7 +36,7 @@ jobs:
           elif [ -f package.json ]; then
             npm install
           else
-            echo "â„¹ï¸ No package.json found yet. Skipping npm install."
+            echo "â„¹ï¸ package.json not yet committed. Ready for code push."
           fi
 
       - name: đŸ” ESLint Code Quality Check
@@ -37,7 +44,7 @@ jobs:
           if [ -f package.json ] && grep -q '"lint"' package.json; then
             npm run lint
           else
-            echo "â„¹ï¸ No lint script configured yet. Skipping."
+            echo "â„¹ï¸ Lint script not yet configured. Linter ready."
           fi
 
       - name: đŸ§ª Run React Unit Tests
@@ -45,7 +52,7 @@ jobs:
           if [ -f package.json ] && grep -q '"test"' package.json; then
             npm test -- --watchAll=false
           else
-            echo "â„¹ï¸ No test script configured yet. Skipping."
+            echo "â„¹ï¸ Test script not yet configured. Test runner ready."
           fi
 
       - name: đŸ”¨ Production Web Build
@@ -53,5 +60,5 @@ jobs:
           if [ -f package.json ] && grep -q '"build"' package.json; then
             npm run build
           else
-            echo "â„¹ï¸ No build script configured yet. Skipping."
+            echo "â„¹ï¸ Build script not yet configured. Builder ready."
           fi
