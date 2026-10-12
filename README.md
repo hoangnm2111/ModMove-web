@@ -1,4 +1,4 @@
-# đŸ’» ModMove - Web Management Portal
+# 💻 ModMove - Web Management Portal
 
 [![Web CI Pipeline (ReactJS)](https://github.com/hoangnm2111/ModMove-web/actions/workflows/web-ci.yml/badge.svg)](https://github.com/hoangnm2111/ModMove-web/actions/workflows/web-ci.yml)
 
@@ -9,7 +9,7 @@ Operations and management web portal built with **ReactJS** for the **ModMove On
 
 ---
 
-## đŸ› ï¸ Technology Stack
+## 🛠️ Technology Stack
 - **Framework:** React 18+ (Vite / TypeScript)
 - **UI & Components:** Tailwind CSS / Ant Design
 - **Real-Time Monitoring:** SignalR / WebSocket client for active driver markers
@@ -18,7 +18,7 @@ Operations and management web portal built with **ReactJS** for the **ModMove On
 
 ---
 
-## đŸŒ¿ GitFlow & Contribution Rules
+## 🌿 GitFlow & Contribution Rules
 - `main`: Production-ready branch. Direct push is prohibited.
 - `develop`: Primary integration branch.
 - `feature/<name>`: Individual feature branch (e.g., `feature/trink`).
