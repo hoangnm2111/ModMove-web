@@ -56,7 +56,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   step: 1,
   pickup: DEFAULT_PICKUP,
   dropoff: DEFAULT_DROPOFF,
-  selectedVehicle: DEFAULT_VEHICLES[2], // Xe tải 1 tấn
+  selectedVehicle: DEFAULT_VEHICLES[0], // Xe tải dưới 1 tấn
   cargo: {
     name: 'Đồ chuyển trọ: 1 tủ quần áo gỗ 2 cánh, 1 đệm 1m6, 5 thùng đồ cá nhân',
     weightKg: 280,

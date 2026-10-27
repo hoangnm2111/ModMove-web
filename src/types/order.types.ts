@@ -1,5 +1,6 @@
 export type OrderStatus =
   | 'PlaceOrder'
+  | 'Pending'
   | 'Accepted'
   | 'Arrived'
   | 'PickedUp'
@@ -7,6 +8,7 @@ export type OrderStatus =
   | 'Delivered'
   | 'Completed'
   | 'Cancelled';
+
 
 export type PaymentMethod = 'PayOS' | 'Cash' | 'Wallet';
 export type PaymentStatus = 'Unpaid' | 'Paid';
@@ -69,6 +71,7 @@ export interface ShippingOrder {
   servicesFee: number;
   discountFee: number;
   totalFee: number;
+  codAmount?: number;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;

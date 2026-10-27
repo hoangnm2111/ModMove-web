@@ -5,6 +5,7 @@ import { CustomerLayout } from '../layouts/CustomerLayout';
 import { LandingPage } from '../pages/landing/LandingPage';
 import { BookingPage } from '../pages/customer/BookingPage';
 import { OrdersPage } from '../pages/customer/OrdersPage';
+import { LiveTrackingPage } from '../pages/customer/LiveTrackingPage';
 import { WalletPage } from '../pages/customer/WalletPage';
 import { DriverHomePage } from '../pages/driver/DriverHomePage';
 import { DriverEarningsPage } from '../pages/driver/DriverEarningsPage';
@@ -80,6 +81,16 @@ export const AppRoutes: React.FC = () => {
           <ProtectedRoute allowedRoles={['Customer']}>
             <CustomerLayout>
               <OrdersPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tracking"
+        element={
+          <ProtectedRoute allowedRoles={['Customer']}>
+            <CustomerLayout>
+              <LiveTrackingPage />
             </CustomerLayout>
           </ProtectedRoute>
         }
