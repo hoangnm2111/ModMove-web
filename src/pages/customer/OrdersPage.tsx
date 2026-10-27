@@ -3,10 +3,12 @@ import { orderService } from '../../services/order.service';
 import { ShippingOrder } from '../../types/order.types';
 import { ORDER_STATUS_CONFIG } from '../../constants';
 import { formatCurrency, formatDate, formatDistance } from '../../utils/format';
-import { Package, Clock, MapPin, Truck, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Package, Clock, MapPin, Truck, ChevronRight, CheckCircle2, Menu } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { useCustomerLayout } from '../../layouts/CustomerLayout';
 
 export const OrdersPage: React.FC = () => {
+  const { toggleSidebar } = useCustomerLayout();
   const [orders] = useState<ShippingOrder[]>(() => orderService.getOrders());
   const [selectedTab, setSelectedTab] = useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [selectedOrder, setSelectedOrder] = useState<ShippingOrder | null>(orders[0] || null);
@@ -31,10 +33,20 @@ export const OrdersPage: React.FC = () => {
         {/* Header Tabs */}
         <div className="p-4 border-b border-slate-200">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Package className="w-5 h-5 text-brand-500" />
-              Lịch sử đơn vận chuyển
-            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1 -ml-1 text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                title="Mở menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Package className="w-5 h-5 text-brand-500" />
+                Lịch sử đơn vận chuyển
+              </h2>
+            </div>
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
               {orders.length} đơn
             </span>

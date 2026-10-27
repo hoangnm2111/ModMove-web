@@ -28,7 +28,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const customerLinks = [
-    { to: '/', label: 'Đặt chuyến chuyển đồ', icon: PackagePlus },
+    { to: '/booking', label: 'Đặt chuyến chuyển đồ', icon: PackagePlus },
     { to: '/orders', label: 'Quản lý đơn hàng', icon: ClipboardList },
     { to: '/wallet', label: 'Ví & Nạp tiền PayOS', icon: CreditCard },
   ];

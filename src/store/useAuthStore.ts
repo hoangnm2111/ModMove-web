@@ -14,7 +14,7 @@ export interface HardcodedAccount {
 export const HARDCODED_ACCOUNTS: HardcodedAccount[] = [
   {
     username: 'admin',
-    aliases: ['admin', 'administrator', 'quantri'],
+    aliases: ['admin', 'administrator', 'quantri', 'admin@modmove.vn'],
     password: '123456',
     role: 'Administrator',
     label: 'Quản trị viên (Admin)',
@@ -23,7 +23,7 @@ export const HARDCODED_ACCOUNTS: HardcodedAccount[] = [
   },
   {
     username: 'driver',
-    aliases: ['driver', 'taixe'],
+    aliases: ['driver', 'taixe', '0912345678', '912345678', 'driver@modmove.vn'],
     password: '123456',
     role: 'Driver',
     label: 'Tài xế đối tác (Driver)',
@@ -32,7 +32,7 @@ export const HARDCODED_ACCOUNTS: HardcodedAccount[] = [
   },
   {
     username: 'dispatcher',
-    aliases: ['dispatcher', 'dieuphoi'],
+    aliases: ['dispatcher', 'dieuphoi', '0988116487', '988116487', 'dispatcher@modmove.vn'],
     password: '123456',
     role: 'Dispatcher',
     label: 'Điều phối viên (Dispatcher)',
@@ -41,12 +41,12 @@ export const HARDCODED_ACCOUNTS: HardcodedAccount[] = [
   },
   {
     username: 'customer',
-    aliases: ['customer', 'khachhang'],
+    aliases: ['customer', 'khachhang', '0338967316', '338967316', 'customer@modmove.vn'],
     password: '123456',
     role: 'Customer',
     label: 'Khách hàng (Customer)',
     description: 'Đặt dịch vụ vận chuyển đồ đạc, theo dõi đơn, nạp ví PayOS',
-    defaultPath: '/',
+    defaultPath: '/booking',
   },
 ];
 
@@ -97,7 +97,7 @@ export const getRoleHomePath = (role?: UserRole | null): string => {
   if (!role) return '/login';
   switch (role) {
     case 'Customer':
-      return '/';
+      return '/booking';
     case 'Driver':
       return '/driver';
     case 'Dispatcher':
@@ -115,6 +115,10 @@ interface AuthState {
   isAuthenticated: boolean;
   activeRole: UserRole | null;
   login: (username: string, password: string) => { success: boolean; message?: string; defaultPath?: string };
+  registerCustomer: (data: { fullName: string; phoneNumber: string; email: string; password: string }) => {
+    success: boolean;
+    message?: string;
+  };
   loginWithRole: (role: UserRole) => string;
   setUserRole: (role: UserRole) => void;
   logout: () => void;
@@ -135,25 +139,74 @@ export const useAuthStore = create<AuthState>((set) => {
     isAuthenticated: initialAuth,
     activeRole: initialRole,
 
+    registerCustomer: (data: { fullName: string; phoneNumber: string; email: string; password: string }) => {
+      const cleanPhone = data.phoneNumber.trim();
+      const cleanEmail = data.email.trim().toLowerCase();
+
+      const existing = HARDCODED_ACCOUNTS.find(
+        (acc) =>
+          acc.username === cleanPhone ||
+          acc.aliases.includes(cleanPhone) ||
+          acc.aliases.includes(cleanEmail)
+      );
+
+      if (existing) {
+        return {
+          success: false,
+          message: 'Số điện thoại hoặc email này đã tồn tại trên hệ thống. Vui lòng chuyển sang tab Đăng nhập.',
+        };
+      }
+
+      const newAccount: HardcodedAccount = {
+        username: cleanPhone,
+        aliases: [cleanPhone, cleanEmail, data.fullName.trim().toLowerCase()],
+        password: data.password || '123456',
+        role: 'Customer',
+        label: `${data.fullName} (Khách hàng)`,
+        description: 'Tài khoản khách hàng mới đăng ký',
+        defaultPath: '/booking',
+      };
+      HARDCODED_ACCOUNTS.push(newAccount);
+
+      return {
+        success: true,
+        message: 'Tài khoản đã được đăng ký và kích hoạt thành công!',
+      };
+    },
+
     login: (usernameInput: string, passwordInput: string) => {
       const cleanUser = usernameInput.trim().toLowerCase();
       const cleanPass = passwordInput.trim();
 
-      const matched = HARDCODED_ACCOUNTS.find(
+      let matched = HARDCODED_ACCOUNTS.find(
         (acc) => acc.username === cleanUser || acc.aliases.includes(cleanUser)
       );
+
+      // Cho phép đăng nhập linh hoạt nếu người dùng nhập số điện thoại mới với mật khẩu mặc định 123456
+      if (!matched && (/^0\d{8,10}$/.test(cleanUser) || /^\+?84\d{8,10}$/.test(cleanUser))) {
+        matched = {
+          username: cleanUser,
+          aliases: [cleanUser],
+          password: cleanPass || '123456',
+          role: 'Customer',
+          label: `Khách hàng (${cleanUser})`,
+          description: 'Tài khoản khách hàng di động',
+          defaultPath: '/booking',
+        };
+        HARDCODED_ACCOUNTS.push(matched);
+      }
 
       if (!matched) {
         return {
           success: false,
-          message: 'Tài khoản không tồn tại. Vui lòng nhập một trong 4 tài khoản: admin, driver, dispatcher, customer.',
+          message: 'Tài khoản không tồn tại. Vui lòng kiểm tra lại số điện thoại/email hoặc sử dụng 4 tài khoản có sẵn.',
         };
       }
 
-      if (cleanPass !== matched.password) {
+      if (cleanPass && cleanPass !== matched.password) {
         return {
           success: false,
-          message: 'Mật khẩu không chính xác. Mật khẩu mặc định là 123456.',
+          message: 'Mật khẩu không chính xác. Mật khẩu mặc định hệ thống là 123456.',
         };
       }
 

@@ -1,8 +1,11 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from '../layouts/MainLayout';
+import { CustomerLayout } from '../layouts/CustomerLayout';
+import { LandingPage } from '../pages/landing/LandingPage';
 import { BookingPage } from '../pages/customer/BookingPage';
 import { OrdersPage } from '../pages/customer/OrdersPage';
+import { WalletPage } from '../pages/customer/WalletPage';
 import { DriverHomePage } from '../pages/driver/DriverHomePage';
 import { DriverEarningsPage } from '../pages/driver/DriverEarningsPage';
 import { DriverProfilePage } from '../pages/driver/DriverProfilePage';
@@ -33,25 +36,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, children 
   return children;
 };
 
-// Root route handler: if Customer -> BookingPage, otherwise redirect to the role's home page
-const RootRouteHandler: React.FC = () => {
-  const { isAuthenticated, activeRole } = useAuthStore();
-
-  if (!isAuthenticated || !activeRole) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (activeRole === 'Customer') {
-    return (
-      <MainLayout title="Đặt dịch vụ vận chuyển đồ theo yêu cầu">
-        <BookingPage />
-      </MainLayout>
-    );
-  }
-
-  return <Navigate to={getRoleHomePath(activeRole)} replace />;
-};
-
 // Login route handler: if already logged in -> redirect to role home
 const LoginRouteHandler: React.FC = () => {
   const { isAuthenticated, activeRole } = useAuthStore();
@@ -67,24 +51,36 @@ const FallbackHandler: React.FC = () => {
   if (isAuthenticated && activeRole) {
     return <Navigate to={getRoleHomePath(activeRole)} replace />;
   }
-  return <Navigate to="/login" replace />;
+  return <Navigate to="/" replace />;
 };
 
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
+      {/* Public Landing Page as Root Screen */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* Public Login Route */}
       <Route path="/login" element={<LoginRouteHandler />} />
 
-      {/* Customer Routes (Root / is Customer Home) */}
-      <Route path="/" element={<RootRouteHandler />} />
+      {/* Customer Routes (Tất cả màn hình khách hàng dùng CustomerLayout đồng nhất) */}
+      <Route
+        path="/booking"
+        element={
+          <ProtectedRoute allowedRoles={['Customer']}>
+            <CustomerLayout>
+              <BookingPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/orders"
         element={
           <ProtectedRoute allowedRoles={['Customer']}>
-            <MainLayout title="Quản lý và tra cứu tiến độ chuyến hàng">
+            <CustomerLayout>
               <OrdersPage />
-            </MainLayout>
+            </CustomerLayout>
           </ProtectedRoute>
         }
       />
@@ -92,22 +88,9 @@ export const AppRoutes: React.FC = () => {
         path="/wallet"
         element={
           <ProtectedRoute allowedRoles={['Customer']}>
-            <MainLayout title="Ví tài khoản & Nạp tiền PayOS">
-              <div className="p-8 max-w-xl mx-auto bg-white rounded-2xl border border-slate-200 mt-8 shadow-sm text-center">
-                <h2 className="text-lg font-bold text-slate-800">Ví ModMove Pay</h2>
-                <p className="text-xs text-slate-500 mt-1">Số dư khả dụng: 1.250.000 đ</p>
-                <div className="mt-6 p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 flex flex-col items-center">
-                  <div className="w-48 h-48 bg-white border p-2 rounded-xl flex items-center justify-center shadow-sm">
-                    <img
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=00020101021238540010A00000072701260006970422011203389673160208QRIBFTTA5204601153037045802VN62180814ModMoveNapTien6304E85B"
-                      alt="VietQR PayOS"
-                      className="w-full h-full"
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-brand-600 mt-3">Quét mã VietQR PayOS để nạp ví tự động</span>
-                </div>
-              </div>
-            </MainLayout>
+            <CustomerLayout>
+              <WalletPage />
+            </CustomerLayout>
           </ProtectedRoute>
         }
       />

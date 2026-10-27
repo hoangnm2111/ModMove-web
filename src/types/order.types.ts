@@ -38,6 +38,8 @@ export interface CargoItem {
   weightKg: number;
   quantity: number;
   images: string[];
+  dimensions?: string;
+  type?: string;
   aiNotes?: string;
 }
 
