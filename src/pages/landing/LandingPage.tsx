@@ -32,7 +32,7 @@ export const LandingPage: React.FC = () => {
 
   // Carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [activeTab, setActiveTab] = useState<'bike' | 'pickup' | 'truck' | 'house'>('house');
+  const [activeTab, setActiveTab] = useState<'van' | 'pickup' | 'truck' | 'house'>('house');
 
   // Quick booking quote inputs
   const [pickupAddr, setPickupAddr] = useState('72 Lê Thánh Tôn, Bến Nghé, Quận 1, TP.HCM');
@@ -50,35 +50,35 @@ export const LandingPage: React.FC = () => {
       mainTitle: 'Chuyển nhà',
       subtitle: 'Thảnh thơi dọn về nhà mới • Khảo sát miễn phí • Đóng gói bọc lót kỹ càng • Cam kết đền bù 100% nếu xảy ra hư hại',
       tags: ['Bọc lót chống trầy xước', 'Tháo lắp giường tủ/máy lạnh', 'Đội ngũ bốc vác nhiệt tình'],
-      primaryCta: 'Giao hàng ngay',
+      primaryCta: 'Đặt xe tải ngay',
       secondaryCta: 'Xem bảng giá dịch vụ',
-      themeGradient: 'from-orange-500 via-amber-500 to-amber-600',
+      themeGradient: 'from-slate-800 via-slate-700 to-slate-900',
       bgType: 'moving',
     },
     {
       id: 2,
-      badge: 'GIAO HÀNG HỎA TỐC 30 PHÚT',
+      badge: 'VẬN CHUYỂN NHANH CHÓNG NỘI ĐÔ',
       brand: 'ModMove',
       highlightTitle: 'XE TẢI & BÁN TẢI',
-      mainTitle: 'Giao hàng siêu tốc',
-      subtitle: 'Đội xe hơn 15.000 tài xế phủ khắp nội thành • Sẵn sàng có mặt sau 15 phút gọi • Vận chuyển hàng hóa cồng kềnh an toàn',
+      mainTitle: 'Hạm đội xe tải chuyên nghiệp',
+      subtitle: 'Đội ngũ xe tải phủ khắp các quận huyện • Tiếp cận điểm nhận sau 15 phút gọi • Vận chuyển hàng hóa cồng kềnh an toàn',
       tags: ['Tải trọng 500kg - 2 tấn', 'Lưu thông giờ cao điểm', 'Theo dõi lộ trình GPS trực tiếp'],
-      primaryCta: 'Giao hàng ngay',
+      primaryCta: 'Đặt xe tải ngay',
       secondaryCta: 'Tra cước xe tải',
-      themeGradient: 'from-orange-600 via-red-500 to-amber-500',
+      themeGradient: 'from-blue-900 via-slate-800 to-slate-900',
       bgType: 'express',
     },
     {
       id: 3,
-      badge: 'GIẢI PHÁP LOGISTICS TOÀN DIỆN',
+      badge: 'GIẢI PHÁP LOGISTICS DOANH NGHIỆP',
       brand: 'ModMove',
-      highlightTitle: 'DOANH NGHIỆP',
-      mainTitle: 'Tối ưu chi phí 30%',
-      subtitle: 'Quản lý chuỗi giao nhận tập trung • Tích hợp API tự động • Hóa đơn VAT điện tử • Đối soát linh hoạt theo chu kỳ',
+      highlightTitle: 'VẬN TẢI HÀNG HÓA',
+      mainTitle: 'Tối ưu chi phí và thời gian',
+      subtitle: 'Quản lý chuỗi giao nhận tập trung • Hóa đơn VAT điện tử • Đội ngũ bốc xếp chuyên nghiệp • Đối soát định kỳ',
       tags: ['Chiết khấu doanh nghiệp', 'Báo cáo lộ trình realtime', 'Hỗ trợ sự cố 24/7'],
-      primaryCta: 'Giao hàng ngay',
+      primaryCta: 'Đặt xe tải ngay',
       secondaryCta: 'Tư vấn doanh nghiệp',
-      themeGradient: 'from-blue-600 via-indigo-600 to-orange-500',
+      themeGradient: 'from-slate-900 via-blue-950 to-slate-900',
       bgType: 'enterprise',
     },
   ];
@@ -115,27 +115,27 @@ export const LandingPage: React.FC = () => {
 
   const vehicles = [
     {
-      id: 'bike',
-      name: 'Xe máy siêu tốc',
-      capacity: 'Dưới 30kg',
-      price: 'Từ 16.000 đ',
-      desc: 'Hàng nhỏ gọn, tài liệu, đồ ăn',
-      icon: Package,
-    },
-    {
       id: 'pickup',
       name: 'Xe bán tải 500kg',
       capacity: 'Dưới 500kg',
       price: 'Từ 150.000 đ',
-      desc: 'Đồ gia dụng, tủ lạnh nhỏ, bàn ghế',
+      desc: 'Đồ gia dụng, máy giặt, tủ lạnh nhỏ, bàn ghế',
       icon: Truck,
     },
     {
       id: 'truck',
-      name: 'Xe tải 1 - 2 tấn',
-      capacity: '1000 - 2000kg',
-      price: 'Từ 280.000 đ',
-      desc: 'Hàng hóa cồng kềnh, chuyển trọ lớn',
+      name: 'Xe tải nhỏ 1 - 1.5 tấn',
+      capacity: '1000 - 1500kg',
+      price: 'Từ 250.000 đ',
+      desc: 'Hàng cồng kềnh, chuyển trọ sinh viên, văn phòng',
+      icon: Truck,
+    },
+    {
+      id: 'heavy_truck',
+      name: 'Xe tải lớn 2 tấn thùng kín',
+      capacity: '1500 - 2000kg',
+      price: 'Từ 380.000 đ',
+      desc: 'Hàng kho bãi, nội thất lớn, vận chuyển đường dài',
       icon: Truck,
     },
     {
@@ -143,27 +143,21 @@ export const LandingPage: React.FC = () => {
       name: 'Chuyển nhà trọn gói',
       capacity: 'Trọn gói phòng/nhà',
       price: 'Khảo sát & Báo giá',
-      desc: 'Bọc lót, tháo lắp tủ giường, khuân vác',
+      desc: 'Bao bọc màng PE, bốc vác, tháo lắp trọn gói',
       icon: Home,
     },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans select-none">
-      {/* 1. TOP ANNOUNCEMENT BAR (Tùy chọn hiển thị ưu đãi) */}
-      <div className="bg-gradient-to-r from-orange-600 via-brand-500 to-amber-500 text-white text-[11px] sm:text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '4s' }} />
-        <span>Ưu đãi tháng này: Nhập mã <strong className="underline uppercase tracking-wider">MODMOVE2026</strong> giảm ngay 25% cho chuyến chuyển nhà đầu tiên!</span>
-        <button
-          onClick={handleGiaoHangNgay}
-          className="hidden md:inline-block ml-3 px-2 py-0.5 bg-white text-brand-600 rounded-md font-bold text-[10px] hover:bg-orange-50 transition"
-        >
-          Nhận ưu đãi
-        </button>
+      {/* 1. TOP ANNOUNCEMENT BAR */}
+      <div className="bg-slate-800 text-slate-200 text-[11px] sm:text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2 border-b border-slate-700">
+        <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+        <span>Hệ thống dịch vụ xe tải & chuyển nhà trọn gói ModMove • Hỗ trợ vận chuyển 24/7</span>
       </div>
 
-      {/* 2. HEADER / NAVBAR (CHUẨN THEO ẢNH AHAMOVE MẪU) */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/90 shadow-sm backdrop-blur-md bg-white/95">
+      {/* 2. HEADER / NAVBAR */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 sm:h-20 flex items-center justify-between">
           {/* Left: Brand Logo & Mascot */}
           <div className="flex items-center gap-8">
@@ -171,20 +165,19 @@ export const LandingPage: React.FC = () => {
               onClick={() => navigate('/')}
               className="flex items-center gap-2.5 cursor-pointer group"
             >
-              {/* Mascot / Logo icon Aha-style */}
-              <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand-500 flex items-center justify-center text-white shadow-md shadow-orange-500/30 group-hover:scale-105 transition-transform duration-200">
-                <Truck className="w-6 h-6 stroke-[2.2]" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></span>
+              {/* Mascot / Logo icon */}
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
+                <Truck className="w-5 h-5 text-blue-400" />
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center">
-                  <span className="text-2xl sm:text-[26px] font-black tracking-tight text-slate-900 group-hover:text-brand-600 transition-colors">
-                    Mod<span className="text-brand-500">Move</span>
+                  <span className="text-2xl sm:text-[26px] font-black tracking-tight text-slate-900">
+                    Mod<span className="text-blue-600">Move</span>
                   </span>
-                  <span className="text-[10px] font-bold text-brand-500 align-super ml-0.5">®</span>
+                  <span className="text-[10px] font-bold text-slate-400 align-super ml-0.5">®</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase -mt-1 hidden sm:block">
-                  Vận chuyển & Chuyển nhà
+                <span className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase -mt-1 hidden sm:block">
+                  Vận tải xe tải chuyên nghiệp
                 </span>
               </div>
             </div>
@@ -229,14 +222,14 @@ export const LandingPage: React.FC = () => {
                     </div>
                     <div
                       onClick={handleGiaoHangNgay}
-                      className="p-2.5 rounded-xl hover:bg-orange-50 cursor-pointer transition flex items-center gap-3 group"
+                      className="p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer transition flex items-center gap-3 group"
                     >
-                      <div className="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center group-hover:bg-red-500 group-hover:text-white transition">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
                         <Package className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-900 group-hover:text-brand-600">Giao hàng xe máy siêu tốc</div>
-                        <div className="text-[11px] text-slate-500">Giao ngay sau 30 phút đặt đơn</div>
+                        <div className="text-xs font-bold text-slate-900 group-hover:text-brand-600">Bốc xếp & Khuân vác</div>
+                        <div className="text-[11px] text-slate-500">Tài xế và phụ xe hỗ trợ 2 đầu</div>
                       </div>
                     </div>
                   </div>
@@ -521,7 +514,7 @@ export const LandingPage: React.FC = () => {
                     onClick={() => setActiveTab(v.id as any)}
                     className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                       isSelected
-                        ? 'bg-brand-500 text-white shadow-md shadow-orange-500/20'
+                        ? 'bg-slate-900 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
                     }`}
                   >
@@ -577,24 +570,22 @@ export const LandingPage: React.FC = () => {
 
             {/* Giá ước tính & Nút Giao Hàng Ngay */}
             <div className="md:col-span-4 flex items-center gap-3">
-              <div className="flex-1 bg-orange-50 border border-orange-200/80 p-2.5 rounded-xl text-center">
-                <div className="text-[10px] font-bold text-orange-700 uppercase">Ước tính từ</div>
-                <div className="text-base font-extrabold text-brand-600">
-                  {activeTab === 'bike'
-                    ? '25.000 đ'
-                    : activeTab === 'pickup'
-                    ? '185.000 đ'
+              <div className="flex-1 bg-slate-100 border border-slate-200 p-2.5 rounded-xl text-center">
+                <div className="text-[10px] font-bold text-slate-500 uppercase">Ước tính từ</div>
+                <div className="text-base font-extrabold text-blue-600">
+                  {activeTab === 'pickup'
+                    ? '150.000 đ'
                     : activeTab === 'truck'
-                    ? '350.000 đ'
+                    ? '280.000 đ'
                     : '1.200.000 đ'}
                 </div>
               </div>
 
               <button
                 onClick={handleGiaoHangNgay}
-                className="flex-1 py-3 px-4 bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <span>Giao hàng ngay</span>
+                <span>Đặt xe tải ngay</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -605,24 +596,24 @@ export const LandingPage: React.FC = () => {
       {/* 5. DANH MỤC DỊCH VỤ MODMOVE TOÀN DIỆN */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-brand-700 font-bold text-xs mb-2">
-            <Award className="w-3.5 h-3.5" />
-            <span>HỆ SINH THÁI DỊCH VỤ 5 SAO</span>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs mb-2">
+            <Award className="w-3.5 h-3.5 text-blue-600" />
+            <span>DỊCH VỤ VẬN TẢI CHUYÊN NGHIỆP</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Giải pháp vận chuyển đa dạng mọi nhu cầu
+            Giải pháp xe tải vận chuyển đa dạng mọi nhu cầu
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-2">
-            Từ gói hàng nhỏ gọn đến chuyển nhà nguyên căn, ModMove luôn có phương tiện và đội ngũ phù hợp nhất cho bạn.
+            Từ kiện hàng gia dụng đến chuyển nhà trọn gói, ModMove luôn có xe tải và đội ngũ bốc xếp chuyên nghiệp.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Card 1: Chuyển nhà */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-brand-300 transition-all duration-300 flex flex-col justify-between group">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:border-slate-400 transition-all duration-200 flex flex-col justify-between group">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-2xl bg-orange-100 text-brand-600 flex items-center justify-center font-bold mb-4 group-hover:scale-110 transition-transform">
-                <Home className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold mb-4">
+                <Home className="w-6 h-6 text-blue-600" />
               </div>
               <h3 className="text-base font-bold text-slate-900 group-hover:text-brand-600 transition-colors">
                 Chuyển nhà trọn gói
@@ -646,12 +637,12 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Card 2: Xe bán tải 500kg */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-brand-300 transition-all duration-300 flex flex-col justify-between group">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:border-slate-400 transition-all duration-200 flex flex-col justify-between group">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold mb-4 group-hover:scale-110 transition-transform">
-                <Truck className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold mb-4">
+                <Truck className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-brand-600 transition-colors">
+              <h3 className="text-base font-bold text-slate-900">
                 Xe bán tải 500kg
               </h3>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
@@ -659,13 +650,13 @@ export const LandingPage: React.FC = () => {
               </p>
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
                 <span>Giá mở cửa:</span>
-                <span className="text-brand-600 font-bold">150.000 đ</span>
+                <span className="text-blue-600 font-bold">150.000 đ</span>
               </div>
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100">
               <button
                 onClick={handleGiaoHangNgay}
-                className="w-full py-2 bg-white hover:bg-brand-500 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 hover:border-brand-500 transition"
+                className="w-full py-2 bg-white hover:bg-slate-900 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 transition"
               >
                 Đặt xe bán tải
               </button>
@@ -673,12 +664,12 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Card 3: Xe tải 1 - 2 tấn */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-brand-300 transition-all duration-300 flex flex-col justify-between group">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:border-slate-400 transition-all duration-200 flex flex-col justify-between group">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center font-bold mb-4 group-hover:scale-110 transition-transform">
-                <Layers className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold mb-4">
+                <Layers className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-brand-600 transition-colors">
+              <h3 className="text-base font-bold text-slate-900">
                 Xe tải thùng kín 1 - 2 tấn
               </h3>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
@@ -686,13 +677,13 @@ export const LandingPage: React.FC = () => {
               </p>
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
                 <span>Giá mở cửa:</span>
-                <span className="text-brand-600 font-bold">250.000 đ</span>
+                <span className="text-blue-600 font-bold">250.000 đ</span>
               </div>
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100">
               <button
                 onClick={handleGiaoHangNgay}
-                className="w-full py-2 bg-white hover:bg-brand-500 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 hover:border-brand-500 transition"
+                className="w-full py-2 bg-white hover:bg-slate-900 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 transition"
               >
                 Đặt xe tải chở hàng
               </button>
@@ -700,12 +691,12 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Card 4: Dịch vụ bốc xếp */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-brand-300 transition-all duration-300 flex flex-col justify-between group">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:border-slate-400 transition-all duration-200 flex flex-col justify-between group">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold mb-4 group-hover:scale-110 transition-transform">
-                <ShieldCheck className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold mb-4">
+                <ShieldCheck className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-brand-600 transition-colors">
+              <h3 className="text-base font-bold text-slate-900">
                 Bốc xếp & Khuân vác 2 đầu
               </h3>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
@@ -719,9 +710,9 @@ export const LandingPage: React.FC = () => {
             <div className="p-4 bg-slate-50 border-t border-slate-100">
               <button
                 onClick={handleGiaoHangNgay}
-                className="w-full py-2 bg-white hover:bg-brand-500 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 hover:border-brand-500 transition"
+                className="w-full py-2 bg-white hover:bg-slate-900 hover:text-white text-slate-800 text-xs font-bold rounded-xl border border-slate-200 transition"
               >
-                Thêm bốc xếp
+                Đặt bốc xếp đi kèm
               </button>
             </div>
           </div>
@@ -861,7 +852,7 @@ export const LandingPage: React.FC = () => {
                 <li><a onClick={handleGiaoHangNgay} className="hover:text-brand-400 cursor-pointer transition">Xe bán tải 500kg</a></li>
                 <li><a onClick={handleGiaoHangNgay} className="hover:text-brand-400 cursor-pointer transition">Xe tải 1 - 2 tấn</a></li>
                 <li><a onClick={handleGiaoHangNgay} className="hover:text-brand-400 cursor-pointer transition">Dịch vụ bốc xếp 2 đầu</a></li>
-                <li><a onClick={handleGiaoHangNgay} className="hover:text-brand-400 cursor-pointer transition">Giao hàng siêu tốc xe máy</a></li>
+                <li><a onClick={handleGiaoHangNgay} className="hover:text-brand-400 cursor-pointer transition">Hợp đồng vận chuyển xe tải</a></li>
               </ul>
             </div>
 

@@ -16,3 +16,8 @@ skills/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Screen capture artifacts
+screens_html/
+screens_purged/
+screens_clean/

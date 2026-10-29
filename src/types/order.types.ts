@@ -25,7 +25,7 @@ export interface LocationPoint {
 export interface VehicleOption {
   id: string;
   name: string;
-  category: 'BIKE' | 'VAN' | 'TRUCK_500KG' | 'TRUCK_1TON' | 'TRUCK_2TON';
+  category: 'VAN' | 'TRUCK_500KG' | 'TRUCK_1TON' | 'TRUCK_2TON';
   tag: string;
   capacityText: string;
   dimensions: string;

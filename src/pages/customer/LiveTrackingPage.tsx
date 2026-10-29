@@ -466,17 +466,17 @@ export const LiveTrackingPage: React.FC = () => {
               </div>
 
               {/* Map floating ETA Badge at Top Right */}
-              <div className="absolute top-6 right-6 z-20 bg-gradient-to-r from-brand-500 to-orange-600 text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-orange-400/50">
+              <div className="absolute top-6 right-6 z-20 bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-xs flex items-center gap-3 border border-slate-700">
                 <div className="text-right">
-                  <div className="text-[10px] font-semibold text-orange-100 uppercase tracking-wider">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                     Dự kiến đến nơi (ETA)
                   </div>
-                  <div className="text-lg font-black leading-tight">
+                  <div className="text-lg font-black leading-tight text-blue-400">
                     ~{etaMinutes} Phút
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-                  <Navigation className="w-4 h-4 text-white animate-spin" />
+                <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                  <Navigation className="w-4 h-4 text-blue-400" />
                 </div>
               </div>
 
@@ -727,20 +727,20 @@ export const LiveTrackingPage: React.FC = () => {
             {/* 1. KHỐI KIỂM TRA ĐƠN HÀNG TRƯỚC KHI TÀI XẾ DI CHUYỂN (PickedUp / InTransit) */}
             {/* ========================================================================= */}
             {['PickedUp', 'InTransit', 'Arrived'].includes(currentOrder?.status || '') && (
-              <div className="bg-gradient-to-b from-orange-50/80 via-white to-white border-2 border-brand-500 rounded-2xl p-4 sm:p-5 shadow-md shadow-orange-500/10 space-y-3.5 animate-slideRight">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5 animate-slideRight">
                 {/* Header */}
-                <div className="flex items-center justify-between pb-2.5 border-b border-orange-200">
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold shadow-xs">
+                    <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
                       <ImageIcon className="w-4 h-4" />
                     </div>
                     <div>
                       <h4 className="font-black text-xs sm:text-sm text-slate-900 leading-tight">
                         Kiểm tra đơn hàng trước khi tài xế di chuyển
                       </h4>
-                      <span className="text-[10px] text-brand-600 font-extrabold uppercase">
+                      <span className="text-[10px] text-blue-600 font-extrabold uppercase">
                         {currentOrder?.status === 'PickedUp'
-                          ? 'Yêu cầu khách duyệt khởi hành (UC-CUS-12)'
+                          ? 'Yêu cầu khách duyệt khởi hành'
                           : 'Đã kiểm tra & Đang trên đường giao'}
                       </span>
                     </div>
@@ -1263,24 +1263,24 @@ export const LiveTrackingPage: React.FC = () => {
 
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 overflow-hidden border border-slate-100 flex flex-col max-h-[92vh] animate-slideRight">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-brand-500 to-orange-600 text-white px-5 py-3.5 flex items-center justify-between flex-shrink-0">
+            <div className="bg-slate-900 border-b border-slate-800 text-white px-5 py-3.5 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-                  <ImageIcon className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm sm:text-base leading-tight">
-                    Kiểm tra ảnh hiện trạng trước khi khởi hành (UC-CUS-11 & 12)
+                  <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white">
+                    Kiểm tra ảnh hiện trạng trước khi khởi hành
                   </h3>
-                  <p className="text-[11px] text-orange-100 font-medium">
-                    Tài xế {driver.name} đã kiểm đếm và tải lên 2 ảnh theo quy định GB-11
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Tài xế {driver.name} đã kiểm đếm và tải lên ảnh hàng hóa
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowPickupProofModal(false)}
-                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

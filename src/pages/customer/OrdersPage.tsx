@@ -180,7 +180,6 @@ export const OrdersPage: React.FC = () => {
 
       // 3. Tag / Service filter
       if (selectedTag !== 'ALL') {
-        if (selectedTag === 'BIKE' && o.vehicle.category !== 'BIKE') return false;
         if (selectedTag === 'VAN' && o.vehicle.category !== 'VAN') return false;
         if (selectedTag === 'TRUCK' && !o.vehicle.category.includes('TRUCK')) return false;
       }
@@ -293,8 +292,7 @@ export const OrdersPage: React.FC = () => {
             onChange={(e) => setSelectedTag(e.target.value)}
             className="appearance-none pl-8 pr-7 py-2 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl outline-none cursor-pointer transition shadow-xs"
           >
-            <option value="ALL">Tags: Tất cả dịch vụ</option>
-            <option value="BIKE">Xe máy</option>
+            <option value="ALL">Tags: Tất cả xe</option>
             <option value="VAN">Xe bán tải 500kg</option>
             <option value="TRUCK">Xe tải 1 - 2 tấn</option>
           </select>

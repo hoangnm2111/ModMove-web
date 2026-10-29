@@ -32,6 +32,7 @@ export const LoginPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Register form state (from SRS Document UC-GST-01 & Image 2)
+  const [regRole, setRegRole] = useState<'Customer' | 'Driver'>('Customer');
   const [regFullName, setRegFullName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -152,14 +153,21 @@ export const LoginPage: React.FC = () => {
 
       setOtpSuccess(true);
       setTimeout(() => {
-        // Automatically log in the new Customer
-        const loginRes = login(regPhone, regPassword);
+        // Automatically log in the new Customer or Driver
         setShowOtpModal(false);
-        if (loginRes.success && loginRes.defaultPath) {
-          navigate(loginRes.defaultPath, { replace: true });
+        if (regRole === 'Driver') {
+          // Khởi tạo tài khoản Driver mới với trạng thái hồ sơ Draft / Chưa nộp
+          useAuthStore.getState().loginWithRole('Driver');
+          // Chuyển thẳng tài xế tới màn hình nộp hồ sơ pháp lý
+          navigate('/driver/profile', { replace: true });
         } else {
-          setActiveTab('login');
-          setLoginPhone(regPhone);
+          const loginRes = login(regPhone, regPassword);
+          if (loginRes.success && loginRes.defaultPath) {
+            navigate(loginRes.defaultPath, { replace: true });
+          } else {
+            setActiveTab('login');
+            setLoginPhone(regPhone);
+          }
         }
       }, 1000);
     }, 400);
@@ -179,51 +187,45 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen w-full relative flex items-center justify-start overflow-hidden bg-slate-100 select-none">
       {/* 1. ELEGANT CALM WHITE / LIGHT NEUTRAL BACKGROUND (MÀU TRẦM TRẮNG DỄ NHÌN) */}
       <div className="absolute inset-0 z-0 bg-slate-100">
-        {/* Soft subtle gradient layers */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-slate-50 to-orange-50/40" />
-
-        {/* Soft, calm ambient glows - non-glaring */}
-        <div className="absolute top-1/6 left-1/4 w-96 h-96 bg-orange-200/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-sky-100/40 rounded-full blur-3xl pointer-events-none" />
+        {/* Soft subtle background */}
+        <div className="absolute inset-0 bg-slate-50" />
         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
       </div>
 
-      {/* 2. RIGHT-SIDE ILLUSTRATION / PHOTO OF COURIER & CUSTOMER (MATCHING USER SCREENSHOT) */}
+      {/* 2. RIGHT-SIDE ILLUSTRATION / PHOTO OF COURIER & CUSTOMER */}
       <div className="hidden lg:flex absolute right-0 top-0 bottom-0 w-7/12 items-end justify-center pointer-events-none z-10 overflow-hidden">
-        {/* Authentic photography of courier & happy customer generated specifically for ModMove */}
         <img
           src="/images/auth-banner.jpg"
-          alt="ModMove Driver and Customer"
-          className="h-full w-full object-cover object-center max-h-screen filter drop-shadow-2xl"
+          alt="ModMove Truck Courier and Customer"
+          className="h-full w-full object-cover object-center max-h-screen filter drop-shadow-xl"
           onError={(e) => {
-            // Fallback to high quality unsplash if local image fails
             (e.target as HTMLImageElement).src =
               'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1600&q=80';
           }}
         />
       </div>
 
-      {/* 3. MAIN FLOATING WHITE CARD (EXACTLY MATCHING USER SCREENSHOT 1 & 2) */}
+      {/* 3. MAIN FLOATING WHITE CARD */}
       <div className="relative z-20 w-full max-w-xl mx-auto lg:mx-0 lg:ml-12 xl:ml-24 px-4 py-8">
-        <div className="bg-white rounded-[28px] sm:rounded-[32px] shadow-2xl p-6 sm:p-10 border border-slate-100/80 backdrop-blur-md max-w-md w-full mx-auto">
+        <div className="bg-white rounded-[24px] shadow-xl p-6 sm:p-10 border border-slate-200/80 max-w-md w-full mx-auto">
           {/* Header: Logo and Return Home Button */}
           <div className="flex items-center justify-between mb-6">
             <div
               onClick={() => navigate('/')}
               className="flex items-center gap-2.5 cursor-pointer group"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center text-white shadow-md shadow-orange-500/30 group-hover:scale-105 transition-transform">
-                <Truck className="w-5 h-5 stroke-[2.2]" />
+              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
+                <Truck className="w-5 h-5 text-blue-400" />
               </div>
               <div className="text-2xl font-black text-slate-900 tracking-tight">
-                Mod<span className="text-brand-500">Move</span>
-                <span className="text-[10px] text-brand-500 align-super ml-0.5 font-bold">®</span>
+                Mod<span className="text-blue-600">Move</span>
+                <span className="text-[10px] text-slate-400 align-super ml-0.5 font-bold">®</span>
               </div>
             </div>
 
             <button
               onClick={() => navigate('/')}
-              className="text-xs font-semibold text-slate-400 hover:text-brand-600 flex items-center gap-1 transition"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Trang chủ</span>
@@ -239,7 +241,7 @@ export const LoginPage: React.FC = () => {
               }}
               className={`pb-3 text-base sm:text-lg transition-all relative ${
                 activeTab === 'login'
-                  ? 'font-extrabold text-slate-900 border-b-2 border-brand-500'
+                  ? 'font-extrabold text-slate-900 border-b-2 border-slate-900'
                   : 'font-semibold text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -253,7 +255,7 @@ export const LoginPage: React.FC = () => {
               }}
               className={`pb-3 text-base sm:text-lg transition-all relative ${
                 activeTab === 'register'
-                  ? 'font-extrabold text-slate-900 border-b-2 border-brand-500'
+                  ? 'font-extrabold text-slate-900 border-b-2 border-slate-900'
                   : 'font-semibold text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -334,13 +336,13 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* TIẾP TỤC BUTTON (GRAY WHEN EMPTY, ORANGE WHEN FILLED) */}
+              {/* TIẾP TỤC BUTTON */}
               <button
                 type="submit"
                 disabled={!isLoginValid || isSubmitting}
                 className={`w-full h-12 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-200 ${
                   isLoginValid
-                    ? 'bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-orange-500/30 cursor-pointer active:scale-98'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer active:scale-98'
                     : 'bg-[#CBD5E1] text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -438,9 +440,44 @@ export const LoginPage: React.FC = () => {
           {/* ========================================================================= */}
           {activeTab === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+              {/* Lựa chọn vai trò đăng ký: Khách hàng vs Tài xế */}
+              <div className="p-1 bg-slate-100 rounded-2xl flex items-center gap-1 border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setRegRole('Customer')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    regRole === 'Customer'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Khách hàng</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegRole('Driver')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    regRole === 'Driver'
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-brand-600'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Đối tác tài xế</span>
+                </button>
+              </div>
+
+              {regRole === 'Driver' && (
+                <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200/80 text-[11px] text-brand-800 leading-snug">
+                  Sau khi xác thực tài khoản, bạn sẽ được chuyển tới bước tải lên hồ sơ pháp lý xe để gửi Ban Quản Trị thẩm định.
+                </div>
+              )}
+
               {/* Field 1: Tên đầy đủ */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Tên đầy đủ</label>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  {regRole === 'Driver' ? 'Họ và tên tài xế (Theo CCCD)' : 'Tên đầy đủ'}
+                </label>
                 <input
                   type="text"
                   value={regFullName}
@@ -569,7 +606,7 @@ export const LoginPage: React.FC = () => {
                 disabled={!isRegisterValid}
                 className={`w-full h-12 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 mt-4 transition-all duration-200 ${
                   isRegisterValid
-                    ? 'bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-orange-500/30 cursor-pointer active:scale-98'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer active:scale-98'
                     : 'bg-[#CBD5E1] text-slate-500 cursor-not-allowed'
                 }`}
               >

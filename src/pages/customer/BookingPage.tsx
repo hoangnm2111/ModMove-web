@@ -1386,21 +1386,21 @@ export const BookingPage: React.FC = () => {
           {/* Modal Container: Chiều ngang rộng rãi cân đối (max-w-2xl ~ 680px), không bị vướng chiều cao */}
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 overflow-hidden border border-slate-100 animate-slideRight my-auto flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-brand-500 to-orange-600 text-white px-5 py-3 flex items-center justify-between flex-shrink-0">
+            <div className="bg-slate-900 border-b border-slate-800 text-white px-5 py-3 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shadow-xs">
-                  <QrCode className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shadow-xs">
+                  <QrCode className="w-4 h-4 text-blue-400" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-sm sm:text-base leading-tight">
+                    <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white">
                       Thanh toán VietQR PayOS
                     </h3>
-                    <span className="text-[10px] bg-white/20 font-bold px-2 py-0.5 rounded-full text-orange-50">
+                    <span className="text-[10px] bg-slate-800 border border-slate-700 font-bold px-2 py-0.5 rounded-full text-blue-400">
                       Tự động khớp lệnh 24/7
                     </span>
                   </div>
-                  <p className="text-[11px] text-orange-100 font-medium">
+                  <p className="text-[11px] text-slate-400 font-medium">
                     Mở ứng dụng ngân hàng bất kỳ để quét mã QR bên dưới
                   </p>
                 </div>
@@ -1408,7 +1408,7 @@ export const BookingPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowQrModal(false)}
-                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -94,14 +94,14 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-700/80 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-black text-lg shadow-md shadow-orange-500/30">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 flex items-center justify-center font-black text-lg shadow-xs">
             M
           </div>
           <div>
             <div className="font-extrabold text-white text-base tracking-wide flex items-center gap-1.5">
-              ModMove <span className="text-[10px] bg-brand-500/20 text-brand-400 px-1.5 py-0.5 rounded font-bold">PORTAL</span>
+              ModMove <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-bold">TRUCK</span>
             </div>
-            <div className="text-[11px] text-slate-400">On-Demand Moving App</div>
+            <div className="text-[11px] text-slate-400">Vận tải xe tải trực tuyến</div>
           </div>
         </div>
       </div>
@@ -123,7 +123,7 @@ export const Sidebar: React.FC = () => {
         {activeRole === 'Customer' && (
           <div>
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2 flex items-center gap-2">
-              <PackagePlus className="w-3.5 h-3.5 text-brand-400" />
+              <PackagePlus className="w-3.5 h-3.5 text-blue-400" />
               Khách hàng / Đặt đơn
             </div>
             <div className="space-y-1">
@@ -136,7 +136,7 @@ export const Sidebar: React.FC = () => {
                     className={({ isActive }) =>
                       `flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition ${
                         isActive
-                          ? 'bg-brand-500 text-white shadow-sm shadow-orange-500/30 font-bold'
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
                           : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                       }`
                     }

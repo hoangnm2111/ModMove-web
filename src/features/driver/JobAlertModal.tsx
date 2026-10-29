@@ -28,22 +28,22 @@ export const JobAlertModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-brand-500 animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
         {/* Top Priority Header */}
-        <div className="bg-gradient-to-r from-brand-500 to-orange-600 p-4 text-white flex items-center justify-between">
+        <div className="bg-slate-900 border-b border-slate-800 p-4 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center animate-bounce">
-              <Truck className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+              <Truck className="w-4 h-4 text-blue-400" />
             </div>
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-orange-100">Đơn Điều Phối Mới</div>
-              <div className="text-sm font-black">Có cuốc xe phù hợp xung quanh!</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Đơn Điều Phối Mới</div>
+              <div className="text-sm font-black text-white">Có cuốc xe phù hợp xung quanh!</div>
             </div>
           </div>
 
           {/* 30s Countdown Ring */}
-          <div className="flex items-center gap-1 bg-white/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold">
-            <Clock className="w-3.5 h-3.5 text-white animate-spin" />
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-xs font-mono font-bold text-slate-300">
+            <Clock className="w-3.5 h-3.5 text-blue-400 animate-spin" />
             <span>{jobCountdown}s</span>
           </div>
         </div>
@@ -98,7 +98,7 @@ export const JobAlertModal: React.FC = () => {
             variant="primary"
             size="lg"
             onClick={acceptJobOffer}
-            className="flex-1 bg-brand-500 hover:bg-brand-600 shadow-md shadow-orange-500/30"
+            className="flex-1"
           >
             <Check className="w-5 h-5 mr-1" /> NHẬN ĐƠN NGAY
           </Button>

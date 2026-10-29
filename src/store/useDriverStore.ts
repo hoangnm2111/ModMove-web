@@ -9,8 +9,9 @@ export type DriverTripStage =
   | 'IN_TRANSIT'
   | 'POD_DELIVERY'
   | 'TRIP_COMPLETED';
-
-interface DriverState {
+export interface DriverState {
+  profileApprovalStatus: 'Approved' | 'Pending' | 'Rejected' | 'Draft';
+  rejectionReason: string;
   isOnline: boolean;
   jobAlert: ShippingOrder | null;
   jobCountdown: number;
@@ -25,9 +26,11 @@ interface DriverState {
   todayEarnings: number;
   todayTripsCount: number;
 
+  setProfileApprovalStatus: (status: 'Approved' | 'Pending' | 'Rejected' | 'Draft', reason?: string) => void;
   toggleOnline: () => void;
   triggerJobOffer: (order?: ShippingOrder) => void;
   acceptJobOffer: () => void;
+  acceptSpecificOrder: (order: ShippingOrder) => void;
   declineJobOffer: () => void;
   setTripStage: (stage: DriverTripStage) => void;
   addInspectionPhoto: (photoUrl: string) => void;
@@ -43,6 +46,8 @@ export const useDriverStore = create<DriverState>((set, get) => {
   const sampleTrip = allOrders[0] || null;
 
   return {
+    profileApprovalStatus: 'Approved',
+    rejectionReason: 'Ảnh chụp sổ đăng kiểm bị mờ nhòe góc tem kiểm định, vui lòng chụp lại rõ nét cả 2 trang.',
     isOnline: true,
     jobAlert: null,
     jobCountdown: 30,
@@ -60,7 +65,19 @@ export const useDriverStore = create<DriverState>((set, get) => {
     todayEarnings: 865000 * 0.8, // Net 80% (deducted 20% commission)
     todayTripsCount: 3,
 
+    setProfileApprovalStatus: (status, reason) => {
+      set({
+        profileApprovalStatus: status,
+        rejectionReason: reason || '',
+        isOnline: status === 'Approved' ? get().isOnline : false,
+      });
+    },
+
     toggleOnline: () => {
+      // GB-03: Tài xế chỉ được phép Bật xe (Online) khi hồ sơ đã được Approved
+      if (get().profileApprovalStatus !== 'Approved') {
+        return;
+      }
       const nextOnline = !get().isOnline;
       set({ isOnline: nextOnline });
       if (nextOnline && !get().activeTrip) {
@@ -136,6 +153,14 @@ export const useDriverStore = create<DriverState>((set, get) => {
           jobAlert: null,
         });
       }
+    },
+
+    acceptSpecificOrder: (order: ShippingOrder) => {
+      set({
+        activeTrip: order,
+        tripStage: 'NAVIGATING_PICKUP',
+        jobAlert: null,
+      });
     },
 
     declineJobOffer: () => {

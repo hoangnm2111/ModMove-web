@@ -48,7 +48,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
   const isTrackingActive = location.pathname === '/tracking';
   const isWalletActive = location.pathname === '/wallet';
 
-  const handleServiceClick = (serviceType: 'bike' | 'truck' | 'house') => {
+  const handleServiceClick = (serviceType: 'truck' | 'house') => {
     if (window.innerWidth < 768) {
       setIsSidebarOpen(false);
     }
@@ -70,48 +70,48 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
   // Content for expanded sidebar (exactly matches AhaMove style in Image 2)
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-white text-slate-800 select-none overflow-hidden">
-      {/* 1. Header: AhaMove iconic Orange Theme with white logo & close button */}
-      <div className="bg-brand-500 text-white p-4 flex-shrink-0 shadow-sm">
+      {/* 1. Header: Clean Corporate Logistics Header */}
+      <div className="bg-slate-900 text-white p-4 flex-shrink-0 border-b border-slate-800">
         <div className="flex items-center justify-between pb-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-white text-brand-500 flex items-center justify-center font-bold shadow-xs">
-              <Truck className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold border border-slate-700">
+              <Truck className="w-4 h-4 text-blue-400" />
             </div>
             <span className="text-xl font-black tracking-tight text-white">
-              Mod<span className="text-amber-200">Move</span>
+              Mod<span className="text-blue-500">Move</span>
             </span>
           </div>
           <button
             type="button"
             onClick={() => setIsSidebarOpen(false)}
-            className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer"
+            className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
             title="Đóng menu"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Profile Card inside orange header */}
-        <div className="bg-white/15 backdrop-blur-xs border border-white/25 rounded-2xl p-3 shadow-inner">
+        {/* Profile Card */}
+        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white text-brand-600 font-black text-sm flex items-center justify-center shadow-xs flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs flex-shrink-0">
               {user?.fullName?.charAt(0) || 'H'}
             </div>
             <div className="overflow-hidden flex-1">
               <div className="font-extrabold text-xs sm:text-sm text-white truncate">
                 {user?.fullName || 'Khách hàng ModMove'}
               </div>
-              <div className="text-[11px] text-white/80 truncate">
+              <div className="text-[11px] text-slate-400 truncate">
                 {user?.email || 'customer@modmove.vn'}
               </div>
             </div>
           </div>
 
-          <div className="mt-2.5 pt-2 border-t border-white/20 flex items-center justify-between text-[11px]">
-            <span className="text-white/85 font-medium">Hạng thành viên:</span>
-            <span className="bg-white/20 text-white font-bold px-2 py-0.5 rounded-full flex items-center gap-1 text-[11px] cursor-pointer hover:bg-white/30 transition">
-              <span>Vàng (Gold)</span>
-              <ChevronRight className="w-3 h-3 text-white/80" />
+          <div className="mt-2.5 pt-2 border-t border-slate-700/80 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400 font-medium">Hạng thành viên:</span>
+            <span className="bg-slate-700 text-slate-200 font-bold px-2 py-0.5 rounded-full flex items-center gap-1 text-[11px] cursor-pointer hover:bg-slate-600 transition">
+              <span>Doanh nghiệp / Vàng</span>
+              <ChevronRight className="w-3 h-3 text-slate-400" />
             </span>
           </div>
         </div>
@@ -122,7 +122,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
         {/* Section 1: DỊCH VỤ */}
         <div>
           <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5 font-extrabold px-3">
-            Dịch vụ
+            Dịch vụ vận chuyển
           </div>
           <div className="space-y-1">
             {/* Giao hàng xe tải */}
@@ -132,18 +132,18 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
               onClick={() => handleServiceClick('truck')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                 isBookingActive
-                  ? 'bg-orange-50 text-brand-600 font-bold border border-orange-200/80 shadow-xs'
+                  ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300'
                   : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-orange-100/80 text-brand-600 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                   <Truck className="w-4 h-4" />
                 </div>
-                <span className="font-semibold">Giao hàng xe tải</span>
+                <span className="font-semibold">Đặt xe tải vận chuyển</span>
               </div>
-              <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                -100K
+              <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                Tiết kiệm
               </span>
             </button>
           </div>
@@ -162,7 +162,7 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
               onClick={() => handleNavigate('/tracking')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                 isTrackingActive
-                  ? 'bg-orange-50 text-brand-600 font-bold border border-orange-200/80 shadow-xs'
+                  ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300'
                   : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
@@ -185,11 +185,11 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
               onClick={() => handleNavigate('/orders')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                 isOrdersActive
-                  ? 'bg-orange-50 text-brand-600 font-bold border border-orange-200/80 shadow-xs'
+                  ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300'
                   : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
-              <div className="w-7 h-7 rounded-lg bg-sky-100/80 text-sky-700 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
                 <Clock className="w-4 h-4" />
               </div>
               <span className="font-semibold">Lịch sử đơn hàng</span>
@@ -209,12 +209,12 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
               onClick={() => handleNavigate('/wallet')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                 isWalletActive
-                  ? 'bg-orange-50 text-brand-600 font-bold border border-orange-200/80 shadow-xs'
+                  ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300'
                   : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-indigo-100/80 text-indigo-700 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <span className="font-semibold">Ví ModMove Pay (VietQR)</span>
@@ -271,8 +271,8 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
                 onClick={() => handleServiceClick('truck')}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
                   isBookingActive
-                    ? 'bg-brand-500 text-white shadow-md shadow-orange-500/25'
-                    : 'text-slate-500 hover:bg-orange-50 hover:text-brand-600'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
                 title="Giao hàng xe tải"
               >
@@ -289,8 +289,8 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
                 onClick={() => handleNavigate('/tracking')}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
                   isTrackingActive
-                    ? 'bg-brand-500 text-white shadow-md shadow-orange-500/25'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
                 title="Theo dõi trực tiếp"
               >
@@ -305,8 +305,8 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
                 onClick={() => handleNavigate('/orders')}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
                   isOrdersActive
-                    ? 'bg-brand-500 text-white shadow-md shadow-orange-500/25'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
                 title="Lịch sử đơn hàng"
               >
@@ -321,8 +321,8 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
                 onClick={() => handleNavigate('/wallet')}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
                   isWalletActive
-                    ? 'bg-brand-500 text-white shadow-md shadow-orange-500/25'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
                 title="Ví ModMove Pay (VietQR)"
               >
