@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
+import { toast } from '../../components/ui/feedback';
+import { msg } from '../../constants/messages';
+import { useAllOrders } from '../../hooks/useDomainData';
+import { formatDateTime } from '../../utils/format';
 import {
   Radio,
   AlertTriangle,
@@ -21,8 +25,6 @@ import {
   CreditCard,
   DollarSign,
 } from 'lucide-react';
-import { orderService } from '../../services/order.service';
-import { ShippingOrder } from '../../types/order.types';
 import { ORDER_STATUS_CONFIG } from '../../constants';
 import { formatCurrency, formatDistance } from '../../utils/format';
 
@@ -89,41 +91,66 @@ const MOCK_FLEET: ActiveFleetVehicle[] = [
   },
 ];
 
+interface OrderDetailsView {
+  code: string;
+  status: string;
+  createdAt: string;
+  customerName: string;
+  customerPhone: string;
+  pickupAddress: string;
+  pickupContact: string;
+  pickupPhone: string;
+  dropoffAddress: string;
+  dropoffContact: string;
+  dropoffPhone: string;
+  cargoName: string;
+  cargoWeight: number;
+  cargoPhoto?: string;
+  baseFee: number;
+  distanceFee: number;
+  servicesFee: number;
+  totalFee: number;
+  paymentMethod: string;
+}
+
+/** SCR-39 – Bản đồ giám sát đội xe (UC-DIS-01). Vị trí xe là dữ liệu mô phỏng cho đến khi có Driver App. */
 export const LiveMapPage: React.FC = () => {
-  const [orders] = useState<ShippingOrder[]>(() => orderService.getOrders());
+  const orders = useAllOrders();
   const [fleetList, setFleetList] = useState<ActiveFleetVehicle[]>(MOCK_FLEET);
   const [selectedVehicle, setSelectedVehicle] = useState<ActiveFleetVehicle>(MOCK_FLEET[0]);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_TRANSIT' | 'ONLINE_IDLE' | 'INCIDENT_STOP'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [currentOrderDetails, setCurrentOrderDetails] = useState<any>(null);
+  const [currentOrderDetails, setCurrentOrderDetails] = useState<OrderDetailsView | null>(null);
 
   const handleOpenOrderDetails = () => {
     if (!selectedVehicle.activeOrderCode) return;
     const found = orders.find((o) => o.code === selectedVehicle.activeOrderCode);
 
+    if (!found) {
+      toast.warning(msg('MSG38'));
+      return;
+    }
     const normalizedOrder = {
-      code: selectedVehicle.activeOrderCode,
-      status: found?.status || 'InTransit',
-      createdAt: found?.createdAt || '29/10/2026 14:15',
-      customerName: found?.customerName || 'Hoàng Nguyễn Mạnh',
-      customerPhone: found?.customerPhone || '0338967316',
-      pickupAddress: found?.pickup?.address || 'Tòa Keangnam Landmark 72, Nam Từ Liêm, Hà Nội',
-      pickupContact: found?.pickup?.contactName || 'Hoàng Nguyễn Mạnh',
-      pickupPhone: found?.pickup?.contactPhone || '0338967316',
-      dropoffAddress: found?.dropoff?.address || 'Khu đô thị Vinhomes Smart City, Tây Mỗ, Hà Nội',
-      dropoffContact: found?.dropoff?.contactName || 'Trịnh Thúy Vy',
-      dropoffPhone: found?.dropoff?.contactPhone || '0981223344',
-      cargoName: found?.cargo?.name || 'Nội thất gia đình & đồ đạc chuyển nhà',
-      cargoWeight: found?.cargo?.weightKg || 450,
-      cargoPhoto:
-        found?.cargo?.images?.[0] ||
-        'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80',
-      baseFee: found?.baseFee || 150000,
-      distanceFee: found?.distanceFee || 90000,
-      servicesFee: found?.servicesFee || 80000,
-      totalFee: found?.totalFee || 320000,
-      paymentMethod: found?.paymentMethod || 'PayOS',
+      code: found.code,
+      status: found.status,
+      createdAt: formatDateTime(found.createdAt),
+      customerName: found.customerName,
+      customerPhone: found.customerPhone,
+      pickupAddress: found.pickup.address,
+      pickupContact: found.pickup.contactName,
+      pickupPhone: found.pickup.contactPhone,
+      dropoffAddress: found.dropoff.address,
+      dropoffContact: found.dropoff.contactName,
+      dropoffPhone: found.dropoff.contactPhone,
+      cargoName: found.cargo.description,
+      cargoWeight: found.cargo.weightKg,
+      cargoPhoto: found.cargo.photos[0],
+      baseFee: found.fare.distanceFare,
+      distanceFee: 0,
+      servicesFee: found.fare.loadingFee,
+      totalFee: found.fare.total,
+      paymentMethod: found.paymentMethod,
     };
 
     setCurrentOrderDetails(normalizedOrder);
@@ -186,7 +213,7 @@ export const LiveMapPage: React.FC = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setStatusFilter(tab.id as any)}
+                onClick={() => setStatusFilter(tab.id as typeof statusFilter)}
                 className={`py-1.5 rounded-lg transition cursor-pointer ${
                   statusFilter === tab.id
                     ? 'bg-white text-slate-900 shadow-xs font-black'
@@ -314,13 +341,9 @@ export const LiveMapPage: React.FC = () => {
                 </div>
               </div>
 
-              <a
-                href={`tel:${selectedVehicle.driverPhone}`}
-                className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 flex items-center justify-center transition shadow-xs"
-                title="Gọi điện trực tiếp cho tài xế"
-              >
-                <Phone className="w-4 h-4" />
-              </a>
+              <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 text-[11px] font-bold flex items-center gap-1 select-text">
+                <Phone className="w-3.5 h-3.5" /> {selectedVehicle.driverPhone}
+              </span>
             </div>
 
             {/* Live Telemetry Info */}
@@ -398,13 +421,6 @@ export const LiveMapPage: React.FC = () => {
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">KHÁCH HÀNG ĐẶT ĐƠN</span>
-                  <a
-                    href={`tel:${currentOrderDetails.customerPhone}`}
-                    className="text-xs text-sky-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span>Gọi điện</span>
-                  </a>
                 </div>
                 <div className="font-black text-xs text-slate-900">{currentOrderDetails.customerName}</div>
                 <div className="text-[11px] font-mono text-slate-500">{currentOrderDetails.customerPhone}</div>
@@ -414,13 +430,6 @@ export const LiveMapPage: React.FC = () => {
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TÀI XẾ ĐANG VẬN CHUYỂN</span>
-                  <a
-                    href={`tel:${selectedVehicle.driverPhone}`}
-                    className="text-xs text-emerald-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span>Gọi tài xế</span>
-                  </a>
                 </div>
                 <div className="font-black text-xs text-slate-900">{selectedVehicle.driverName}</div>
                 <div className="text-[11px] font-mono text-slate-500">

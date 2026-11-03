@@ -1,678 +1,400 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Download, MapPin, Search, X } from 'lucide-react';
+import { Button } from '../../components/Button';
+import { Banner, confirm, toast } from '../../components/ui/feedback';
+import { OrderStatusBadge } from '../../components/ui/StatusBadge';
+import { PayOsModal } from '../../features/payment/PayOsModal';
+import { CancelOrderModal, ComplaintModal, RatingModal, ReplyInfoModal } from '../../features/orders/OrderActionModals';
+import { ORDER_STATUS_CONFIG, REFUND_SOURCE_LABEL, REFUND_STATUS_LABEL } from '../../constants';
+import { msg } from '../../constants/messages';
+import { canComplain, canCustomerCancel, ratingRestriction } from '../../domain/orderRules';
+import { useCustomerOrders, useRefunds } from '../../hooks/useDomainData';
 import { orderService } from '../../services/order.service';
-import { ShippingOrder, OrderStatus } from '../../types/order.types';
-import { ORDER_STATUS_CONFIG } from '../../constants';
-import { formatCurrency } from '../../utils/format';
-import {
-  Search,
-  Calendar,
-  Tag,
-  Download,
-  Copy,
-  Check,
-  RotateCw,
-  ExternalLink,
-  X,
-  Truck,
-  MapPin,
-  Clock,
-  User,
-  Phone,
-  DollarSign,
-  AlertCircle,
-  ShieldCheck,
-  ChevronRight,
-  Package,
-  Radio,
-} from 'lucide-react';
-import { useCustomerLayout } from '../../layouts/CustomerLayout';
-import { useOrderStore } from '../../store/useOrderStore';
+import { caseService } from '../../services/case.service';
+import { errorMessage } from '../../services/mock/storage';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useBookingDraftStore } from '../../store/useBookingDraftStore';
+import { OrderStatus, ShippingOrder } from '../../types/order.types';
+import { Refund } from '../../types/case.types';
+import { downloadCsv, formatCurrency, formatDateTime } from '../../utils/format';
 
-// Tabs strictly following the Order Lifecycle in Report-3 SRS:
-// Pending (PlaceOrder) -> Accepted -> Arrived -> PickedUp -> InTransit -> Delivered -> Completed | Cancelled
-type TabKey =
-  | 'ALL'
-  | 'PlaceOrder'
-  | 'Accepted'
-  | 'Arrived'
-  | 'PickedUp'
-  | 'InTransit'
-  | 'Delivered'
-  | 'Completed'
-  | 'Cancelled';
+type TabKey = 'ALL' | OrderStatus;
+const TABS: TabKey[] = ['ALL', 'Pending', 'Accepted', 'Arrived', 'PickedUp', 'InTransit', 'Delivered', 'Completed', 'Cancelled'];
+const TIME_RANGES = [
+  { key: 'ALL', label: 'Mọi thời gian', days: Infinity },
+  { key: '7D', label: '7 ngày', days: 7 },
+  { key: '30D', label: '30 ngày', days: 30 },
+] as const;
 
-interface TabItem {
-  key: TabKey;
-  label: string;
-}
+type ModalState =
+  | { kind: 'cancel' | 'complaint' | 'rating' | 'pay'; order: ShippingOrder }
+  | { kind: 'reply'; refund: Refund }
+  | null;
 
-const SRS_STATUS_TABS: TabItem[] = [
-  { key: 'ALL', label: 'Tất cả' },
-  { key: 'PlaceOrder', label: 'Đang tìm tài xế' },
-  { key: 'Accepted', label: 'Đã nhận đơn' },
-  { key: 'Arrived', label: 'Đã đến điểm lấy' },
-  { key: 'PickedUp', label: 'Đã lấy hàng' },
-  { key: 'InTransit', label: 'Đang giao' },
-  { key: 'Delivered', label: 'Đã giao' },
-  { key: 'Completed', label: 'Hoàn thành' },
-  { key: 'Cancelled', label: 'Đã huỷ' },
-];
-
+/** SCR-18 – Lịch sử đơn (UC-CUS-08/09/10/20) + các thao tác theo trạng thái */
 export const OrdersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { toggleSidebar } = useCustomerLayout();
-  const { setPickup, setDropoff } = useOrderStore();
+  const { user } = useAuthStore();
+  const orders = useCustomerOrders(user?.id);
+  const refunds = useRefunds();
+  const { reset, update } = useBookingDraftStore();
 
-  const [orders] = useState<ShippingOrder[]>(() => orderService.getOrders());
-  const [activeTab, setActiveTab] = useState<TabKey>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string>('ALL');
-  const [selectedTimeRange, setSelectedTimeRange] = useState<string>('ALL');
+  const [tab, setTab] = useState<TabKey>('ALL');
+  const [query, setQuery] = useState('');
+  const [range, setRange] = useState<(typeof TIME_RANGES)[number]['key']>('ALL');
+  const [detailCode, setDetailCode] = useState<string | null>(null);
+  const [modal, setModal] = useState<ModalState>(null);
 
-  // Drawer / Modal detail view
-  const [detailOrder, setDetailOrder] = useState<ShippingOrder | null>(null);
-
-  // Copied feedback tooltip
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
-  const handleCopyCode = (code: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const handleReorder = (order: ShippingOrder, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPickup({
-      address: order.pickup.address,
-      lat: order.pickup.lat,
-      lng: order.pickup.lng,
-      contactName: order.pickup.contactName,
-      contactPhone: order.pickup.contactPhone,
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const days = TIME_RANGES.find((r) => r.key === range)!.days;
+    return orders.filter((o) => {
+      if (tab !== 'ALL' && o.status !== tab) return false;
+      if (days !== Infinity && Date.now() - new Date(o.createdAt).getTime() > days * 86_400_000) return false;
+      if (!q) return true;
+      return [o.code, o.pickup.address, o.dropoff.address, o.cargo.description].some((s) => s.toLowerCase().includes(q));
     });
-    setDropoff({
-      address: order.dropoff.address,
-      lat: order.dropoff.lat,
-      lng: order.dropoff.lng,
-      contactName: order.dropoff.contactName,
-      contactPhone: order.dropoff.contactPhone,
-    });
+  }, [orders, tab, query, range]);
+
+  const detail = orders.find((o) => o.code === detailCode) ?? null;
+  const detailRefunds = detail ? refunds.filter((r) => r.orderId === detail.id) : [];
+
+  /** GB-34: không sửa đơn đã gửi → tạo đơn mới từ thông tin cũ */
+  const handleReorder = (o: ShippingOrder) => {
+    reset();
+    update({ pickup: o.pickup, dropoff: o.dropoff, cargo: { ...o.cargo }, vehicleTypeId: o.vehicle.id, loadingService: o.loadingService });
     navigate('/booking');
   };
 
-  // Export to CSV
-  const handleExportData = () => {
-    const headers = [
-      'Mã đơn',
-      'Dịch vụ',
-      'Điểm lấy hàng',
-      'Điểm giao hàng',
-      'Thời gian tạo',
-      'Tổng COD',
-      'Tổng phí',
-      'Trạng thái',
-      'Phương thức TT',
-    ];
-
-    const rows = filteredOrders.map((o) => [
-      o.code,
-      `"${o.vehicle.name}"`,
-      `"${o.pickup.address.replace(/"/g, '""')}"`,
-      `"${o.dropoff.address.replace(/"/g, '""')}"`,
-      formatDateTime(o.createdAt),
-      o.codAmount || 0,
-      o.totalFee,
-      ORDER_STATUS_CONFIG[o.status]?.label || o.status,
-      o.paymentMethod,
-    ]);
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `ModMove_Orders_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Format date time: 26-10-2026, 23:18
-  const formatDateTime = (dateStr: string) => {
+  const handleConfirmReceipt = async (o: ShippingOrder) => {
+    if (!(await confirm({ title: 'Xác nhận đã nhận hàng', message: msg('MSG68', { order_id: o.code }) }))) return;
     try {
-      const d = new Date(dateStr);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      const hours = String(d.getHours()).padStart(2, '0');
-      const mins = String(d.getMinutes()).padStart(2, '0');
-      return `${day}-${month}-${year}, ${hours}:${mins}`;
-    } catch {
-      return dateStr;
+      await orderService.confirmReceipt(o.id);
+      toast.success(msg('MSG45', { order_id: o.code }));
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   };
 
-  // Filtered orders
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      // 1. Tab filter (SRS OrderStatus)
-      if (activeTab !== 'ALL') {
-        if (activeTab === 'PlaceOrder') {
-          if (o.status !== 'PlaceOrder' && o.status !== 'Pending') return false;
-        } else if (o.status !== activeTab) {
-          return false;
-        }
-      }
+  const handleWithdraw = async (r: Refund) => {
+    try {
+      await caseService.withdrawComplaint(r.id);
+      toast.success(msg('MSG04', { record_name: 'trạng thái khiếu nại' }));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
 
-      // 2. Search query filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchCode = o.code.toLowerCase().includes(q);
-        const matchPickup = o.pickup.address.toLowerCase().includes(q);
-        const matchDropoff = o.dropoff.address.toLowerCase().includes(q);
-        const matchCustomer = o.customerName.toLowerCase().includes(q);
-        if (!matchCode && !matchPickup && !matchDropoff && !matchCustomer) return false;
-      }
-
-      // 3. Tag / Service filter
-      if (selectedTag !== 'ALL') {
-        if (selectedTag === 'VAN' && o.vehicle.category !== 'VAN') return false;
-        if (selectedTag === 'TRUCK' && !o.vehicle.category.includes('TRUCK')) return false;
-      }
-
-      // 4. Time range filter
-      if (selectedTimeRange !== 'ALL') {
-        const orderTime = new Date(o.createdAt).getTime();
-        const now = Date.now();
-        if (selectedTimeRange === 'TODAY' && now - orderTime > 86400000) return false;
-        if (selectedTimeRange === 'WEEK' && now - orderTime > 86400000 * 7) return false;
-        if (selectedTimeRange === 'MONTH' && now - orderTime > 86400000 * 30) return false;
-      }
-
-      return true;
-    });
-  }, [orders, activeTab, searchQuery, selectedTag, selectedTimeRange]);
+  const exportCsv = () =>
+    downloadCsv(
+      `modmove-don-hang-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Mã đơn', 'Loại xe', 'Điểm lấy', 'Điểm giao', 'Thời gian tạo', 'Tổng cước', 'Thanh toán', 'Trạng thái'],
+      filtered.map((o) => [o.code, o.vehicle.name, o.pickup.address, o.dropoff.address, formatDateTime(o.createdAt), o.fare.total, o.paymentMethod, ORDER_STATUS_CONFIG[o.status].label])
+    );
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white select-none overflow-hidden font-sans">
-      {/* ========================================================================= */}
-      {/* 1. TOP HEADER: TITLE & EXPORT BUTTON */}
-      {/* ========================================================================= */}
-      <div className="px-6 pt-5 pb-2 flex items-center justify-between border-b border-slate-100 flex-shrink-0">
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-          Lịch sử đơn hàng
-        </h1>
-
-        <button
-          type="button"
-          onClick={handleExportData}
-          className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer hover:border-slate-300"
-          title="Tải về file Excel/CSV"
-        >
-          <Download className="w-4 h-4 text-slate-500" />
-          <span>Xuất dữ liệu</span>
-        </button>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. HORIZONTAL STATUS TABS (SRS LIFECYCLE - AHAMOVE TAB STYLE) */}
-      {/* ========================================================================= */}
-      <div className="px-6 border-b border-slate-200 flex-shrink-0 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-6 text-xs sm:text-sm whitespace-nowrap min-w-max">
-          {SRS_STATUS_TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`py-3 font-bold transition-all relative cursor-pointer ${
-                  isActive
-                    ? 'text-brand-500 font-extrabold'
-                    : 'text-slate-600 hover:text-slate-900 font-medium'
-                }`}
-              >
-                <span>{tab.label}</span>
-                {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-brand-500 rounded-t-full" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. FILTER BAR: SEARCH, TIME, TAGS */}
-      {/* ========================================================================= */}
-      <div className="px-6 py-3.5 flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white flex-shrink-0">
-        {/* Search input */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+    <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden min-w-0">
+      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 flex-shrink-0">
+        <h1 className="text-base font-extrabold text-slate-900 mr-auto">Lịch sử đơn hàng</h1>
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo mã đơn hàng"
-            className="w-full pl-9 pr-3 py-2 bg-slate-50/80 hover:bg-slate-100/70 focus:bg-white text-xs sm:text-sm text-slate-800 placeholder-slate-400 border border-slate-200 rounded-xl outline-none focus:border-brand-500 transition shadow-inner"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm mã đơn, địa chỉ, hàng hoá…"
+            aria-label="Tìm kiếm đơn"
+            className="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm w-64 max-w-full"
           />
-          {searchQuery && (
+        </div>
+        <select value={range} onChange={(e) => setRange(e.target.value as typeof range)} aria-label="Khoảng thời gian" className="py-2 px-3 rounded-xl border border-slate-200 text-sm">
+          {TIME_RANGES.map((r) => (
+            <option key={r.key} value={r.key}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
+          <Download className="w-4 h-4 mr-1.5" /> Xuất CSV
+        </Button>
+      </header>
+
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 flex gap-1 overflow-x-auto flex-shrink-0" role="tablist">
+        {TABS.map((t) => {
+          const count = t === 'ALL' ? orders.length : orders.filter((o) => o.status === t).length;
+          return (
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`px-3 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 transition ${tab === t ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             >
-              <X className="w-3.5 h-3.5" />
+              {t === 'ALL' ? 'Tất cả' : ORDER_STATUS_CONFIG[t].label} ({count})
             </button>
-          )}
-        </div>
-
-        {/* Time Filter Dropdown */}
-        <div className="relative">
-          <select
-            value={selectedTimeRange}
-            onChange={(e) => setSelectedTimeRange(e.target.value)}
-            className="appearance-none pl-8 pr-7 py-2 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl outline-none cursor-pointer transition shadow-xs"
-          >
-            <option value="ALL">Thời gian: Tất cả</option>
-            <option value="TODAY">Hôm nay</option>
-            <option value="WEEK">7 ngày qua</option>
-            <option value="MONTH">30 ngày qua</option>
-          </select>
-          <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Tags / Service Filter Dropdown */}
-        <div className="relative">
-          <select
-            value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
-            className="appearance-none pl-8 pr-7 py-2 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl outline-none cursor-pointer transition shadow-xs"
-          >
-            <option value="ALL">Tags: Tất cả xe</option>
-            <option value="VAN">Xe bán tải 500kg</option>
-            <option value="TRUCK">Xe tải 1 - 2 tấn</option>
-          </select>
-          <Tag className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
+          );
+        })}
       </div>
 
-      {/* ========================================================================= */}
-      {/* 4. ORDERS DATA TABLE (EXACTLY MATCHING AHAMOVE IMAGE) */}
-      {/* ========================================================================= */}
-      <div className="flex-1 overflow-y-auto overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[960px]">
-          {/* Table Header */}
-          <thead>
-            <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 text-[11px] sm:text-xs font-bold uppercase tracking-wider sticky top-0 z-10">
-              <th className="py-3 px-4 w-[16%]">Mã đơn</th>
-              <th className="py-3 px-4 w-[24%]">Điểm lấy hàng</th>
-              <th className="py-3 px-4 w-[24%]">Điểm giao hàng</th>
-              <th className="py-3 px-4 w-[13%]">Thời gian tạo</th>
-              <th className="py-3 px-4 w-[7%] text-center">Tổng COD</th>
-              <th className="py-3 px-4 w-[9%] text-right">Tổng phí</th>
-              <th className="py-3 px-4 w-[10%] text-center">Trạng thái</th>
-              <th className="py-3 px-4 w-[7%] text-center">Thao tác</th>
-            </tr>
-          </thead>
-
-          {/* Table Body */}
-          <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
-            {filteredOrders.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-16 text-center text-slate-400">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Package className="w-10 h-10 text-slate-300 stroke-1" />
-                    <span className="text-xs sm:text-sm font-semibold">
-                      Không tìm thấy đơn hàng nào phù hợp
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {filtered.length === 0 ? (
+          <div className="text-center text-sm text-slate-500 py-16">
+            Không có đơn hàng phù hợp.{' '}
+            <button className="text-blue-600 font-bold" onClick={() => navigate('/booking')}>
+              Đặt xe ngay
+            </button>
+          </div>
+        ) : (
+          <ul className="space-y-3 max-w-5xl mx-auto">
+            {filtered.map((o) => (
+              <li key={o.id}>
+                <button type="button" onClick={() => setDetailCode(o.code)} className="w-full text-left bg-white border border-slate-200 hover:border-slate-400 rounded-2xl p-4 transition">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-sm text-slate-900">{o.code}</span>
+                    <OrderStatusBadge status={o.status} />
+                    {o.paymentMethod === 'PayOS' && o.paymentStatus === 'Unpaid' && o.status === 'Pending' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">Chưa thanh toán</span>
+                    )}
+                    <span className="ml-auto text-sm font-black text-slate-900">{formatCurrency(o.fare.total)}</span>
+                  </div>
+                  <div className="mt-2 grid sm:grid-cols-2 gap-1 text-xs text-slate-600">
+                    <span className="flex gap-1.5 truncate">
+                      <MapPin className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                      {o.pickup.address}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      Hãy thử đổi bộ lọc hoặc tạo đơn giao hàng mới
+                    <span className="flex gap-1.5 truncate">
+                      <MapPin className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                      {o.dropoff.address}
                     </span>
                   </div>
-                </td>
-              </tr>
-            ) : (
-              filteredOrders.map((order) => {
-                const statusCfg =
-                  ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.PlaceOrder;
-
-                return (
-                  <tr
-                    key={order.id}
-                    onClick={() => setDetailOrder(order)}
-                    className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
-                  >
-                    {/* Cột 1: Mã đơn */}
-                    <td className="py-3.5 px-4 align-top">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-brand-600 hover:underline">
-                          #{order.code}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyCode(order.code, e)}
-                          className="text-slate-400 hover:text-slate-700 transition p-0.5 rounded cursor-pointer"
-                          title="Sao chép mã đơn"
-                        >
-                          {copiedCode === order.code ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
-                        {order.vehicle.name}
-                      </div>
-                    </td>
-
-                    {/* Cột 2: Điểm lấy hàng */}
-                    <td className="py-3.5 px-4 align-top">
-                      <div className="text-slate-800 font-medium line-clamp-2 leading-relaxed">
-                        {order.pickup.address}
-                      </div>
-                    </td>
-
-                    {/* Cột 3: Điểm giao hàng */}
-                    <td className="py-3.5 px-4 align-top">
-                      <div className="text-slate-800 font-medium line-clamp-2 leading-relaxed">
-                        {order.dropoff.address}
-                      </div>
-                    </td>
-
-                    {/* Cột 4: Thời gian tạo */}
-                    <td className="py-3.5 px-4 align-top whitespace-nowrap text-slate-600 font-medium text-[11px]">
-                      {formatDateTime(order.createdAt)}
-                    </td>
-
-                    {/* Cột 5: Tổng COD */}
-                    <td className="py-3.5 px-4 align-top text-center font-bold text-slate-700">
-                      {order.codAmount && order.codAmount > 0 ? (
-                        formatCurrency(order.codAmount)
-                      ) : (
-                        <span className="text-slate-400 font-normal">-</span>
-                      )}
-                    </td>
-
-                    {/* Cột 6: Tổng phí */}
-                    <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                      <div className="font-extrabold text-brand-600 flex items-center justify-end gap-1">
-                        <span className="text-xs">💵</span>
-                        <span>{formatCurrency(order.totalFee)}</span>
-                      </div>
-                    </td>
-
-                    {/* Cột 7: Trạng thái (SRS status badges) */}
-                    <td className="py-3.5 px-4 align-top text-center whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${statusCfg.bg} ${statusCfg.text} ${statusCfg.border}`}
-                      >
-                        {statusCfg.label}
-                      </span>
-                    </td>
-
-                    {/* Cột 8: Thao tác (Reorder & Details & Live Tracking) */}
-                    <td className="py-3.5 px-4 align-top text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(order.status) && (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/tracking?order=${order.code}`)}
-                            className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition cursor-pointer flex items-center gap-1 text-[11px] font-bold border border-emerald-200"
-                            title="Theo dõi vị trí trực tiếp"
-                          >
-                            <Radio className="w-3.5 h-3.5 animate-pulse" />
-                            <span>Theo dõi</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleReorder(order, e)}
-                          className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-orange-50 rounded-lg transition cursor-pointer"
-                          title="Đặt lại chuyến này"
-                        >
-                          <RotateCw className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDetailOrder(order)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                          title="Xem chi tiết đơn"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                  <div className="mt-1.5 text-[11px] text-slate-400">
+                    {formatDateTime(o.createdAt)} • {o.vehicle.name} • {o.paymentMethod === 'PayOS' ? 'PayOS' : 'Tiền mặt'}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* 5. SLIDE-OVER DETAIL MODAL / DRAWER (UC-CUS-17: View Delivery Details) */}
-      {/* ========================================================================= */}
-      {detailOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end">
-          {/* Backdrop */}
-          <div
-            onClick={() => setDetailOrder(null)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-          />
-
-          {/* Slide-out Drawer */}
-          <div className="relative w-full max-w-lg h-full bg-white shadow-2xl z-50 flex flex-col overflow-hidden animate-slideRight">
-            {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="font-black text-slate-900 text-base">
-                  Chi tiết đơn #{detailOrder.code}
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    ORDER_STATUS_CONFIG[detailOrder.status]?.bg
-                  } ${ORDER_STATUS_CONFIG[detailOrder.status]?.text} ${
-                    ORDER_STATUS_CONFIG[detailOrder.status]?.border
-                  }`}
-                >
-                  {ORDER_STATUS_CONFIG[detailOrder.status]?.label}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailOrder(null)}
-                className="w-8 h-8 rounded-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition cursor-pointer"
-              >
+      {detail && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40" onClick={() => setDetailCode(null)}>
+          <aside className="w-full max-w-md h-full bg-white shadow-2xl overflow-y-auto" onClick={(e) => e.stopPropagation()} aria-label="Chi tiết đơn">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center gap-2">
+              <h2 className="font-black text-slate-900">{detail.code}</h2>
+              <OrderStatusBadge status={detail.status} />
+              <button type="button" className="ml-auto p-1.5 rounded-lg hover:bg-slate-100" onClick={() => setDetailCode(null)} aria-label="Đóng">
                 <X className="w-4 h-4" />
               </button>
             </div>
+            <div className="p-5 space-y-4 text-sm">
+              <OrderActions
+                order={detail}
+                onTrack={() => navigate(`/tracking?order=${detail.code}`)}
+                onPay={() => setModal({ kind: 'pay', order: detail })}
+                onCancel={() => setModal({ kind: 'cancel', order: detail })}
+                onConfirm={() => handleConfirmReceipt(detail)}
+                onComplain={() => setModal({ kind: 'complaint', order: detail })}
+                onRate={() => setModal({ kind: 'rating', order: detail })}
+                onReorder={() => handleReorder(detail)}
+              />
 
-            {/* Drawer Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
-              {/* Card 1: Dịch vụ & Tuyến đường */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-extrabold text-sm text-slate-900">
-                    {detailOrder.vehicle.name}
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    {detailOrder.totalDistanceKm} km • ~{detailOrder.estimatedDurationMins} phút
-                  </span>
-                </div>
+              <section className="space-y-1 text-xs">
+                <h3 className="font-extrabold text-slate-900 text-sm">Lộ trình</h3>
+                <p>
+                  <b>Lấy:</b> {detail.pickup.address} – {detail.pickup.contactName} ({detail.pickup.contactPhone})
+                </p>
+                <p>
+                  <b>Giao:</b> {detail.dropoff.address} – {detail.dropoff.contactName} ({detail.dropoff.contactPhone})
+                </p>
+              </section>
 
-                {/* Pickup & Dropoff addresses */}
-                <div className="space-y-3 pt-2 border-t border-slate-200/70">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-3 h-3 rounded-full border-2 border-slate-900 mt-1 flex-shrink-0" />
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase">
-                        Điểm lấy hàng
-                      </div>
-                      <div className="font-bold text-slate-800">{detailOrder.pickup.address}</div>
-                      <div className="text-slate-500 text-[11px] mt-0.5 flex items-center gap-1.5">
-                        <User className="w-3 h-3 text-slate-400" />
-                        <span>{detailOrder.pickup.contactName}</span>
-                        <span>•</span>
-                        <Phone className="w-3 h-3 text-slate-400" />
-                        <span>{detailOrder.pickup.contactPhone}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-3 h-3 rounded-sm bg-brand-500 mt-1 flex-shrink-0" />
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase">
-                        Điểm giao hàng
-                      </div>
-                      <div className="font-bold text-slate-800">{detailOrder.dropoff.address}</div>
-                      <div className="text-slate-500 text-[11px] mt-0.5 flex items-center gap-1.5">
-                        <User className="w-3 h-3 text-slate-400" />
-                        <span>{detailOrder.dropoff.contactName}</span>
-                        <span>•</span>
-                        <Phone className="w-3 h-3 text-slate-400" />
-                        <span>{detailOrder.dropoff.contactPhone}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Thông tin hàng hóa & AI Analysis */}
-              <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-2.5 shadow-xs">
-                <div className="font-extrabold text-slate-900 flex items-center justify-between">
-                  <span>Thông tin hàng hóa</span>
-                  <span className="text-slate-500 font-medium text-[11px]">
-                    {detailOrder.cargo.weightKg} kg • {detailOrder.cargo.quantity} kiện
-                  </span>
-                </div>
-                <div className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  {detailOrder.cargo.name}
-                </div>
-                {detailOrder.cargo.aiNotes && (
-                  <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 text-[11px] text-brand-800 flex items-start gap-2">
-                    <span className="text-xs">🤖</span>
-                    <div>
-                      <span className="font-bold">Gợi ý từ AI:</span> {detailOrder.cargo.aiNotes}
-                    </div>
+              <section className="space-y-1 text-xs">
+                <h3 className="font-extrabold text-slate-900 text-sm">Hàng hoá & xe</h3>
+                <p>{detail.cargo.description}</p>
+                <p>
+                  {detail.cargo.quantity} kiện • {detail.cargo.weightKg} kg • {detail.vehicle.name}
+                </p>
+                {detail.cargo.photos.length > 0 && (
+                  <div className="flex gap-2 pt-1">
+                    {detail.cargo.photos.map((p, i) => (
+                      <img key={i} src={p} alt="" className="w-14 h-14 rounded-lg object-cover border" />
+                    ))}
                   </div>
                 )}
-              </div>
+              </section>
 
-              {/* Card 3: Tài xế phụ trách (nếu đã nhận đơn) */}
-              {detailOrder.assignedDriver ? (
-                <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-2 shadow-xs">
-                  <div className="font-extrabold text-slate-900">Tài xế phụ trách</div>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={detailOrder.assignedDriver.avatar}
-                      alt={detailOrder.assignedDriver.name}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200"
-                    />
-                    <div className="flex-1">
-                      <div className="font-bold text-slate-900">
-                        {detailOrder.assignedDriver.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Biển số: {detailOrder.assignedDriver.licensePlate} • ⭐{' '}
-                        {detailOrder.assignedDriver.rating}
-                      </div>
-                    </div>
-                    <a
-                      href={`tel:${detailOrder.assignedDriver.phone}`}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center gap-1"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>Gọi</span>
-                    </a>
+              <section className="text-xs space-y-1">
+                <h3 className="font-extrabold text-slate-900 text-sm">Cước phí</h3>
+                <div className="flex justify-between">
+                  <span>Cước quãng đường ({detail.fare.distanceKm} km)</span>
+                  <b>{formatCurrency(detail.fare.distanceFare)}</b>
+                </div>
+                {detail.fare.loadingFee > 0 && (
+                  <div className="flex justify-between">
+                    <span>Bốc xếp</span>
+                    <b>{formatCurrency(detail.fare.loadingFee)}</b>
                   </div>
+                )}
+                {detail.fare.discount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Giảm giá {detail.couponCode}</span>
+                    <b>-{formatCurrency(detail.fare.discount)}</b>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1 border-t">
+                  <span className="font-bold">Tổng</span>
+                  <b className="text-base">{formatCurrency(detail.fare.total)}</b>
                 </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  <span>Hệ thống đang tiến hành điều phối tài xế gần bạn nhất...</span>
-                </div>
+                <p className="text-slate-500">
+                  {detail.paymentMethod === 'PayOS' ? 'PayOS' : `Tiền mặt – ${detail.payerRole === 'Receiver' ? 'người nhận trả' : 'người gửi trả'}`} •{' '}
+                  {detail.paymentStatus === 'Paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                </p>
+              </section>
+
+              {detail.assignedDriver && (
+                <section className="text-xs">
+                  <h3 className="font-extrabold text-slate-900 text-sm mb-1">Tài xế</h3>
+                  <p>
+                    {detail.assignedDriver.name} • {detail.assignedDriver.licensePlate} • ★ {detail.assignedDriver.rating}
+                  </p>
+                </section>
               )}
 
-              {/* Card 4: Chi tiết cước phí & Thanh toán */}
-              <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-2 shadow-xs">
-                <div className="font-extrabold text-slate-900 pb-1 border-b border-slate-100 flex items-center justify-between">
-                  <span>Chi tiết thanh toán</span>
-                  <span className="text-[11px] font-bold text-slate-500">
-                    {detailOrder.paymentMethod === 'PayOS' ? 'VietQR PayOS' : 'Tiền mặt COD'}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-[11px] text-slate-600">
-                  <div className="flex justify-between">
-                    <span>Cước phí cơ bản:</span>
-                    <span className="font-semibold">{formatCurrency(detailOrder.baseFee)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Cước cự ly ({detailOrder.totalDistanceKm} km):</span>
-                    <span className="font-semibold">{formatCurrency(detailOrder.distanceFee)}</span>
-                  </div>
-                  {detailOrder.servicesFee > 0 && (
-                    <div className="flex justify-between">
-                      <span>Dịch vụ bốc xếp / phụ kiện:</span>
-                      <span className="font-semibold">
-                        +{formatCurrency(detailOrder.servicesFee)}
-                      </span>
-                    </div>
-                  )}
-                  {detailOrder.discountFee > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-semibold">
-                      <span>Khuyến mãi / Giảm giá:</span>
-                      <span>-{formatCurrency(detailOrder.discountFee)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between pt-2 border-t border-slate-100 text-xs sm:text-sm font-extrabold text-slate-900">
-                    <span>Tổng cước phí:</span>
-                    <span className="text-brand-600 font-black">
-                      {formatCurrency(detailOrder.totalFee)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer Footer Actions */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center gap-2.5 flex-shrink-0">
-              {['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(detailOrder.status) && (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/tracking?order=${detailOrder.code}`)}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 transition cursor-pointer"
-                >
-                  <Radio className="w-4 h-4 animate-pulse" />
-                  <span>Theo dõi vị trí xe</span>
-                </button>
+              {detail.rating && (
+                <section className="text-xs">
+                  <h3 className="font-extrabold text-slate-900 text-sm mb-1">Đánh giá của bạn (UC-CUS-26)</h3>
+                  <p>
+                    {'★'.repeat(detail.rating.stars)} {detail.rating.tags.join(', ')}
+                  </p>
+                  {detail.rating.comment && <p className="text-slate-500">“{detail.rating.comment}”</p>}
+                </section>
               )}
-              <button
-                type="button"
-                onClick={() => handleReorder(detailOrder, {} as any)}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/25 transition cursor-pointer"
-              >
-                <RotateCw className="w-4 h-4" />
-                <span>Đặt lại đơn này</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetailOrder(null)}
-                className="py-2.5 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs transition cursor-pointer"
-              >
-                Đóng
-              </button>
+
+              {detailRefunds.length > 0 && (
+                <section className="text-xs space-y-2">
+                  <h3 className="font-extrabold text-slate-900 text-sm">Khiếu nại / Hoàn tiền (UC-CUS-23)</h3>
+                  {detailRefunds.map((r) => (
+                    <div key={r.id} className="border border-slate-200 rounded-xl p-3 space-y-1">
+                      <div className="flex justify-between">
+                        <b>
+                          {REFUND_SOURCE_LABEL[r.source]} • {r.id}
+                        </b>
+                        <span className="font-bold">{REFUND_STATUS_LABEL[r.status]}</span>
+                      </div>
+                      <p className="text-slate-600">{r.reason}</p>
+                      <p>
+                        Yêu cầu: {formatCurrency(r.requestedAmount)}
+                        {r.approvedAmount !== undefined && ` • Đã duyệt: ${formatCurrency(r.approvedAmount)}`}
+                      </p>
+                      {r.proposalNote && <p className="text-slate-500">Ghi chú: {r.proposalNote}</p>}
+                      <div className="flex gap-2 pt-1">
+                        {r.status === 'InfoRequested' && (
+                          <Button size="sm" onClick={() => setModal({ kind: 'reply', refund: r })}>
+                            Bổ sung thông tin
+                          </Button>
+                        )}
+                        {r.source === 'Complaint' && (r.status === 'Requested' || r.status === 'InfoRequested') && (
+                          <Button size="sm" variant="outline" onClick={() => handleWithdraw(r)}>
+                            Rút khiếu nại
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+
+              {detail.cancellationReason && <Banner kind="warning">Lý do huỷ: {detail.cancellationReason}</Banner>}
+
+              <section className="text-xs">
+                <h3 className="font-extrabold text-slate-900 text-sm mb-1">Lịch sử trạng thái</h3>
+                <ol className="space-y-1 border-l-2 border-slate-200 pl-3">
+                  {detail.history.map((h, i) => (
+                    <li key={i}>
+                      <b>{ORDER_STATUS_CONFIG[h.to].label}</b> <span className="text-slate-400">• {formatDateTime(h.changedAt)} • {h.changedBy}</span>
+                      {h.note && <span className="block text-slate-500">{h.note}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
             </div>
-          </div>
+          </aside>
         </div>
       )}
+
+      {modal?.kind === 'cancel' && user && <CancelOrderModal order={modal.order} customerId={user.id} onClose={() => setModal(null)} />}
+      {modal?.kind === 'complaint' && <ComplaintModal order={modal.order} onClose={() => setModal(null)} />}
+      {modal?.kind === 'rating' && <RatingModal order={modal.order} onClose={() => setModal(null)} />}
+      {modal?.kind === 'reply' && <ReplyInfoModal refund={modal.refund} onClose={() => setModal(null)} />}
+      {modal?.kind === 'pay' && (
+        <PayOsModal
+          open
+          amount={modal.order.fare.total}
+          reference={`MODMOVE ${modal.order.code}`}
+          onPaid={async () => {
+            const paid = await orderService.confirmPayment(modal.order.id);
+            toast.success(msg('MSG48', { amount: formatCurrency(paid.fare.total), order_id: paid.code }));
+            setModal(null);
+          }}
+          onClose={() => {
+            toast.warning(msg('MSG51'));
+            setModal(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+/** Các nút thao tác hiển thị theo trạng thái đơn và Business Rule */
+const OrderActions: React.FC<{
+  order: ShippingOrder;
+  onTrack: () => void;
+  onPay: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onComplain: () => void;
+  onRate: () => void;
+  onReorder: () => void;
+}> = ({ order, onTrack, onPay, onCancel, onConfirm, onComplain, onRate, onReorder }) => {
+  const needsPayment = order.status === 'Pending' && order.paymentMethod === 'PayOS' && order.paymentStatus === 'Unpaid';
+  const ratingBlock = ratingRestriction(order);
+  return (
+    <div className="flex flex-wrap gap-2">
+      {needsPayment && (
+        <Button size="sm" onClick={onPay}>
+          Thanh toán ngay
+        </Button>
+      )}
+      {!['Completed', 'Cancelled'].includes(order.status) && (
+        <Button size="sm" variant="secondary" onClick={onTrack}>
+          Theo dõi đơn
+        </Button>
+      )}
+      {order.status === 'Delivered' && (
+        <Button size="sm" onClick={onConfirm}>
+          Xác nhận đã nhận hàng
+        </Button>
+      )}
+      {canComplain(order) && (
+        <Button size="sm" variant="outline" onClick={onComplain}>
+          Khiếu nại
+        </Button>
+      )}
+      {order.status === 'Completed' && !ratingBlock && (
+        <Button size="sm" variant="outline" onClick={onRate}>
+          Đánh giá
+        </Button>
+      )}
+      {canCustomerCancel(order) && (
+        <Button size="sm" variant="danger" onClick={onCancel}>
+          Huỷ đơn
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={onReorder} title="Đơn đã gửi không sửa được (GB-34); tạo đơn mới từ thông tin này">
+        Đặt lại đơn tương tự
+      </Button>
     </div>
   );
 };

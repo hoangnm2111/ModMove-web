@@ -1,5 +1,7 @@
 import React, { useState, createContext, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SuspenseOutlet } from '../components/SuspenseOutlet';
+import { useRefunds } from '../hooks/useDomainData';
 import {
   Menu,
   X,
@@ -8,6 +10,7 @@ import {
   ShieldAlert,
   Repeat,
   FileCheck2,
+  UserCog,
   LogOut,
   ChevronRight,
   Headphones,
@@ -32,7 +35,7 @@ export const DispatcherLayoutContext = createContext<DispatcherLayoutContextType
 export const useDispatcherLayout = () => useContext(DispatcherLayoutContext);
 
 interface DispatcherLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const DispatcherLayout: React.FC<DispatcherLayoutProps> = ({ children }) => {
@@ -46,7 +49,8 @@ export const DispatcherLayout: React.FC<DispatcherLayoutProps> = ({ children }) 
   // Active navigation paths
   const isLiveMapActive = location.pathname === '/dispatcher' || location.pathname === '/dispatcher/live-map';
   const isIncidentsActive = location.pathname === '/dispatcher/incidents';
-  const isReassignActive = location.pathname === '/dispatcher/reassign';
+  const isProfileActive = location.pathname === '/dispatcher/profile';
+  const pendingCases = useRefunds().filter((r) => r.source !== 'Cancellation' && r.status === 'Requested').length;
   const isComplaintsActive = location.pathname === '/dispatcher/complaints';
 
   const handleNavigate = (path: string) => {
@@ -207,8 +211,18 @@ export const DispatcherLayout: React.FC<DispatcherLayoutProps> = ({ children }) 
                 <span className="font-semibold">Thẩm định khiếu nại hoàn tiền</span>
               </div>
               <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                1 mới
+                {pendingCases} mới
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavigate('/dispatcher/profile')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
+                isProfileActive ? 'bg-sky-500 text-slate-950 font-bold' : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              <UserCog className="w-4 h-4" />
+              <span className="font-semibold">Hồ sơ & bảo mật</span>
             </button>
           </div>
         </div>
@@ -299,6 +313,16 @@ export const DispatcherLayout: React.FC<DispatcherLayoutProps> = ({ children }) 
                   Thẩm định khiếu nại hoàn tiền
                 </span>
               </button>
+              <button
+                onClick={() => handleNavigate('/dispatcher/profile')}
+                title="Hồ sơ & bảo mật"
+                aria-label="Hồ sơ & bảo mật"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition ${
+                  isProfileActive ? 'bg-sky-500 text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-sky-400'
+                }`}
+              >
+                <UserCog className="w-5 h-5" />
+              </button>
             </div>
 
             {/* Bottom Status Dot */}
@@ -326,7 +350,7 @@ export const DispatcherLayout: React.FC<DispatcherLayoutProps> = ({ children }) 
 
         {/* MAIN WORKSPACE */}
         <main className="flex-1 h-full overflow-hidden relative flex bg-slate-50">
-          {children}
+          {children ?? <SuspenseOutlet />}
         </main>
       </div>
     </DispatcherLayoutContext.Provider>

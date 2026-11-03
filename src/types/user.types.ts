@@ -1,6 +1,7 @@
 export type UserRole = 'Customer' | 'Driver' | 'Dispatcher' | 'Administrator';
 
-export type AccountStatus = 'Active' | 'Inactive' | 'Locked' | 'PendingApproval';
+/** SRS Entity User – AccountStatus */
+export type AccountStatus = 'Active' | 'Inactive' | 'Locked';
 
 export interface User {
   id: string;
@@ -10,11 +11,15 @@ export interface User {
   role: UserRole;
   status: AccountStatus;
   avatarUrl?: string;
-  walletBalance?: number;
+  emailVerified: boolean;
 }
 
+export type ApplicationStatus = 'Pending' | 'Approved' | 'Rejected';
+
+/** Entity DriverApplication – mỗi lần nộp lại tạo version mới (UC-DRV-05) */
 export interface DriverApplication {
   id: string;
+  version: number;
   fullName: string;
   phoneNumber: string;
   email: string;
@@ -29,6 +34,6 @@ export interface DriverApplication {
   boxDimensions: string;
   licensePlate: string;
   submittedAt: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: ApplicationStatus;
   rejectionReason?: string;
 }

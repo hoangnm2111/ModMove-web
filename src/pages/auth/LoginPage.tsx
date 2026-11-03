@@ -1,725 +1,265 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Truck,
-  ArrowLeft,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  AlertCircle,
-  KeyRound,
-  ShieldCheck,
-  Sparkles,
-  ArrowRight,
-  Clock,
-  RotateCcw,
-} from 'lucide-react';
-import { useAuthStore, HARDCODED_ACCOUNTS } from '../../store/useAuthStore';
+import React, { useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Lock, Mail, Phone, Truck, User as UserIcon } from 'lucide-react';
+import { Button } from '../../components/Button';
+import { Banner, toast } from '../../components/ui/feedback';
+import { Field } from '../../components/ui/Field';
+import { Modal } from '../../components/ui/Modal';
+import { BUSINESS, IS_DEMO } from '../../config/business';
+import { msg } from '../../constants/messages';
+import { confirmPassword, email as emailRule, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
+import { useCountdown } from '../../hooks/useLiveData';
+import { authService, DEMO_PASSWORD, OtpPurpose } from '../../services/auth.service';
+import { errorMessage } from '../../services/mock/storage';
+import { getRoleHomePath, useAuthStore } from '../../store/useAuthStore';
 import { UserRole } from '../../types/user.types';
 
+const DEMO_ACCOUNTS: { role: UserRole; email: string; label: string }[] = [
+  { role: 'Customer', email: 'customer@modmove.vn', label: 'Khách hàng' },
+  { role: 'Driver', email: 'driver@modmove.vn', label: 'Tài xế' },
+  { role: 'Dispatcher', email: 'dispatcher@modmove.vn', label: 'Điều phối viên' },
+  { role: 'Administrator', email: 'admin@modmove.vn', label: 'Quản trị viên' },
+];
+
+/** Chỉ cho phép redirect nội bộ */
+const safeRedirect = (v: string | null) => (v && v.startsWith('/') && !v.startsWith('//') ? v : null);
+
+/** SCR-02/03/04 – Đăng nhập, Đăng ký Customer (UC-GST-01), Quên mật khẩu (UC-CUS-02) */
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loginWithRole, registerCustomer } = useAuthStore();
+  const [params] = useSearchParams();
+  const redirect = safeRedirect(params.get('redirect'));
+  const signIn = useAuthStore((s) => s.signIn);
 
-  // Active Tab: 'login' | 'register'
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'login' | 'register'>(params.get('tab') === 'register' ? 'register' : 'login');
 
-  // Login form state
-  const [loginPhone, setLoginPhone] = useState('');
-  const [loginPassword, setLoginPassword] = useState('123456');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // ------------------------------------------------------------ Đăng nhập
+  const [identifier, setIdentifier] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  // Register form state (from SRS Document UC-GST-01 & Image 2)
-  const [regRole, setRegRole] = useState<'Customer' | 'Driver'>('Customer');
-  const [regFullName, setRegFullName] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('123456');
-  const [regReferral, setRegReferral] = useState('');
-  const [showRegPassword, setShowRegPassword] = useState(false);
-
-  // 4 Checkboxes from Image 2
-  const [agreeTerms, setAgreeTerms] = useState(false); // Bắt buộc
-  const [agreeDataProcessing, setAgreeDataProcessing] = useState(false); // Bắt buộc
-  const [agreeMarketing, setAgreeMarketing] = useState(false); // Tùy chọn
-  const [agreeThirdParty, setAgreeThirdParty] = useState(false); // Tùy chọn
-
-  // OTP Modal state (SRS UC-GST-01 Step 5-8)
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpCode, setOtpCode] = useState(['1', '2', '3', '4', '5', '6']);
-  const [otpCountdown, setOtpCountdown] = useState(300); // 5 phút (300 giây) theo SRS
-  const [otpError, setOtpError] = useState('');
-  const [otpSuccess, setOtpSuccess] = useState(false);
-
-  // Quick Demo Account Accordion
-  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
-
-  // OTP Countdown Timer
-  useEffect(() => {
-    let timer: any;
-    if (showOtpModal && otpCountdown > 0) {
-      timer = setInterval(() => {
-        setOtpCountdown((prev) => prev - 1);
-      }, 1000);
+  const doLogin = async (id: string, pass: string) => {
+    setLoggingIn(true);
+    setLoginError(null);
+    try {
+      const user = await signIn(id, pass);
+      // Guest đang có nháp → quay lại trang đặt xe (GB-28); chỉ áp dụng cho Customer
+      navigate(user.role === 'Customer' && redirect ? redirect : getRoleHomePath(user.role), { replace: true });
+    } catch (e) {
+      setLoginError(errorMessage(e));
+    } finally {
+      setLoggingIn(false);
     }
-    return () => clearInterval(timer);
-  }, [showOtpModal, otpCountdown]);
-
-  // Format MM:SS for OTP timer
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Check if Login button is enabled
-  const isLoginValid = loginPhone.trim().length >= 3;
+  // ------------------------------------------------------------- Đăng ký
+  const [reg, setReg] = useState({ fullName: '', phoneNumber: '', email: '', password: '', confirm: '' });
+  const [regErr, setRegErr] = useState<Record<string, string | null>>({});
+  const [regPending, setRegPending] = useState(false);
 
-  // Check if Register button is enabled
-  const isRegisterValid =
-    regFullName.trim().length >= 2 &&
-    regPhone.trim().length >= 9 &&
-    regEmail.trim().includes('@') &&
-    agreeTerms &&
-    agreeDataProcessing;
+  // ------------------------------------------------------------------ OTP
+  const [otp, setOtp] = useState<{ purpose: OtpPurpose; email: string; masked: string; devCode?: string; expiresAt: number } | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [resetPwd, setResetPwd] = useState('');
+  const otpLeft = useCountdown(otp?.expiresAt ?? null);
 
-  // Handle Login Submit
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const startOtp = async (purpose: OtpPurpose, email: string) => {
+    const res = await authService.requestOtp(email, purpose);
+    setOtp({ purpose, email, masked: res.maskedEmail, devCode: res.devCode, expiresAt: Date.now() + BUSINESS.OTP_TTL_SECONDS * 1000 });
+    setOtpCode('');
+    setOtpError(null);
+    toast.info(msg('MSG15', { masked_email: res.maskedEmail }));
+  };
+
+  const submitRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError('');
-
-    if (!isLoginValid) {
-      setLoginError('Vui lòng nhập số điện thoại hoặc tên tài khoản.');
-      return;
+    const errs = {
+      fullName: validate(reg.fullName, required('Họ và tên')),
+      phoneNumber: phoneRule()(reg.phoneNumber),
+      email: emailRule()(reg.email),
+      password: passwordRule(reg.password),
+      confirm: confirmPassword(reg.password)(reg.confirm),
+    };
+    setRegErr(errs);
+    if (Object.values(errs).some(Boolean)) return;
+    setRegPending(true);
+    try {
+      await authService.validateRegistration(reg); // GB-01 trước khi gửi OTP
+      await startOtp('register', reg.email.trim().toLowerCase());
+    } catch (err) {
+      setRegErr({ form: errorMessage(err) });
+    } finally {
+      setRegPending(false);
     }
+  };
 
-    setIsSubmitting(true);
-    setTimeout(() => {
-      const res = login(loginPhone, loginPassword);
-      setIsSubmitting(false);
+  // ------------------------------------------------------- Quên mật khẩu
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotErr, setForgotErr] = useState<string | null>(null);
 
-      if (res.success && res.defaultPath) {
-        navigate(res.defaultPath, { replace: true });
+  const submitForgot = async () => {
+    const err = emailRule()(forgotEmail);
+    setForgotErr(err);
+    if (err) return;
+    try {
+      await startOtp('reset', forgotEmail.trim().toLowerCase());
+      setForgotOpen(false);
+    } catch (e) {
+      setForgotErr(errorMessage(e));
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!otp) return;
+    setOtpError(null);
+    try {
+      if (otp.purpose === 'register') {
+        await authService.registerCustomer(reg, otpCode.trim());
+        toast.success(msg('MSG17'));
+        setTab('login');
+        setIdentifier(reg.email);
       } else {
-        setLoginError(res.message || 'Đăng nhập không thành công. Mật khẩu mặc định là 123456.');
+        await authService.resetPassword(otp.email, otpCode.trim(), resetPwd);
+        toast.success(msg('MSG20'));
+        setIdentifier(otp.email);
       }
-    }, 250);
-  };
-
-  // Handle Register Submit -> Trigger OTP Verification Modal (SRS UC-GST-01)
-  const handleRegisterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-
-    if (!agreeTerms || !agreeDataProcessing) {
-      setLoginError('Vui lòng đồng ý với Chính sách & Điều khoản và Xử lý dữ liệu cá nhân.');
-      return;
+      setOtp(null);
+    } catch (e) {
+      setOtpError(errorMessage(e));
     }
-
-    // Open OTP Verification Modal
-    setShowOtpModal(true);
-    setOtpCountdown(300);
-    setOtpError('');
-    setOtpSuccess(false);
-  };
-
-  // Confirm OTP (SRS UC-GST-01 Step 6 - Step 8)
-  const handleVerifyOtp = () => {
-    const fullCode = otpCode.join('');
-    if (fullCode.length < 6) {
-      setOtpError('Vui lòng nhập đủ 6 chữ số mã OTP.');
-      return;
-    }
-
-    // In demo environment, 123456 or any 6 digits are accepted
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-
-      // Register new user into store
-      const regRes = registerCustomer({
-        fullName: regFullName,
-        phoneNumber: regPhone,
-        email: regEmail,
-        password: regPassword,
-      });
-
-      if (!regRes.success) {
-        setOtpError(regRes.message || 'Đăng ký không thành công.');
-        return;
-      }
-
-      setOtpSuccess(true);
-      setTimeout(() => {
-        // Automatically log in the new Customer or Driver
-        setShowOtpModal(false);
-        if (regRole === 'Driver') {
-          // Khởi tạo tài khoản Driver mới với trạng thái hồ sơ Draft / Chưa nộp
-          useAuthStore.getState().loginWithRole('Driver');
-          // Chuyển thẳng tài xế tới màn hình nộp hồ sơ pháp lý
-          navigate('/driver/profile', { replace: true });
-        } else {
-          const loginRes = login(regPhone, regPassword);
-          if (loginRes.success && loginRes.defaultPath) {
-            navigate(loginRes.defaultPath, { replace: true });
-          } else {
-            setActiveTab('login');
-            setLoginPhone(regPhone);
-          }
-        }
-      }, 1000);
-    }, 400);
-  };
-
-  // Quick 1-click login for testing
-  const handleQuickLogin = (role: UserRole) => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      const targetPath = loginWithRole(role);
-      setIsSubmitting(false);
-      navigate(targetPath, { replace: true });
-    }, 200);
   };
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-start overflow-hidden bg-slate-100 select-none">
-      {/* 1. ELEGANT CALM WHITE / LIGHT NEUTRAL BACKGROUND (MÀU TRẦM TRẮNG DỄ NHÌN) */}
-      <div className="absolute inset-0 z-0 bg-slate-100">
-        {/* Soft subtle background */}
-        <div className="absolute inset-0 bg-slate-50" />
-        <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
-      </div>
-
-      {/* 2. RIGHT-SIDE ILLUSTRATION / PHOTO OF COURIER & CUSTOMER */}
-      <div className="hidden lg:flex absolute right-0 top-0 bottom-0 w-7/12 items-end justify-center pointer-events-none z-10 overflow-hidden">
-        <img
-          src="/images/auth-banner.jpg"
-          alt="ModMove Truck Courier and Customer"
-          className="h-full w-full object-cover object-center max-h-screen filter drop-shadow-xl"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1600&q=80';
-          }}
-        />
-      </div>
-
-      {/* 3. MAIN FLOATING WHITE CARD */}
-      <div className="relative z-20 w-full max-w-xl mx-auto lg:mx-0 lg:ml-12 xl:ml-24 px-4 py-8">
-        <div className="bg-white rounded-[24px] shadow-xl p-6 sm:p-10 border border-slate-200/80 max-w-md w-full mx-auto">
-          {/* Header: Logo and Return Home Button */}
-          <div className="flex items-center justify-between mb-6">
-            <div
-              onClick={() => navigate('/')}
-              className="flex items-center gap-2.5 cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
-                <Truck className="w-5 h-5 text-blue-400" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 tracking-tight">
-                Mod<span className="text-blue-600">Move</span>
-                <span className="text-[10px] text-slate-400 align-super ml-0.5 font-bold">®</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/')}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Trang chủ</span>
-            </button>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl grid md:grid-cols-2 bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
+        <div className="hidden md:flex flex-col justify-between bg-slate-900 text-white p-8">
+          <Link to="/" className="flex items-center gap-2 text-xl font-black">
+            <Truck className="w-6 h-6 text-blue-400" /> Mod<span className="text-blue-500">Move</span>
+          </Link>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black leading-tight">Chuyển đồ nhanh, giá minh bạch trong nội thành Hà Nội.</h2>
+            <p className="text-sm text-slate-400">Tự lọc xe phù hợp tải trọng & kích thước, theo dõi tài xế trực tiếp, thanh toán PayOS hoặc tiền mặt.</p>
           </div>
+          <p className="text-[11px] text-slate-500">Tài xế đăng ký qua ứng dụng ModMove Driver.</p>
+        </div>
 
-          {/* TWO TABS: ĐĂNG NHẬP | ĐĂNG KÝ (IDENTICAL TO SCREENSHOT) */}
-          <div className="flex items-center gap-8 border-b border-slate-100 mb-6">
-            <button
-              onClick={() => {
-                setActiveTab('login');
-                setLoginError('');
-              }}
-              className={`pb-3 text-base sm:text-lg transition-all relative ${
-                activeTab === 'login'
-                  ? 'font-extrabold text-slate-900 border-b-2 border-slate-900'
-                  : 'font-semibold text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              Đăng nhập
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('register');
-                setLoginError('');
-              }}
-              className={`pb-3 text-base sm:text-lg transition-all relative ${
-                activeTab === 'register'
-                  ? 'font-extrabold text-slate-900 border-b-2 border-slate-900'
-                  : 'font-semibold text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              Đăng ký
-            </button>
-          </div>
-
-          {/* Error Message Alert */}
-          {loginError && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-start gap-2.5 animate-fadeIn">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>{loginError}</span>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* TAB 1: FORM ĐĂNG NHẬP (IMAGE 1) */}
-          {/* ========================================================================= */}
-          {activeTab === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              {/* Phone Input with Vietnam Flag +84 Box */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">
-                  Số điện thoại hoặc Tài khoản
-                </label>
-                <div className="flex items-center gap-2.5">
-                  {/* Flag +84 Prefix Box */}
-                  <div className="h-12 px-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-2 flex-shrink-0 text-slate-700 font-bold text-xs sm:text-sm">
-                    {/* Vietnam Flag representation */}
-                    <span className="text-base" role="img" aria-label="Vietnam Flag">
-                      🇻🇳
-                    </span>
-                    <span>+84</span>
-                  </div>
-
-                  {/* Phone input */}
-                  <input
-                    type="text"
-                    value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                    placeholder="Số điện thoại"
-                    autoFocus
-                    className="flex-1 h-12 px-4 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Password field with toggle */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">Mật khẩu</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginPhone('0338967316');
-                      setLoginPassword('123456');
-                    }}
-                    className="text-[11px] text-brand-600 hover:underline font-semibold"
-                  >
-                    Quên mật khẩu?
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Mật khẩu (Mặc định: 123456)"
-                    className="w-full h-12 px-4 pr-11 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* TIẾP TỤC BUTTON */}
-              <button
-                type="submit"
-                disabled={!isLoginValid || isSubmitting}
-                className={`w-full h-12 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-200 ${
-                  isLoginValid
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer active:scale-98'
-                    : 'bg-[#CBD5E1] text-slate-500 cursor-not-allowed'
-                }`}
-              >
-                {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <span>Tiếp tục</span>
-                )}
+        <div className="p-6 sm:p-8">
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-5" role="tablist">
+            {(['login', 'register'] as const).map((t) => (
+              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`flex-1 py-2 rounded-lg text-sm font-bold ${tab === t ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
+                {t === 'login' ? 'Đăng nhập' : 'Đăng ký khách hàng'}
               </button>
+            ))}
+          </div>
 
-              {/* DIVIDER: "HOẶC" (EXACTLY AS IN IMAGE 1) */}
-              <div className="relative my-5">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white px-3 text-slate-400 font-medium">Hoặc</span>
-                </div>
-              </div>
+          {redirect && <Banner kind="info" className="mb-4">{msg('MSG14')} Đơn nháp của bạn vẫn được giữ lại.</Banner>}
 
-              {/* SOCIAL LOGIN BUTTONS (FACEBOOK & GOOGLE - EXACTLY AS IN IMAGE 1) */}
-              <div className="space-y-2.5">
-                {/* Facebook Login */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('Customer')}
-                  className="w-full h-12 px-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-3 transition"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                  <span>Đăng nhập với Facebook</span>
-                </button>
-
-                {/* Google Login */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('Customer')}
-                  className="w-full h-12 px-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-3 transition"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                  <span>Đăng nhập với Google</span>
+          {tab === 'login' ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                doLogin(identifier, pwd);
+              }}
+              className="space-y-3"
+              noValidate
+            >
+              <Field label="Email hoặc số điện thoại" icon={<Mail className="w-4 h-4" />} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+              <Field label="Mật khẩu" type="password" icon={<Lock className="w-4 h-4" />} autoComplete="current-password" value={pwd} onChange={(e) => setPwd(e.target.value)} />
+              <div className="flex justify-end">
+                <button type="button" className="text-xs font-bold text-blue-600" onClick={() => { setForgotEmail(identifier.includes('@') ? identifier : ''); setForgotOpen(true); }}>
+                  Quên mật khẩu?
                 </button>
               </div>
+              {loginError && <Banner kind="error">{loginError}</Banner>}
+              <Button type="submit" className="w-full" isLoading={loggingIn} disabled={!identifier || !pwd}>
+                Đăng nhập
+              </Button>
 
-              {/* DEMO ACCOUNTS HELPER (Tiện ích chuyển nhanh 4 vai trò cho chấm bài & kiểm thử) */}
-              <div className="pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowDemoAccounts(!showDemoAccounts)}
-                  className="w-full text-center text-[11px] font-bold text-slate-500 hover:text-brand-600 flex items-center justify-center gap-1 transition"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                  <span>{showDemoAccounts ? 'Ẩn tài khoản Demo' : 'Truy cập nhanh 4 vai trò (Admin / Driver / Dispatcher / Customer)'}</span>
-                </button>
-
-                {showDemoAccounts && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
-                    {HARDCODED_ACCOUNTS.map((acc) => (
-                      <button
-                        key={acc.role}
-                        type="button"
-                        onClick={() => handleQuickLogin(acc.role)}
-                        className="p-2 rounded-lg bg-white border border-slate-200 hover:border-brand-500 text-left transition hover:shadow-sm"
-                      >
-                        <div className="font-bold text-slate-800">{acc.label.split(' ')[0]}</div>
-                        <div className="text-[10px] text-slate-500">TK: {acc.username}</div>
+              {IS_DEMO && (
+                <div className="pt-4 mt-2 border-t border-slate-100">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Tài khoản demo (mật khẩu {DEMO_PASSWORD})</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEMO_ACCOUNTS.map((a) => (
+                      <button key={a.role} type="button" onClick={() => doLogin(a.email, DEMO_PASSWORD)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 text-left">
+                        {a.label}
+                        <span className="block text-[10px] font-medium text-slate-400">{a.email}</span>
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
-            </form>
-          )}
-
-          {/* ========================================================================= */}
-          {/* TAB 2: FORM ĐĂNG KÝ (IMAGE 2 & DOC SRS UC-GST-01) */}
-          {/* ========================================================================= */}
-          {activeTab === 'register' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              {/* Lựa chọn vai trò đăng ký: Khách hàng vs Tài xế */}
-              <div className="p-1 bg-slate-100 rounded-2xl flex items-center gap-1 border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setRegRole('Customer')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    regRole === 'Customer'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <span>Khách hàng</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRegRole('Driver')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    regRole === 'Driver'
-                      ? 'bg-brand-500 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-brand-600'
-                  }`}
-                >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>Đối tác tài xế</span>
-                </button>
-              </div>
-
-              {regRole === 'Driver' && (
-                <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200/80 text-[11px] text-brand-800 leading-snug">
-                  Sau khi xác thực tài khoản, bạn sẽ được chuyển tới bước tải lên hồ sơ pháp lý xe để gửi Ban Quản Trị thẩm định.
                 </div>
               )}
-
-              {/* Field 1: Tên đầy đủ */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  {regRole === 'Driver' ? 'Họ và tên tài xế (Theo CCCD)' : 'Tên đầy đủ'}
-                </label>
-                <input
-                  type="text"
-                  value={regFullName}
-                  onChange={(e) => setRegFullName(e.target.value)}
-                  placeholder="Tên liên lạc của bạn khi sử dụng dịch vụ"
-                  className="w-full h-11 px-3.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-xs sm:text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                />
+            </form>
+          ) : (
+            <form onSubmit={submitRegister} className="space-y-3" noValidate>
+              <Field label="Họ và tên" required icon={<UserIcon className="w-4 h-4" />} value={reg.fullName} error={regErr.fullName} onChange={(e) => setReg({ ...reg, fullName: e.target.value })} />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Số điện thoại" required icon={<Phone className="w-4 h-4" />} inputMode="tel" value={reg.phoneNumber} error={regErr.phoneNumber} onChange={(e) => setReg({ ...reg, phoneNumber: e.target.value })} />
+                <Field label="Email" required type="email" icon={<Mail className="w-4 h-4" />} value={reg.email} error={regErr.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} />
               </div>
-
-              {/* Field 2: Số điện thoại */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Số điện thoại</label>
-                <input
-                  type="tel"
-                  value={regPhone}
-                  onChange={(e) => setRegPhone(e.target.value)}
-                  placeholder="Số điện thoại"
-                  className="w-full h-11 px-3.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-xs sm:text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Mật khẩu" required type="password" autoComplete="new-password" value={reg.password} error={regErr.password} hint={`${BUSINESS.PASSWORD_MIN}–${BUSINESS.PASSWORD_MAX} ký tự`} onChange={(e) => setReg({ ...reg, password: e.target.value })} />
+                <Field label="Nhập lại mật khẩu" required type="password" autoComplete="new-password" value={reg.confirm} error={regErr.confirm} onChange={(e) => setReg({ ...reg, confirm: e.target.value })} />
               </div>
-
-              {/* Field 3: Email (nhận OTP xác thực theo SRS) */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="Email"
-                  className="w-full h-11 px-3.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-xs sm:text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                />
-              </div>
-
-              {/* Field 4: Mật khẩu */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Mật khẩu</label>
-                <div className="relative">
-                  <input
-                    type={showRegPassword ? 'text' : 'password'}
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-                    className="w-full h-11 px-3.5 pr-10 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-xs sm:text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegPassword(!showRegPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition"
-                  >
-                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Field 5: Mã giới thiệu (không bắt buộc) */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Mã giới thiệu (không bắt buộc)</label>
-                <input
-                  type="text"
-                  value={regReferral}
-                  onChange={(e) => setRegReferral(e.target.value)}
-                  placeholder="Mã giới thiệu (không bắt buộc)"
-                  className="w-full h-11 px-3.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-slate-800 text-xs sm:text-sm font-medium transition placeholder:text-slate-400 outline-none"
-                />
-              </div>
-
-              {/* 4 CHECKBOXES (EXACT WORDING FROM USER SCREENSHOT 2) */}
-              <div className="space-y-2.5 pt-2 text-[11px] text-slate-600 leading-snug">
-                {/* Checkbox 1: Chính sách & Điều khoản (Bắt buộc) */}
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={(e) => setAgreeTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 rounded-sm"
-                  />
-                  <span>
-                    Tôi đã đọc, hiểu rõ và đồng ý với{' '}
-                    <span className="text-brand-600 font-bold underline">Chính sách và Điều khoản</span> của ModMove.
-                  </span>
-                </label>
-
-                {/* Checkbox 2: Xử lý dữ liệu cung cấp dịch vụ (Bắt buộc) */}
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={agreeDataProcessing}
-                    onChange={(e) => setAgreeDataProcessing(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 rounded-sm"
-                  />
-                  <span>Cho phép ModMove xử lý dữ liệu cá nhân để thực hiện đơn hàng và cung cấp dịch vụ.</span>
-                </label>
-
-                {/* Checkbox 3: Quảng cáo tiếp thị (Tùy chọn) */}
-                <label className="flex items-start gap-2.5 cursor-pointer select-none text-slate-500">
-                  <input
-                    type="checkbox"
-                    checked={agreeMarketing}
-                    onChange={(e) => setAgreeMarketing(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 rounded-sm"
-                  />
-                  <span>
-                    Cho phép ModMove xử lý dữ liệu cá nhân cho mục đích quảng cáo tiếp thị, truyền thông và các hoạt động
-                    xúc tiến thương mại (Tùy chọn).
-                  </span>
-                </label>
-
-                {/* Checkbox 4: Chuyển giao bên thứ ba (Tùy chọn) */}
-                <label className="flex items-start gap-2.5 cursor-pointer select-none text-slate-500">
-                  <input
-                    type="checkbox"
-                    checked={agreeThirdParty}
-                    onChange={(e) => setAgreeThirdParty(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 rounded-sm"
-                  />
-                  <span>
-                    Cho phép ModMove chuyển giao dữ liệu cá nhân cho bên thứ ba liên quan (Tùy chọn).{' '}
-                    <span className="text-brand-600 font-bold underline">Xem chi tiết</span>
-                  </span>
-                </label>
-              </div>
-
-              {/* NÚT TIẾP TỤC ĐĂNG KÝ */}
-              <button
-                type="submit"
-                disabled={!isRegisterValid}
-                className={`w-full h-12 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 mt-4 transition-all duration-200 ${
-                  isRegisterValid
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer active:scale-98'
-                    : 'bg-[#CBD5E1] text-slate-500 cursor-not-allowed'
-                }`}
-              >
-                Tiếp tục
-              </button>
+              {regErr.form && <Banner kind="error">{regErr.form}</Banner>}
+              <Button type="submit" className="w-full" isLoading={regPending}>
+                Gửi mã xác thực email
+              </Button>
             </form>
           )}
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 4. MODAL XÁC THỰC MÃ OTP (THEO ĐÚNG TÀI LIỆU SRS UC-GST-01: STEP 5 - 8) */}
-      {/* ========================================================================= */}
-      {showOtpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 text-center animate-fadeIn relative">
-            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-brand-600 flex items-center justify-center mx-auto mb-4 shadow-sm">
-              <ShieldCheck className="w-7 h-7" />
-            </div>
+      <Modal
+        open={forgotOpen}
+        title="Khôi phục mật khẩu"
+        size="sm"
+        onClose={() => setForgotOpen(false)}
+        footer={
+          <Button size="sm" onClick={submitForgot}>
+            Gửi mã OTP
+          </Button>
+        }
+      >
+        <Field label="Email đã đăng ký" type="email" value={forgotEmail} error={forgotErr} onChange={(e) => setForgotEmail(e.target.value)} />
+      </Modal>
 
-            <h3 className="text-xl font-extrabold text-slate-900">Xác thực mã OTP</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              Hệ thống đã gửi mã OTP 6 chữ số tới email <strong className="text-slate-800">{regEmail || 'customer@modmove.vn'}</strong>
-            </p>
-
-            {otpError && (
-              <div className="mt-3 p-2.5 rounded-xl bg-rose-50 text-rose-600 text-xs flex items-center justify-center gap-1.5 font-medium">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{otpError}</span>
-              </div>
+      <Modal
+        open={Boolean(otp)}
+        title={otp?.purpose === 'register' ? 'Xác thực email' : 'Đặt lại mật khẩu'}
+        size="sm"
+        onClose={() => setOtp(null)}
+        footer={
+          <Button size="sm" onClick={verifyOtp} disabled={otpCode.length !== BUSINESS.OTP_LENGTH || otpLeft === 0 || (otp?.purpose === 'reset' && !resetPwd)}>
+            Xác nhận
+          </Button>
+        }
+      >
+        {otp && (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600">{msg('MSG15', { masked_email: otp.masked })}</p>
+            {otp.devCode && <Banner kind="info">Chế độ demo – mã OTP: <b>{otp.devCode}</b></Banner>}
+            <Field
+              label={`Mã OTP (${BUSINESS.OTP_LENGTH} số)`}
+              inputMode="numeric"
+              maxLength={BUSINESS.OTP_LENGTH}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+              hint={otpLeft > 0 ? `Hết hạn sau ${Math.floor(otpLeft / 60)}:${String(otpLeft % 60).padStart(2, '0')}` : undefined}
+            />
+            {otp.purpose === 'reset' && (
+              <Field label="Mật khẩu mới" type="password" autoComplete="new-password" value={resetPwd} hint={`${BUSINESS.PASSWORD_MIN}–${BUSINESS.PASSWORD_MAX} ký tự`} onChange={(e) => setResetPwd(e.target.value)} />
             )}
-
-            {otpSuccess && (
-              <div className="mt-3 p-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs flex items-center justify-center gap-2 font-bold animate-pulse">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Đăng ký thành công! Đang chuyển hướng vào hệ thống...</span>
-              </div>
-            )}
-
-            {/* 6-Digit OTP Input Boxes */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3 my-6">
-              {otpCode.map((digit, idx) => (
-                <input
-                  key={idx}
-                  id={`otp-input-${idx}`}
-                  type="text"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    const newOtp = [...otpCode];
-                    newOtp[idx] = val;
-                    setOtpCode(newOtp);
-                    // Auto-focus next input
-                    if (val && idx < 5) {
-                      const nextInput = document.getElementById(`otp-input-${idx + 1}`);
-                      nextInput?.focus();
-                    }
-                  }}
-                  className="w-11 h-13 sm:w-12 sm:h-14 text-center font-mono font-bold text-xl sm:text-2xl border-2 border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 rounded-xl outline-none transition"
-                />
-              ))}
-            </div>
-
-            {/* Countdown timer & Resend button */}
-            <div className="flex items-center justify-between text-xs text-slate-500 px-2 mb-6">
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Hiệu lực còn: <strong className="text-brand-600">{formatTimer(otpCountdown)}</strong></span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpCountdown(300);
-                  setOtpError('');
-                }}
-                className="font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Gửi lại mã</span>
-              </button>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowOtpModal(false)}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm transition"
-              >
-                Hủy bỏ
-              </button>
-
-              <button
-                type="button"
-                onClick={handleVerifyOtp}
-                disabled={isSubmitting || otpSuccess}
-                className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs sm:text-sm shadow-lg shadow-orange-500/25 transition flex items-center justify-center gap-1.5"
-              >
-                {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Xác nhận</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
+            {otpLeft === 0 && <Banner kind="warning">{msg('MSG16')}</Banner>}
+            {otpError && <Banner kind="error">{otpError}</Banner>}
+            <button type="button" className="text-xs font-bold text-blue-600" onClick={() => startOtp(otp.purpose, otp.email)}>
+              Gửi lại mã
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 };

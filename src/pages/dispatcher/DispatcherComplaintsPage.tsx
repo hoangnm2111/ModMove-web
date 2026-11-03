@@ -18,118 +18,99 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/format';
 
-interface CustomerComplaint {
-  id: string;
-  orderCode: string;
-  customerName: string;
-  customerPhone: string;
-  driverName: string;
-  driverPhone: string;
-  ratingScore: number;
-  complaintType: string;
-  complaintContent: string;
-  damageEvidenceUrl: string;
-  podEvidenceUrl: string;
-  orderTotalFee: number;
-  status: 'PENDING_PROPOSAL' | 'PROPOSED_TO_ADMIN' | 'REJECTED';
-  proposedRefundAmount?: number;
-  proposalNote?: string;
-  submittedAt: string;
-}
+import { toast } from '../../components/ui/feedback';
+import { REFUND_SOURCE_LABEL, REFUND_STATUS_LABEL } from '../../constants';
+import { msg } from '../../constants/messages';
+import { useAllOrders, useRefunds } from '../../hooks/useDomainData';
+import { caseService } from '../../services/case.service';
+import { errorMessage } from '../../services/mock/storage';
+import { Refund } from '../../types/case.types';
+import { formatDateTime } from '../../utils/format';
 
-const INITIAL_COMPLAINTS: CustomerComplaint[] = [
-  {
-    id: 'cmp_01',
-    orderCode: 'MM-90182',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    driverName: 'Nguyễn Văn Hùng',
-    driverPhone: '0912345678',
-    ratingScore: 2,
-    complaintType: 'Hàng hóa bị trầy xước & Giao trễ',
-    complaintContent: 'Bàn làm việc gỗ sồi bị trầy sâu một góc cạnh do chằng buộc lỏng lẻo trong thùng xe, đồng thời giao trễ 45 phút so với lịch hẹn.',
-    damageEvidenceUrl: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=800&q=80',
-    podEvidenceUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80',
-    orderTotalFee: 580000,
-    status: 'PENDING_PROPOSAL',
-    submittedAt: 'Hôm nay, 16:30',
-  },
-  {
-    id: 'cmp_02',
-    orderCode: 'MM-78102',
-    customerName: 'Phạm Hương Giang',
-    customerPhone: '0904112233',
-    driverName: 'Lê Thanh Bình',
-    driverPhone: '0977889900',
-    ratingScore: 1,
-    complaintType: 'Thái độ phục vụ & Thu cước sai',
-    complaintContent: 'Tài xế tự ý thu thêm 100k tiền bê vác dù tôi đã đặt gói dịch vụ bốc xếp trọn gói trên ứng dụng.',
-    damageEvidenceUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=800&q=80',
-    podEvidenceUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80',
-    orderTotalFee: 320000,
-    status: 'PROPOSED_TO_ADMIN',
-    proposedRefundAmount: 100000,
-    proposalNote: 'Đã xác minh tài xế thu sai phụ phí. Đề xuất hoàn lại 100.000 VNĐ cho khách hàng.',
-    submittedAt: 'Hôm qua, 11:20',
-  },
-];
+type ViewStatus = 'PENDING_PROPOSAL' | 'PROPOSED_TO_ADMIN' | 'REJECTED';
+const toView = (r: Refund): ViewStatus =>
+  r.status === 'Requested' || r.status === 'InfoRequested' ? 'PENDING_PROPOSAL' : r.status === 'Rejected' || r.status === 'Withdrawn' ? 'REJECTED' : 'PROPOSED_TO_ADMIN';
 
+/** SCR-42 – Xử lý khiếu nại & yêu cầu hoàn tiền sự cố (UC-DIS-08/09/11–15/17) */
 export const DispatcherComplaintsPage: React.FC = () => {
-  const [complaints, setComplaints] = useState<CustomerComplaint[]>(INITIAL_COMPLAINTS);
-  const [selectedComplaint, setSelectedComplaint] = useState<CustomerComplaint>(INITIAL_COMPLAINTS[0]);
+  const refunds = useRefunds();
+  const orders = useAllOrders();
 
-  // Form states for proposal to Admin
-  const [proposedAmount, setProposedAmount] = useState<number>(300000);
-  const [proposalNote, setProposalNote] = useState<string>(
-    'Đã đối soát ảnh POD và xác nhận vết trầy xước bàn gỗ phát sinh trong lúc vận chuyển. Đề xuất bồi hoàn 300.000 VNĐ từ tiền cước.'
-  );
+  // Hoàn tiền huỷ đơn (GB-41) đi thẳng Admin, Dispatcher không duyệt
+  const complaints = refunds
+    .filter((r) => r.source !== 'Cancellation')
+    .map((r) => {
+      const o = orders.find((x) => x.id === r.orderId);
+      return {
+        id: r.id,
+        raw: r,
+        orderCode: r.orderCode,
+        customerName: r.customerName,
+        customerPhone: o?.customerPhone ?? '',
+        driverName: o?.assignedDriver?.name ?? '—',
+        driverPhone: o?.assignedDriver?.phone ?? '',
+        ratingScore: o?.rating?.stars ?? 0,
+        complaintType: `${REFUND_SOURCE_LABEL[r.source]} • ${REFUND_STATUS_LABEL[r.status]}`,
+        complaintContent: `${r.reason}${r.infoReply ? `\n— Khách bổ sung: ${r.infoReply}` : ''}`,
+        damageEvidenceUrl: r.evidence[0] ?? '',
+        // UC-DIS-13: đối chiếu với ảnh kiểm hàng & POD
+        podEvidenceUrl: o?.proof?.deliveryPhoto ?? o?.proof?.pickupPhotos[0] ?? '',
+        orderTotalFee: r.requestedAmount,
+        status: toView(r),
+        proposedRefundAmount: r.proposedAmount,
+        proposalNote: r.proposalNote,
+        submittedAt: formatDateTime(r.createdAt),
+      };
+    });
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedComplaint = complaints.find((c) => c.id === selectedId) ?? complaints[0];
+  const setSelectedComplaint = (c: { id: string }) => setSelectedId(c.id);
+
+  const [proposedAmount, setProposedAmount] = useState<number>(0);
+  const [proposalNote, setProposalNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Submit proposal to Admin queue (UC-DIS-09 & UC-DIS-17)
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setIsSubmitting(true);
+    try {
+      await fn();
+      toast.success(ok);
+      setProposalNote('');
+      setProposedAmount(0);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /** UC-DIS-09/15/17 – GB-42: đề xuất ≤ số tiền khách yêu cầu */
   const handleSubmitProposal = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const updated = complaints.map((c) =>
-        c.id === selectedComplaint.id
-          ? {
-              ...c,
-              status: 'PROPOSED_TO_ADMIN' as const,
-              proposedRefundAmount: proposedAmount,
-              proposalNote: proposalNote,
-            }
-          : c
-      );
-      setComplaints(updated);
-      setSelectedComplaint((prev) => ({
-        ...prev,
-        status: 'PROPOSED_TO_ADMIN',
-        proposedRefundAmount: proposedAmount,
-        proposalNote: proposalNote,
-      }));
-    }, 800);
+    if (!selectedComplaint) return;
+    run(() => caseService.proposeRefund(selectedComplaint.id, proposedAmount, proposalNote), msg('MSG59', { case_type: 'Yêu cầu', case_id: selectedComplaint.id, status: 'Chờ Admin duyệt', additional_information: '' }));
   };
 
-  // Reject complaint (UC-DIS-10)
+  /** Đề xuất không hoàn tiền (vẫn cần Admin chốt – GB-19) */
   const handleRejectComplaint = () => {
-    const updated = complaints.map((c) =>
-      c.id === selectedComplaint.id
-        ? {
-            ...c,
-            status: 'REJECTED' as const,
-            proposalNote: 'Bác bỏ khiếu nại: Hàng hóa đã có dấu hiệu trầy xước từ trước lúc bốc lên xe.',
-          }
-        : c
-    );
-    setComplaints(updated);
-    setSelectedComplaint((prev) => ({
-      ...prev,
-      status: 'REJECTED',
-      proposalNote: 'Bác bỏ khiếu nại: Hàng hóa đã có dấu hiệu trầy xước từ trước lúc bốc lên xe.',
-    }));
+    if (!selectedComplaint) return;
+    run(() => caseService.proposeRefund(selectedComplaint.id, 0, proposalNote || 'Không đủ căn cứ hoàn tiền sau khi đối chiếu ảnh kiểm hàng và POD.'), 'Đã gửi đề xuất không hoàn tiền tới Admin.');
   };
+
+  /** UC-DIS-14 */
+  const handleRequestInfo = () => {
+    if (!selectedComplaint) return;
+    const question = window.prompt('Nội dung cần khách bổ sung:') ?? '';
+    if (!question.trim()) return;
+    run(() => caseService.requestMoreInfo(selectedComplaint.id, question), msg('MSG60', { case_type: 'Yêu cầu', case_id: selectedComplaint.id, requested_information: question }));
+  };
+
+  if (!selectedComplaint) {
+    return <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Không có khiếu nại / yêu cầu hoàn tiền nào.</div>;
+  }
+
+  const awaitingInfo = selectedComplaint.raw.status === 'InfoRequested';
 
   return (
     <div className="flex h-full w-full bg-slate-100 overflow-hidden select-none">
@@ -221,26 +202,20 @@ export const DispatcherComplaintsPage: React.FC = () => {
                   <span className="bg-orange-50 text-brand-600 border border-orange-200 text-xs font-black px-2 py-0.5 rounded">
                     MÃ ĐƠN: #{selectedComplaint.orderCode}
                   </span>
-                  <span className="text-xs text-slate-500">Giá trị đơn: <strong>{formatCurrency(selectedComplaint.orderTotalFee)}</strong></span>
+                  <span className="text-xs text-slate-500">Khách yêu cầu: <strong>{formatCurrency(selectedComplaint.orderTotalFee)}</strong></span>
                 </div>
                 <h2 className="text-lg font-black text-slate-900">{selectedComplaint.complaintType}</h2>
               </div>
 
               <div className="flex items-center gap-2">
-                <a
-                  href={`tel:${selectedComplaint.customerPhone}`}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
-                >
+                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
                   <Phone className="w-4 h-4 text-sky-600" />
-                  <span>Gọi khách ({selectedComplaint.customerPhone})</span>
-                </a>
-                <a
-                  href={`tel:${selectedComplaint.driverPhone}`}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
-                >
+                  <span>Khách: {selectedComplaint.customerPhone}</span>
+                </span>
+                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
                   <Phone className="w-4 h-4 text-emerald-600" />
-                  <span>Gọi tài xế ({selectedComplaint.driverPhone})</span>
-                </a>
+                  <span>Tài xế: {selectedComplaint.driverPhone}</span>
+                </span>
               </div>
             </div>
 
@@ -314,11 +289,11 @@ export const DispatcherComplaintsPage: React.FC = () => {
                     max={selectedComplaint.orderTotalFee}
                     value={proposedAmount}
                     onChange={(e) => setProposedAmount(Number(e.target.value))}
-                    disabled={selectedComplaint.status === 'PROPOSED_TO_ADMIN'}
+                    disabled={selectedComplaint.status !== 'PENDING_PROPOSAL' || awaitingInfo}
                     className="w-full text-xs font-bold p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                   <span className="text-[10px] text-slate-400 mt-1 block">
-                    Tối đa bằng cước đơn: {formatCurrency(selectedComplaint.orderTotalFee)}
+                    Tối đa bằng số tiền khách yêu cầu (GB-42): {formatCurrency(selectedComplaint.orderTotalFee)}
                   </span>
                 </div>
 
@@ -330,7 +305,7 @@ export const DispatcherComplaintsPage: React.FC = () => {
                     type="text"
                     value={proposalNote}
                     onChange={(e) => setProposalNote(e.target.value)}
-                    disabled={selectedComplaint.status === 'PROPOSED_TO_ADMIN'}
+                    disabled={selectedComplaint.status !== 'PENDING_PROPOSAL' || awaitingInfo}
                     placeholder="Nhập lý do bồi thường hoặc kết quả thương lượng..."
                     className="w-full text-xs p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
@@ -338,14 +313,22 @@ export const DispatcherComplaintsPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                {selectedComplaint.status !== 'PROPOSED_TO_ADMIN' && (
+                {awaitingInfo && <span className="mr-auto text-[11px] text-amber-300">Đang chờ khách bổ sung thông tin…</span>}
+                {selectedComplaint.status === 'PENDING_PROPOSAL' && !awaitingInfo && (
                   <>
+                    <button
+                      type="button"
+                      onClick={handleRequestInfo}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-amber-300 hover:bg-amber-500/10 transition cursor-pointer"
+                    >
+                      Yêu cầu bổ sung thông tin
+                    </button>
                     <button
                       type="button"
                       onClick={handleRejectComplaint}
                       className="px-4 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
                     >
-                      Bác bỏ khiếu nại
+                      Đề xuất không hoàn tiền
                     </button>
                     <button
                       type="submit"

@@ -1,5 +1,6 @@
 import React, { useState, createContext, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SuspenseOutlet } from '../components/SuspenseOutlet';
 import {
   Menu,
   X,
@@ -10,6 +11,8 @@ import {
   CreditCard,
   DollarSign,
   Settings,
+  Database,
+  UserCog,
   LogOut,
   ChevronRight,
   TrendingUp,
@@ -19,7 +22,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { useDriverStore } from '../store/useDriverStore';
+import { driverService } from '../services/driver.service';
+import { useLiveData } from '../hooks/useLiveData';
 
 interface AdminLayoutContextType {
   isSidebarOpen: boolean;
@@ -36,14 +40,13 @@ export const AdminLayoutContext = createContext<AdminLayoutContextType>({
 export const useAdminLayout = () => useContext(AdminLayoutContext);
 
 interface AdminLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
-  const { profileApprovalStatus } = useDriverStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
@@ -54,7 +57,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const isUsersActive = location.pathname === '/admin/users';
   const isWithdrawalsActive = location.pathname === '/admin/withdrawals';
   const isPricingActive = location.pathname === '/admin/pricing';
-  const isReportsActive = location.pathname === '/admin/reports';
+  const isMasterDataActive = location.pathname === '/admin/master-data';
+  const isProfileActive = location.pathname === '/admin/profile';
 
   const handleNavigate = (path: string) => {
     if (window.innerWidth < 768) {
@@ -69,7 +73,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   };
 
   // Pending count calculation (if driver store status is Pending, count as 1 + mock pending)
-  const pendingDriverCount = profileApprovalStatus === 'Pending' ? 2 : 1;
+  const [pendingDriverCount] = useLiveData(
+    () => driverService.listLatestApplicationsSync().filter((a) => a.status === 'Pending').length,
+    driverService.subscribe
+  );
 
   // Sidebar content (Drawer style matching CustomerLayout & DriverLayout)
   const renderSidebarContent = () => (
@@ -278,7 +285,49 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 >
                   <Settings className="w-4 h-4" />
                 </div>
-                <span className="font-semibold">Bảng cước & Hoa hồng 20%</span>
+                <span className="font-semibold">Bảng cước & Hoa hồng</span>
+              </div>
+            </button>
+            {/* Danh mục xe & mã giảm giá */}
+            <button
+              type="button"
+              onClick={() => handleNavigate('/admin/master-data')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
+                isMasterDataActive
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                  : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    isMasterDataActive ? 'bg-slate-950 text-amber-400' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  <Database className="w-4 h-4" />
+                </div>
+                <span className="font-semibold">Danh mục xe & mã giảm giá</span>
+              </div>
+            </button>
+            {/* Hồ sơ & bảo mật */}
+            <button
+              type="button"
+              onClick={() => handleNavigate('/admin/profile')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
+                isProfileActive
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                  : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    isProfileActive ? 'bg-slate-950 text-amber-400' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  <UserCog className="w-4 h-4" />
+                </div>
+                <span className="font-semibold">Hồ sơ & bảo mật</span>
               </div>
             </button>
           </div>
@@ -404,6 +453,36 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                   Bảng cước & Hoa hồng
                 </span>
               </button>
+              {/* Danh mục xe & mã giảm giá */}
+              <button
+                onClick={() => handleNavigate('/admin/master-data')}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
+                  isMasterDataActive
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-amber-400'
+                }`}
+                title="Danh mục xe & mã giảm giá"
+              >
+                <Database className="w-5 h-5" />
+                <span className="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition z-50">
+                  Danh mục xe & mã giảm giá
+                </span>
+              </button>
+              {/* Hồ sơ & bảo mật */}
+              <button
+                onClick={() => handleNavigate('/admin/profile')}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition group relative ${
+                  isProfileActive
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-amber-400'
+                }`}
+                title="Hồ sơ & bảo mật"
+              >
+                <UserCog className="w-5 h-5" />
+                <span className="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition z-50">
+                  Hồ sơ & bảo mật
+                </span>
+              </button>
             </div>
 
             {/* Bottom Status Dot */}
@@ -431,7 +510,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         {/* MAIN CONTENT WORKSPACE */}
         <main className="flex-1 h-full overflow-hidden relative flex bg-slate-50">
-          {children}
+          {children ?? <SuspenseOutlet />}
         </main>
       </div>
     </AdminLayoutContext.Provider>

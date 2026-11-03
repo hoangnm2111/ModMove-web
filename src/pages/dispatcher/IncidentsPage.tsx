@@ -20,131 +20,134 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/format';
 
-interface IncidentTicket {
-  id: string;
-  orderCode: string;
-  customerName: string;
-  customerPhone: string;
-  driverName: string;
-  driverPhone: string;
-  vehiclePlate: string;
-  vehicleType: string;
-  type: string;
-  description: string;
-  evidencePhoto: string;
-  severity: 'HIGH' | 'MEDIUM' | 'LOW';
-  status: 'OPEN' | 'RESOLVING' | 'RESOLVED_CONTINUE' | 'RESOLVED_REASSIGN' | 'RESOLVED_CANCELLED';
-  reportedAt: string;
-  reassignedDriverName?: string;
-  reassignedDriverPlate?: string;
-  dispatcherDecision?: string;
-}
+import { toast } from '../../components/ui/feedback';
+import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL } from '../../constants';
+import { msg } from '../../constants/messages';
+import { useAllOrders, useIncidents, useUsers } from '../../hooks/useDomainData';
+import { useLiveData } from '../../hooks/useLiveData';
+import { caseService } from '../../services/case.service';
+import { driverService } from '../../services/driver.service';
+import { errorMessage } from '../../services/mock/storage';
+import { IncidentDecision } from '../../types/case.types';
+import { AssignedDriver } from '../../types/order.types';
+import { timeAgo } from '../../utils/format';
 
-const INITIAL_INCIDENTS: IncidentTicket[] = [
-  {
-    id: 'inc_01',
-    orderCode: 'MM-90182',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    driverName: 'Nguyễn Văn Hùng',
-    driverPhone: '0912345678',
-    vehiclePlate: '29C-874.12',
-    vehicleType: 'Xe Tải Nhỏ 1 Tấn',
-    type: 'Sự cố xe hỏng lốp giữa đường',
-    description: 'Xe bị cán đinh nổ lốp sau tại đoạn đường Vành đai 3 trên cao, tài xế đang đợi đội vá lốp lưu động mất tầm 35 phút.',
-    evidencePhoto: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=800&q=80',
-    severity: 'HIGH',
-    status: 'OPEN',
-    reportedAt: '15 phút trước',
-  },
-  {
-    id: 'inc_02',
-    orderCode: 'MM-78220',
-    customerName: 'Trịnh Thúy Vy',
-    customerPhone: '0981223344',
-    driverName: 'Lê Thanh Bình',
-    driverPhone: '0977889900',
-    vehiclePlate: '29H-102.39',
-    vehicleType: 'Xe Tải 1.5 Tấn',
-    type: 'Hàng hóa cồng kềnh quá tải so với khai báo',
-    description: 'Khách hàng có thêm 1 tủ kính và 2 sofa lớn không khai báo ban đầu, thùng xe không đủ chỗ chứa an toàn.',
-    evidencePhoto: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
-    severity: 'MEDIUM',
-    status: 'RESOLVING',
-    reportedAt: '40 phút trước',
-  },
-];
+type TicketStatus = 'OPEN' | 'RESOLVING' | 'RESOLVED_CONTINUE' | 'RESOLVED_REASSIGN' | 'RESOLVED_CANCELLED' | 'CANCELLED';
+const DECISION_STATUS: Record<IncidentDecision, TicketStatus> = {
+  ContinueTrip: 'RESOLVED_CONTINUE',
+  ReassignDriver: 'RESOLVED_REASSIGN',
+  CancelOrder: 'RESOLVED_CANCELLED',
+};
 
+/** SCR-40/41 – Xử lý sự cố (UC-DIS-03/04/05/06/07/10) */
 export const IncidentsPage: React.FC = () => {
-  const [incidents, setIncidents] = useState<IncidentTicket[]>(INITIAL_INCIDENTS);
-  const [selectedIncident, setSelectedIncident] = useState<IncidentTicket>(INITIAL_INCIDENTS[0]);
+  const rawIncidents = useIncidents();
+  const orders = useAllOrders();
+  const users = useUsers();
+  const [apps] = useLiveData(driverService.listLatestApplicationsSync, driverService.subscribe);
+
+  const incidents = rawIncidents.map((i) => {
+    const o = orders.find((x) => x.id === i.orderId);
+    const status: TicketStatus =
+      i.status === 'Open' ? 'OPEN' : i.status === 'InProgress' ? 'RESOLVING' : i.status === 'Cancelled' ? 'CANCELLED' : DECISION_STATUS[i.decision ?? 'ContinueTrip'];
+    return {
+      id: i.id,
+      orderId: i.orderId,
+      orderCode: i.orderCode,
+      vehicleTypeId: o?.vehicle.id,
+      currentDriverId: o?.assignedDriver?.id,
+      paymentMethod: o?.paymentMethod,
+      customerName: o?.customerName ?? '—',
+      customerPhone: o?.customerPhone ?? '',
+      driverName: o?.assignedDriver?.name ?? '—',
+      driverPhone: o?.assignedDriver?.phone ?? '',
+      vehiclePlate: o?.assignedDriver?.licensePlate ?? '',
+      vehicleType: o?.vehicle.name ?? '',
+      type: `${INCIDENT_TYPE_LABEL[i.type]} (${i.reportedBy === 'Driver' ? 'tài xế báo' : 'khách báo'})`,
+      description: i.description,
+      evidencePhoto: i.photos[0] ?? '',
+      severity: (i.type === 'Accident' || i.type === 'DamagedCargo' ? 'HIGH' : i.type === 'VehicleBreakdown' ? 'MEDIUM' : 'LOW') as 'HIGH' | 'MEDIUM' | 'LOW',
+      status,
+      statusLabel: INCIDENT_STATUS_LABEL[i.status],
+      reportedAt: timeAgo(i.createdAt),
+      dispatcherDecision: i.decisionNote,
+    };
+  });
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedIncident = incidents.find((i) => i.id === selectedId) ?? incidents[0];
+  const setSelectedIncident = (i: { id: string }) => setSelectedId(i.id);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReasonInput, setCancelReasonInput] = useState('');
+  const [cancelRefundable, setCancelRefundable] = useState(true);
 
-  // 1. Decision: Continue trip (sự cố nhẹ)
-  const handleDecisionContinue = () => {
-    const updated = incidents.map((inc) =>
-      inc.id === selectedIncident.id
-        ? {
-            ...inc,
-            status: 'RESOLVED_CONTINUE' as const,
-            dispatcherDecision: 'Cho phép tài xế khắc phục tại chỗ và tiếp tục vận chuyển đơn hàng.',
-          }
-        : inc
-    );
-    setIncidents(updated);
-    setSelectedIncident((prev) => ({
-      ...prev,
-      status: 'RESOLVED_CONTINUE',
-      dispatcherDecision: 'Cho phép tài xế khắc phục tại chỗ và tiếp tục vận chuyển đơn hàng.',
-    }));
+  /**
+   * GB-37: tài xế thay thế phải Approved, cùng loại xe, không có đơn đang chạy.
+   * (Online & ký quỹ được kiểm tra thêm ở backend.)
+   */
+  const candidates: AssignedDriver[] = selectedIncident
+    ? apps
+        .filter((a) => a.status === 'Approved' && a.vehicleCategory === selectedIncident.vehicleTypeId && a.driverId !== selectedIncident.currentDriverId)
+        .filter((a) => !orders.some((o) => o.assignedDriver?.id === a.driverId && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.status)))
+        .map((a) => ({
+          id: a.driverId,
+          name: a.fullName,
+          phone: a.phoneNumber,
+          avatar: users.find((x) => x.id === a.driverId)?.avatarUrl ?? '',
+          rating: 4.8,
+          licensePlate: a.licensePlate,
+          currentLat: 21.03,
+          currentLng: 105.8,
+          lastLocationAt: new Date().toISOString(),
+        }))
+    : [];
+
+  const isClosed = !selectedIncident || !['OPEN', 'RESOLVING'].includes(selectedIncident.status);
+
+  const decide = async (decision: IncidentDecision, note: string, extra?: { newDriver?: AssignedDriver; refundable?: boolean }) => {
+    if (!selectedIncident) return;
+    try {
+      await caseService.resolveIncident(selectedIncident.id, decision, note, extra);
+      toast.success(msg('MSG59', { case_type: 'Sự cố', case_id: selectedIncident.id, status: 'Đã giải quyết', additional_information: note }));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
-  // 2. Decision: Reassign driver (điều xe khác)
-  const handleConfirmReassign = (newDriverName: string, newPlate: string) => {
-    const updated = incidents.map((inc) =>
-      inc.id === selectedIncident.id
-        ? {
-            ...inc,
-            status: 'RESOLVED_REASSIGN' as const,
-            reassignedDriverName: newDriverName,
-            reassignedDriverPlate: newPlate,
-            dispatcherDecision: `Đã điều động xe thay thế (${newDriverName} - ${newPlate}) tới tiếp quản hành trình.`,
-          }
-        : inc
-    );
-    setIncidents(updated);
-    setSelectedIncident((prev) => ({
-      ...prev,
-      status: 'RESOLVED_REASSIGN',
-      reassignedDriverName: newDriverName,
-      reassignedDriverPlate: newPlate,
-      dispatcherDecision: `Đã điều động xe thay thế (${newDriverName} - ${newPlate}) tới tiếp quản hành trình.`,
-    }));
+  // 1. Cho tiếp tục chuyến
+  const handleDecisionContinue = () => decide('ContinueTrip', 'Cho phép tài xế khắc phục tại chỗ và tiếp tục vận chuyển.');
+
+  // 2. Đổi tài xế (UC-DIS-06)
+  const handleConfirmReassign = async (driver: AssignedDriver) => {
+    await decide('ReassignDriver', `Điều xe thay thế ${driver.name} (${driver.licensePlate}); tài xế mới kiểm hàng lại từ đầu (GB-37).`, { newDriver: driver });
     setShowReassignModal(false);
   };
 
-  // 3. Decision: Cancel order due to incident (hủy đơn)
-  const handleConfirmCancel = () => {
-    const reason = cancelReasonInput || 'Hàng hóa quá tải nghiêm trọng hoặc hỏng xe không thể tiếp tục';
-    const updated = incidents.map((inc) =>
-      inc.id === selectedIncident.id
-        ? {
-            ...inc,
-            status: 'RESOLVED_CANCELLED' as const,
-            dispatcherDecision: `Đã hủy đơn hàng do sự cố: ${reason}. Tạo đề xuất hoàn tiền chuyển Admin duyệt.`,
-          }
-        : inc
-    );
-    setIncidents(updated);
-    setSelectedIncident((prev) => ({
-      ...prev,
-      status: 'RESOLVED_CANCELLED',
-      dispatcherDecision: `Đã hủy đơn hàng do sự cố: ${reason}. Tạo đề xuất hoàn tiền chuyển Admin duyệt.`,
-    }));
+  // 3. Huỷ đơn (UC-DIS-07) – GB-38 hoàn 100% PayOS; GB-07/GB-35 không hoàn
+  const handleConfirmCancel = async () => {
+    const reason = cancelReasonInput.trim() || 'Không thể tiếp tục chuyến do sự cố';
+    await decide('CancelOrder', reason, { refundable: cancelRefundable });
     setShowCancelModal(false);
+    setCancelReasonInput('');
   };
+
+  // UC-DIS-10: huỷ sự cố không hợp lệ
+  const handleCancelIncident = async () => {
+    if (!selectedIncident) return;
+    const reason = window.prompt('Lý do huỷ sự cố (không hợp lệ / không đủ căn cứ):') ?? '';
+    if (!reason.trim()) return;
+    try {
+      await caseService.cancelIncident(selectedIncident.id, reason);
+      toast.success(msg('MSG59', { case_type: 'Sự cố', case_id: selectedIncident.id, status: 'Đã huỷ', additional_information: reason }));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  if (!selectedIncident) {
+    return <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Chưa có sự cố nào được báo cáo.</div>;
+  }
 
   return (
     <div className="flex h-full w-full bg-slate-100 overflow-hidden select-none">
@@ -237,20 +240,14 @@ export const IncidentsPage: React.FC = () => {
 
               {/* Quick Communication Buttons */}
               <div className="flex items-center gap-2">
-                <a
-                  href={`tel:${selectedIncident.driverPhone}`}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
-                >
+                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
                   <PhoneCall className="w-4 h-4 text-emerald-600" />
-                  <span>Gọi tài xế ({selectedIncident.driverPhone})</span>
-                </a>
-                <a
-                  href={`tel:${selectedIncident.customerPhone}`}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
-                >
+                  <span>Tài xế: {selectedIncident.driverPhone}</span>
+                </span>
+                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
                   <PhoneCall className="w-4 h-4 text-sky-600" />
-                  <span>Gọi khách ({selectedIncident.customerPhone})</span>
-                </a>
+                  <span>Khách: {selectedIncident.customerPhone}</span>
+                </span>
               </div>
             </div>
 
@@ -307,6 +304,7 @@ export const IncidentsPage: React.FC = () => {
             )}
 
             {/* Decision Actions Workspace (UC-DIS-05) */}
+            {!isClosed && (
             <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 to-sky-950 text-white space-y-3 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
@@ -363,7 +361,11 @@ export const IncidentsPage: React.FC = () => {
                   </span>
                 </button>
               </div>
+              <button type="button" onClick={handleCancelIncident} className="text-[11px] font-bold text-slate-300 underline">
+                Huỷ sự cố (không hợp lệ – UC-DIS-10)
+              </button>
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -394,25 +396,23 @@ export const IncidentsPage: React.FC = () => {
 
             {/* Candidate Drivers List */}
             <div className="space-y-2">
-              {[
-                { name: 'Hoàng Hải Nam', phone: '0988112233', plate: '30F-441.20', type: 'Xe Tải 2 Tấn', distance: '1.2 km' },
-                { name: 'Đỗ Văn Cường', phone: '0933441122', plate: '29C-552.18', type: 'Xe Tải 1 Tấn', distance: '2.5 km' },
-              ].map((cand, idx) => (
+              {candidates.length === 0 && <p className="text-xs text-slate-500">Không có tài xế phù hợp (cùng loại xe, đã duyệt, đang rảnh). Hãy huỷ đơn theo GB-38.</p>}
+              {candidates.map((cand, idx) => (
                 <div
                   key={idx}
                   className="p-3 rounded-2xl border border-slate-200 hover:border-sky-500 bg-slate-50 hover:bg-sky-50/40 flex items-center justify-between transition"
                 >
                   <div>
                     <div className="font-black text-xs text-slate-900">{cand.name} ({cand.phone})</div>
-                    <div className="text-[11px] text-slate-500 font-mono">{cand.plate} • {cand.type}</div>
+                    <div className="text-[11px] text-slate-500 font-mono">{cand.licensePlate} • {selectedIncident.vehicleType}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                      Cách {cand.distance}
+                      Đang rảnh
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleConfirmReassign(cand.name, cand.plate)}
+                      onClick={() => handleConfirmReassign(cand)}
                       className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
                     >
                       Điều xe này
@@ -456,7 +456,7 @@ export const IncidentsPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-500">
-              Đơn hàng sẽ được chuyển sang trạng thái <strong>Đã hủy</strong>. Hệ thống sẽ tạo đề xuất hoàn tiền chuyển tiếp đến Quản trị viên (Admin) phê duyệt.
+              Đơn hàng sẽ được chuyển sang trạng thái <strong>Đã hủy</strong>. Với đơn PayOS đã thanh toán, hệ thống tạo khoản hoàn 100% chuyển Quản trị viên duyệt; đơn tiền mặt được giải quyết ngoài hệ thống.
             </p>
 
             <textarea
@@ -466,6 +466,12 @@ export const IncidentsPage: React.FC = () => {
               placeholder="Nhập lý do chi tiết (Ví dụ: Khách không đồng ý sang xe, hàng dễ vỡ không thể tiếp tục)..."
               className="w-full text-xs p-3 rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition"
             />
+            {selectedIncident.paymentMethod === 'PayOS' && (
+              <label className="flex items-start gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={cancelRefundable} onChange={(e) => setCancelRefundable(e.target.checked)} className="mt-0.5" />
+                <span>Hoàn 100% cho khách (GB-38). Bỏ chọn nếu huỷ do hàng cấm (GB-07) hoặc khách vắng mặt (GB-35).</span>
+              </label>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button

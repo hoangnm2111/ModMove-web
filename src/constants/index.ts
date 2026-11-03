@@ -1,7 +1,7 @@
-import { VehicleOption, ServiceOption } from '../types/order.types';
+import { OrderStatus } from '../types/order.types';
+import { IncidentStatus, IncidentType, RefundSource, RefundStatus } from '../types/case.types';
 
-export const ORDER_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  PlaceOrder: { label: 'Đang tìm tài xế', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+export const ORDER_STATUS_CONFIG: Record<OrderStatus, { label: string; bg: string; text: string; border: string }> = {
   Pending: { label: 'Đang tìm tài xế', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
   Accepted: { label: 'Đã nhận đơn', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   Arrived: { label: 'Đã đến điểm lấy', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
@@ -12,46 +12,43 @@ export const ORDER_STATUS_CONFIG: Record<string, { label: string; bg: string; te
   Cancelled: { label: 'Đã huỷ', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
 };
 
+export const INCIDENT_TYPE_LABEL: Record<IncidentType, string> = {
+  VehicleBreakdown: 'Hỏng xe',
+  DamagedCargo: 'Hư hỏng hàng hoá',
+  Accident: 'Tai nạn',
+  Delay: 'Giao chậm',
+  WrongRoute: 'Sai lộ trình',
+  DriverMisconduct: 'Tài xế không đúng mực',
+  Other: 'Khác',
+};
 
-export const DEFAULT_VEHICLES: VehicleOption[] = [
-  {
-    id: 'veh_truck_under_1t',
-    name: 'Xe Tải dưới 1 Tấn',
-    category: 'TRUCK_1TON',
-    tag: 'Tải trọng 500kg - 950kg • Thùng xe 2.2m • Chuyên chở đồ đạc phòng trọ, căn hộ nhỏ',
-    capacityText: 'Dung tích 4.5 m³ • Thời gian tiếp cận: ~8 phút',
-    dimensions: '2.2 x 1.4 x 1.5 m',
-    baseFare: 180000,
-    perKmRate: 16000,
-    iconType: 'truck',
-    isAiRecommended: true,
-  },
-  {
-    id: 'veh_truck_1_2t',
-    name: 'Xe Tải 1 - 2 Tấn',
-    category: 'TRUCK_2TON',
-    tag: 'Tải trọng 1.000kg - 2.000kg • Thùng dài 3.5m - 4.2m • Chuyên dọn nhà trọn gói, hàng công ty',
-    capacityText: 'Dung tích 10.5 m³ • Thời gian tiếp cận: ~15 phút',
-    dimensions: '3.8 x 1.7 x 1.8 m',
-    baseFare: 280000,
-    perKmRate: 22000,
-    iconType: 'heavy_truck',
-  },
-];
+export const INCIDENT_STATUS_LABEL: Record<IncidentStatus, string> = {
+  Open: 'Mới tiếp nhận',
+  InProgress: 'Đang xử lý',
+  Resolved: 'Đã giải quyết',
+  Cancelled: 'Đã huỷ',
+};
 
-export const DEFAULT_SERVICES: ServiceOption[] = [
-  {
-    id: 'srv_loading_full',
-    name: 'Bốc xếp tận nơi (Loading / Unloading)',
-    description: 'Tài xế và phụ xe hỗ trợ khuân vác, bốc dỡ hàng hóa cẩn thận tại 2 đầu (Điểm lấy và Điểm giao hàng).',
-    price: 50000,
-    isSelected: true,
-  },
-  {
-    id: 'srv_insured',
-    name: 'Bảo hiểm hàng hóa giá trị cao',
-    description: 'Bồi thường 100% giá trị hàng hóa nếu xảy ra trầy xước hoặc đổ vỡ do vận chuyển',
-    price: 35000,
-    isSelected: false,
-  },
-];
+export const REFUND_SOURCE_LABEL: Record<RefundSource, string> = {
+  Cancellation: 'Huỷ đơn',
+  Incident: 'Sự cố',
+  Complaint: 'Khiếu nại',
+};
+
+export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
+  Requested: 'Chờ điều phối xem xét',
+  InfoRequested: 'Cần bổ sung thông tin',
+  Proposed: 'Chờ Admin duyệt',
+  Approved: 'Đã duyệt',
+  Rejected: 'Từ chối',
+  Processed: 'Đã hoàn tiền',
+  Withdrawn: 'Đã rút',
+};
+
+export const CARGO_TYPE_OPTIONS = [
+  { value: 'Furniture', label: 'Nội thất' },
+  { value: 'Electronics', label: 'Điện tử' },
+  { value: 'Household', label: 'Gia dụng' },
+  { value: 'Documents', label: 'Tài liệu' },
+  { value: 'Other', label: 'Khác' },
+] as const;

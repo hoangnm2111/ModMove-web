@@ -17,7 +17,11 @@ import {
   Camera,
   Filter
 } from 'lucide-react';
-import { formatCurrency, formatDistance } from '../../utils/format';
+import { formatCurrency, formatDateTime, formatDistance } from '../../utils/format';
+import { BUSINESS } from '../../config/business';
+import { calculateDriverEarning } from '../../domain/pricing';
+import { useAllOrders } from '../../hooks/useDomainData';
+import { useDriverContext } from '../../hooks/useDriverContext';
 
 interface CompletedTrip {
   id: string;
@@ -42,99 +46,46 @@ interface CompletedTrip {
   signaturePhoto: string;
 }
 
-const MOCK_TRIP_HISTORY: CompletedTrip[] = [
-  {
-    id: 'trip_hist_01',
-    code: 'MM-78219',
-    completedAt: '29/10/2026 15:45',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338 967 316',
-    pickupAddress: 'Tòa Nhà 131 Trần Phú, P.Hà Đông, Hà Nội',
-    dropoffAddress: 'Eurowindow Multi Complex, 27 Trần Duy Hưng, Cầu Giấy, Hà Nội',
-    cargoName: '8 Thùng hồ sơ tài liệu văn phòng và thiết bị máy in',
-    cargoWeightKg: 180,
-    totalDistanceKm: 8.5,
-    durationMins: 28,
-    totalFee: 480000,
-    netEarnings: 384000,
-    paymentMethod: 'PayOS',
-    status: 'Completed',
-    rating: 5,
-    customerFeedback: 'Bác tài nhiệt tình, hỗ trợ bốc xếp cẩn thận vào tận phòng làm việc.',
-    podPhoto: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80',
-    signaturePhoto: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'trip_hist_02',
-    code: 'MM-65104',
-    completedAt: '29/10/2026 11:20',
-    customerName: 'Nguyễn Thị Bích Ngọc',
-    customerPhone: '0978 222 555',
-    pickupAddress: 'Chợ hoa Quảng Bá, Nghi Tàm, Tây Hồ, Hà Nội',
-    dropoffAddress: 'Khu biệt thự Gamuda Gardens, Yên Sở, Hoàng Mai, Hà Nội',
-    cargoName: 'Chậu cây cảnh phong thủy và giỏ hoa tươi sự kiện',
-    cargoWeightKg: 95,
-    totalDistanceKm: 14.8,
-    durationMins: 36,
-    totalFee: 620000,
-    netEarnings: 496000,
-    paymentMethod: 'Cash',
-    status: 'Completed',
-    rating: 5,
-    customerFeedback: 'Giao hàng đúng giờ, cây cối nguyên vẹn không bị rụng lá.',
-    podPhoto: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?auto=format&fit=crop&w=600&q=80',
-    signaturePhoto: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'trip_hist_03',
-    code: 'MM-51928',
-    completedAt: '28/10/2026 17:30',
-    customerName: 'Phạm Đức Huy',
-    customerPhone: '0915 678 999',
-    pickupAddress: 'Cửa hàng Nội Thất Gỗ, 290 Đê La Thành, Đống Đa, Hà Nội',
-    dropoffAddress: 'Chung cư Eco Green City, 286 Nguyễn Xiển, Thanh Trì, Hà Nội',
-    cargoName: '1 Tủ giày thông minh gỗ sồi và 1 giá sách treo tường',
-    cargoWeightKg: 130,
-    totalDistanceKm: 9.2,
-    durationMins: 32,
-    totalFee: 520000,
-    netEarnings: 416000,
-    paymentMethod: 'PayOS',
-    status: 'Completed',
-    rating: 4,
-    customerFeedback: 'Giao hàng ổn, bọc lót chống trầy xước rất tốt.',
-    podPhoto: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-    signaturePhoto: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=600&q=80',
-  },
-  {
-    id: 'trip_hist_04',
-    code: 'MM-44021',
-    completedAt: '27/10/2026 09:15',
-    customerName: 'Trịnh Quốc Bảo',
-    customerPhone: '0903 444 888',
-    pickupAddress: 'Đại lý gạch men, 120 Hoàng Quốc Việt, Cầu Giấy, Hà Nội',
-    dropoffAddress: 'Khu công nghiệp Bắc Thăng Long, Đông Anh, Hà Nội',
-    cargoName: 'Thùng mẫu vật liệu gốm sứ và đá hoa cương',
-    cargoWeightKg: 310,
-    totalDistanceKm: 18.0,
-    durationMins: 45,
-    totalFee: 650000,
-    netEarnings: 0,
-    paymentMethod: 'Cash',
-    status: 'Cancelled',
-    cancelReason: 'Khách hàng đổi lịch giao sang ngày khác trước khi xe xuất bến',
-    podPhoto: '',
-    signaturePhoto: '',
-  },
-];
 
 export const DriverTripHistoryPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Completed' | 'Cancelled'>('ALL');
-  const [selectedTrip, setSelectedTrip] = useState<CompletedTrip | null>(null);
+  const [selectedTrip, setSelectedTrip] = useState<(CompletedTrip & { commissionRate: number }) | null>(null);
   const [photoZoom, setPhotoZoom] = useState<string | null>(null);
 
-  const filteredTrips = MOCK_TRIP_HISTORY.filter((trip) => {
+  const { driverId } = useDriverContext();
+  const orders = useAllOrders();
+  /** Lịch sử chuyến của tài xế: đơn đã hoàn thành hoặc đã huỷ */
+  const trips: (CompletedTrip & { commissionRate: number })[] = orders
+    .filter((o) => o.assignedDriver?.id === driverId && (o.status === 'Completed' || o.status === 'Cancelled'))
+    .map((o) => {
+      const rate = o.commissionRate ?? BUSINESS.DEFAULT_COMMISSION_RATE;
+      return {
+        id: o.id,
+        code: o.code,
+        completedAt: formatDateTime(o.completedAt ?? o.cancelledAt),
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
+        pickupAddress: o.pickup.address,
+        dropoffAddress: o.dropoff.address,
+        cargoName: o.cargo.description,
+        cargoWeightKg: o.cargo.weightKg,
+        totalDistanceKm: o.fare.distanceKm,
+        durationMins: o.fare.durationMins,
+        totalFee: o.fare.total,
+        netEarnings: o.status === 'Completed' ? calculateDriverEarning(o.fare.total, rate) : 0,
+        paymentMethod: o.paymentMethod,
+        status: o.status as 'Completed' | 'Cancelled',
+        cancelReason: o.cancellationReason,
+        rating: o.rating?.stars,
+        customerFeedback: o.rating?.comment,
+        podPhoto: o.proof?.deliveryPhoto ?? '',
+        signaturePhoto: o.proof?.pickupPhotos[0] ?? '',
+        commissionRate: rate,
+      };
+    });
+
+  const filteredTrips = trips.filter((trip) => {
     if (statusFilter !== 'ALL' && trip.status !== statusFilter) return false;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
@@ -357,7 +308,7 @@ export const DriverTripHistoryPage: React.FC = () => {
                 <div>
                   <span className="text-[10px] font-bold text-emerald-800 uppercase block">Thù lao thực nhận:</span>
                   <span className="text-xl font-black text-emerald-600">+{formatCurrency(selectedTrip.netEarnings)}</span>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Hoa hồng sàn 20%: -{formatCurrency(Math.round(selectedTrip.totalFee * 0.2))}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Hoa hồng sàn {Math.round(selectedTrip.commissionRate * 100)}%: -{formatCurrency(selectedTrip.totalFee - selectedTrip.netEarnings)}</div>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 font-bold block uppercase">Khách hàng:</span>

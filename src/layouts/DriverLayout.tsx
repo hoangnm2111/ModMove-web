@@ -1,5 +1,7 @@
 import React, { useState, createContext, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SuspenseOutlet } from '../components/SuspenseOutlet';
+import { JobAlertModal } from '../features/driver/JobAlertModal';
 import {
   Menu,
   X,
@@ -21,7 +23,10 @@ import {
   Lock,
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { useDriverStore } from '../store/useDriverStore';
+import { useDriverContext } from '../hooks/useDriverContext';
+import { driverService } from '../services/driver.service';
+import { errorMessage } from '../services/mock/storage';
+import { toast } from '../components/ui/feedback';
 import { formatCurrency } from '../utils/format';
 
 interface DriverLayoutContextType {
@@ -39,22 +44,24 @@ export const DriverLayoutContext = createContext<DriverLayoutContextType>({
 export const useDriverLayout = () => useContext(DriverLayoutContext);
 
 interface DriverLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const DriverLayout: React.FC<DriverLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
-  const {
-    isOnline,
-    toggleOnline,
-    todayEarnings,
-    activeTrip,
-    walletBalance,
-    depositBalance,
-    profileApprovalStatus,
-  } = useDriverStore();
+  const { driverId, isOnline, activeTrip, wallet, approvalStatus: profileApprovalStatus } = useDriverContext();
+  const walletBalance = wallet.earningsBalance;
+
+  /** GB-03: chỉ Online khi hồ sơ Approved */
+  const toggleOnline = async () => {
+    try {
+      await driverService.setOnline(driverId, !isOnline);
+    } catch (e) {
+      toast.warning(errorMessage(e));
+    }
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
@@ -517,7 +524,8 @@ export const DriverLayout: React.FC<DriverLayoutProps> = ({ children }) => {
 
         {/* MAIN CONTENT WORKSPACE: Full width/flex like Customer */}
         <main className="flex-1 h-full overflow-hidden relative flex">
-          {children}
+          {children ?? <SuspenseOutlet />}
+          <JobAlertModal />
         </main>
       </div>
     </DriverLayoutContext.Provider>

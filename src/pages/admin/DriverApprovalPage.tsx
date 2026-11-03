@@ -22,150 +22,61 @@ import {
   User,
 } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { useDriverStore } from '../../store/useDriverStore';
+import { confirm, toast } from '../../components/ui/feedback';
+import { msg } from '../../constants/messages';
+import { useLiveData } from '../../hooks/useLiveData';
+import { useVehicleTypes } from '../../hooks/useDomainData';
+import { driverService, DriverApplicationRecord } from '../../services/driver.service';
+import { errorMessage } from '../../services/mock/storage';
+import { formatDateTime } from '../../utils/format';
 
-export interface DriverApplicationItem {
-  id: string;
-  fullName: string;
-  phoneNumber: string;
-  email: string;
-  nationalId: string;
-  licenseNumber: string;
-  licensePhotoUrl: string;
-  registrationPhotoUrl: string;
-  inspectionPhotoUrl: string;
-  vehiclePhotoUrl: string;
-  vehicleCategory: string;
-  payloadCapacityKg: number;
-  boxDimensions: string;
-  licensePlate: string;
-  submittedAt: string;
-  status: 'Approved' | 'Pending' | 'Rejected' | 'Draft';
-  rejectionReason?: string;
-  isCurrentUserDriver?: boolean;
-}
-
+/** SCR-33/34 – Thẩm định hồ sơ tài xế (UC-ADM-08, UC-ADM-09) */
 export const DriverApprovalPage: React.FC = () => {
-  const { profileApprovalStatus, rejectionReason, setProfileApprovalStatus } = useDriverStore();
+  const [apps] = useLiveData(driverService.listLatestApplicationsSync, driverService.subscribe);
+  const vehicleTypes = useVehicleTypes();
+  const vehicleName = (id: string) => vehicleTypes.find((v) => v.id === id)?.name ?? id;
 
   const [activeTabFilter, setActiveTabFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
   const [searchTerm, setSearchTerm] = useState('');
   const [zoomModalPhoto, setZoomModalPhoto] = useState<string | null>(null);
-
-  // Initial applications list with live connection to the current driver profile
-  const [apps, setApps] = useState<DriverApplicationItem[]>([
-    {
-      id: 'app_active_driver',
-      fullName: 'Nguyễn Văn Hùng',
-      phoneNumber: '0912345678',
-      email: 'driver.hung@gmail.com',
-      nationalId: '001201004567',
-      licenseNumber: 'B2-88219482',
-      licensePhotoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80',
-      registrationPhotoUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=1200&q=80',
-      inspectionPhotoUrl: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1200&q=80',
-      vehiclePhotoUrl: 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=1200&q=80',
-      vehicleCategory: 'Xe Tải Nhỏ 1 Tấn',
-      payloadCapacityKg: 990,
-      boxDimensions: '3.0 x 1.6 x 1.7 m',
-      licensePlate: '29C-874.12',
-      submittedAt: 'Hôm nay, 15:30',
-      status: profileApprovalStatus,
-      rejectionReason: rejectionReason,
-      isCurrentUserDriver: true,
-    },
-    {
-      id: 'app_02',
-      fullName: 'Vũ Đức Thịnh',
-      phoneNumber: '0971234567',
-      email: 'thinhvu@gmail.com',
-      nationalId: '001201009988',
-      licenseNumber: 'B2-99120482',
-      licensePhotoUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80',
-      registrationPhotoUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=1200&q=80',
-      inspectionPhotoUrl: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1200&q=80',
-      vehiclePhotoUrl: 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=1200&q=80',
-      vehicleCategory: 'Xe Tải 2 Tấn',
-      payloadCapacityKg: 1950,
-      boxDimensions: '4.2 x 1.8 x 1.9 m',
-      licensePlate: '29C-998.54',
-      submittedAt: 'Hôm qua, 14:20',
-      status: 'Pending',
-      isCurrentUserDriver: false,
-    },
-    {
-      id: 'app_03',
-      fullName: 'Hoàng Hải Nam',
-      phoneNumber: '0988112233',
-      email: 'namhoang@gmail.com',
-      nationalId: '001202008899',
-      licenseNumber: 'C-10294812',
-      licensePhotoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80',
-      registrationPhotoUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80',
-      inspectionPhotoUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=1200&q=80',
-      vehiclePhotoUrl: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1200&q=80',
-      vehicleCategory: 'Xe Tải 2 Tấn',
-      payloadCapacityKg: 1950,
-      boxDimensions: '4.2 x 1.8 x 1.9 m',
-      licensePlate: '30F-441.20',
-      submittedAt: '27/10/2026 09:15',
-      status: 'Approved',
-      isCurrentUserDriver: false,
-    },
-  ]);
-
-  const [selectedApp, setSelectedApp] = useState<DriverApplicationItem>(apps[0]);
-  const [activePhoto, setActivePhoto] = useState<string>(selectedApp.licensePhotoUrl);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedApp: DriverApplicationRecord | undefined = apps.find((a) => a.id === selectedId) ?? apps[0];
+  const [activePhoto, setActivePhoto] = useState<string>(selectedApp?.licensePhotoUrl ?? '');
   const [rejectReasonInput, setRejectReasonInput] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
 
-  // Sync when profileApprovalStatus from store changes
-  React.useEffect(() => {
-    setApps((prev) =>
-      prev.map((a) =>
-        a.isCurrentUserDriver
-          ? { ...a, status: profileApprovalStatus, rejectionReason: rejectionReason }
-          : a
-      )
-    );
-    if (selectedApp.isCurrentUserDriver) {
-      setSelectedApp((prev) => ({
-        ...prev,
-        status: profileApprovalStatus,
-        rejectionReason: rejectionReason,
-      }));
-    }
-  }, [profileApprovalStatus, rejectionReason]);
-
-  // Handle Approve action
-  const handleApprove = () => {
-    const updatedStatus = 'Approved';
-    if (selectedApp.isCurrentUserDriver) {
-      setProfileApprovalStatus('Approved');
-    }
-    setApps((prev) =>
-      prev.map((a) => (a.id === selectedApp.id ? { ...a, status: updatedStatus } : a))
-    );
-    setSelectedApp((prev) => ({ ...prev, status: updatedStatus }));
+  const setSelectedApp = (a: DriverApplicationRecord) => {
+    setSelectedId(a.id);
+    setActivePhoto(a.licensePhotoUrl);
   };
 
-  // Handle Reject action
-  const handleReject = () => {
-    const reason = rejectReasonInput.trim() || 'Hình ảnh giấy tờ không rõ nét hoặc thông tin không trùng khớp';
-    if (selectedApp.isCurrentUserDriver) {
-      setProfileApprovalStatus('Rejected', reason);
+  /** MSG62 → MSG24 */
+  const handleApprove = async () => {
+    if (!selectedApp) return;
+    if (!(await confirm({ title: 'Duyệt hồ sơ', message: msg('MSG62', { action_name: `duyệt hồ sơ ${selectedApp.fullName} (v${selectedApp.version})` }) }))) return;
+    try {
+      await driverService.approve(selectedApp.id);
+      toast.success(msg('MSG24', { status: 'phê duyệt', additional_information: 'Tài xế có thể bật trực tuyến.' }));
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
-    setApps((prev) =>
-      prev.map((a) =>
-        a.id === selectedApp.id
-          ? { ...a, status: 'Rejected', rejectionReason: reason }
-          : a
-      )
-    );
-    setSelectedApp((prev) => ({ ...prev, status: 'Rejected', rejectionReason: reason }));
-    setShowRejectModal(false);
-    setRejectReasonInput('');
   };
+
+  const handleReject = async () => {
+    if (!selectedApp) return;
+    try {
+      await driverService.reject(selectedApp.id, rejectReasonInput);
+      toast.success(msg('MSG24', { status: 'từ chối', additional_information: rejectReasonInput }));
+      setShowRejectModal(false);
+      setRejectReasonInput('');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  if (!selectedApp) {
+    return <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Chưa có hồ sơ tài xế nào.</div>;
+  }
 
   // Filter applications list
   const filteredApps = apps.filter((a) => {
@@ -173,7 +84,7 @@ export const DriverApprovalPage: React.FC = () => {
       activeTabFilter === 'ALL'
         ? true
         : activeTabFilter === 'PENDING'
-        ? a.status === 'Pending' || a.status === 'Draft'
+        ? a.status === 'Pending'
         : activeTabFilter === 'APPROVED'
         ? a.status === 'Approved'
         : a.status === 'Rejected';
@@ -231,7 +142,7 @@ export const DriverApprovalPage: React.FC = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTabFilter(tab.id as any)}
+                onClick={() => setActiveTabFilter(tab.id as typeof activeTabFilter)}
                 className={`py-1.5 rounded-lg transition cursor-pointer ${
                   activeTabFilter === tab.id
                     ? 'bg-white text-slate-900 shadow-xs font-black'
@@ -270,10 +181,8 @@ export const DriverApprovalPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5 font-black text-xs text-slate-900 truncate">
                       <span>{a.fullName}</span>
-                      {a.isCurrentUserDriver && (
-                        <span className="text-[10px] bg-sky-100 text-sky-700 font-extrabold px-1.5 py-0.2 rounded">
-                          Tài khoản hiện tại
-                        </span>
+                      {a.version > 1 && (
+                        <span className="text-[10px] bg-sky-100 text-sky-700 font-extrabold px-1.5 py-0.5 rounded">Nộp lại</span>
                       )}
                     </div>
                     <span
@@ -298,7 +207,7 @@ export const DriverApprovalPage: React.FC = () => {
                   </div>
 
                   <div className="text-xs text-slate-600 font-semibold flex items-center justify-between">
-                    <span>{a.vehicleCategory}</span>
+                    <span>{vehicleName(a.vehicleCategory)} • v{a.version}</span>
                     <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-bold">
                       {a.licensePlate}
                     </span>
@@ -311,7 +220,7 @@ export const DriverApprovalPage: React.FC = () => {
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-slate-400" />
-                      {a.submittedAt}
+                      {formatDateTime(a.submittedAt)}
                     </span>
                   </div>
                 </div>
@@ -336,12 +245,7 @@ export const DriverApprovalPage: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-black text-slate-900">{selectedApp.fullName}</h2>
-                    {selectedApp.isCurrentUserDriver && (
-                      <span className="bg-sky-100 text-sky-800 text-[10px] font-black px-2 py-0.5 rounded-full">
-                        Đang đồng bộ trực tiếp
-                      </span>
-                    )}
-                  </div>
+                                      </div>
                   <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
                     <span>Số điện thoại: <strong className="text-slate-800">{selectedApp.phoneNumber}</strong></span>
                     <span>CCCD: <strong className="text-slate-800 font-mono">{selectedApp.nationalId}</strong></span>
@@ -352,7 +256,7 @@ export const DriverApprovalPage: React.FC = () => {
 
               {/* Status Action Buttons */}
               <div className="flex items-center gap-2">
-                {selectedApp.status === 'Pending' || selectedApp.status === 'Draft' ? (
+                {selectedApp.status === 'Pending' ? (
                   <>
                     <button
                       type="button"
@@ -377,13 +281,7 @@ export const DriverApprovalPage: React.FC = () => {
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       <span>Hồ sơ đã được phê duyệt đầy đủ</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowRejectModal(true)}
-                      className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-rose-600 hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      Hủy duyệt / Thu hồi
-                    </button>
+                    <span className="text-[11px] text-slate-400">Phiên bản đã quyết định không thể thay đổi</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -391,14 +289,7 @@ export const DriverApprovalPage: React.FC = () => {
                       <XCircle className="w-4 h-4 text-rose-600" />
                       <span>Hồ sơ đang bị từ chối</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleApprove}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Duyệt lại</span>
-                    </button>
+                    <span className="text-[11px] text-slate-400">Chờ tài xế nộp lại phiên bản mới (UC-DRV-05)</span>
                   </div>
                 )}
               </div>
@@ -419,7 +310,7 @@ export const DriverApprovalPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">HẠNG XE ĐĂNG KÝ</span>
-                <span className="font-black text-slate-900 text-sm mt-0.5 block">{selectedApp.vehicleCategory}</span>
+                <span className="font-black text-slate-900 text-sm mt-0.5 block">{vehicleName(selectedApp.vehicleCategory)}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">BIỂN SỐ XE</span>

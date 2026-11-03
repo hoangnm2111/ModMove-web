@@ -1,420 +1,464 @@
-import { ShippingOrder } from '../types/order.types';
-import { apiClient } from './api';
+import { BUSINESS } from '../config/business';
+import { msg } from '../constants/messages';
+import { calculateCommission, calculateFare, validateCoupon } from '../domain/pricing';
+import {
+  canComplain,
+  canConfirmReceipt,
+  canCustomerCancel,
+  canReviewPickupEvidence,
+  canTransition,
+  hasEnoughDeposit,
+  isVisibleToDrivers,
+  ratingRestriction,
+  refundOnCancel,
+} from '../domain/orderRules';
+import { canVehicleCarry } from '../domain/vehicleFit';
+import {
+  ActorRole,
+  AssignedDriver,
+  BookingDraft,
+  OrderStatus,
+  Rating,
+  ShippingOrder,
+} from '../types/order.types';
+import { User } from '../types/user.types';
+import { catalogService } from './catalog.service';
+import { GeoPoint, mapService, SAMPLE_PLACES } from './map.service';
+import { latency, readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
 
-const ORDERS_STORAGE_KEY = 'modmove_orders_cache_v3';
+/**
+ * Order service – tương ứng API /orders của backend.
+ * Mỗi hàm kiểm tra Business Rule (GB-xx) giống phía server để FE báo lỗi sớm.
+ */
+const KEY = 'orders';
 
-const INITIAL_MOCK_ORDERS: ShippingOrder[] = [
-  {
-    id: 'ord_26eg8ca4',
-    code: '26EG8CA4',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    pickup: {
-      address: 'Tòa Nhà 131 Trần Phú Hà Đông, 131 Trần Phú, P.Hà Đông, Thủ Đô Hà Nội',
-      lat: 20.9781,
-      lng: 105.7865,
-      contactName: 'Hoàng',
-      contactPhone: '0338967316',
-    },
-    dropoff: {
-      address: 'Eurowindow Multi Complex, 27 Trần Duy Hưng, P.Yên Hòa, TP.Hà Nội',
-      lat: 21.0076,
-      lng: 105.7997,
-      contactName: 'Anh Mạnh',
-      contactPhone: '0338967316',
-    },
-    vehicle: {
-      id: 'veh_truck_500kg',
-      name: 'Xe Bán Tải 500kg',
-      category: 'TRUCK_500KG',
-      tag: 'Giao nhanh tiêu chuẩn đô thị',
-      capacityText: 'Tối đa 500kg',
-      dimensions: '1.8 x 1.2 x 1.2 m',
-      baseFare: 120000,
-      perKmRate: 14000,
-      iconType: 'truck',
-    },
-    cargo: {
-      name: 'Thùng carton thiết bị gia dụng & hồ sơ văn phòng',
-      weightKg: 45.0,
-      quantity: 3,
-      images: ['https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80'],
-    },
-    additionalServices: [],
-    totalDistanceKm: 6.2,
-    estimatedDurationMins: 18,
-    baseFee: 23000,
-    distanceFee: 19000,
-    servicesFee: 0,
-    discountFee: 0,
-    totalFee: 42000,
-    codAmount: 0,
-    status: 'Cancelled',
-    paymentMethod: 'Cash',
-    paymentStatus: 'Unpaid',
-    createdAt: '2026-10-26T23:18:00Z',
-  },
-  {
-    id: 'ord_90182',
-    code: 'MM-90182',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    pickup: {
-      address: 'Keangnam Landmark 72, Phạm Hùng, Mễ Trì, Nam Từ Liêm, Hà Nội',
-      lat: 21.0168,
-      lng: 105.7838,
-      contactName: 'Hoàng Mạnh',
-      contactPhone: '0338967316',
-    },
-    dropoff: {
-      address: 'Vinhomes Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội',
-      lat: 20.9995,
-      lng: 105.7421,
-      contactName: 'Anh Mạnh',
-      contactPhone: '0338967316',
-    },
-    vehicle: {
-      id: 'veh_truck_1t',
-      name: 'Xe Tải Nhỏ 1 Tấn',
-      category: 'TRUCK_1TON',
-      tag: 'Chuyển nhà 1-2 phòng',
-      capacityText: 'Tối đa 1000kg',
-      dimensions: '3.0 x 1.6 x 1.7 m',
-      baseFare: 250000,
-      perKmRate: 20000,
-      iconType: 'truck',
-    },
-    cargo: {
-      name: 'Bàn ghế học sinh, tủ giày và 3 vali quần áo',
-      weightKg: 280,
-      quantity: 5,
-      images: [],
-    },
-    additionalServices: [
-      {
-        id: 'srv_loading_1',
-        name: 'Bốc xếp tầng trệt',
-        description: 'Tài xế hỗ trợ bốc xếp',
-        price: 60000,
-        isSelected: true,
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+
+function seedOrders(): ShippingOrder[] {
+  const vehicles = catalogService.getVehicleTypesSync();
+  const snap = (i: number) => {
+    const { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType } = vehicles[i] ?? vehicles[0];
+    return { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType };
+  };
+  const settings = catalogService.getSettingsSync();
+  const driver: AssignedDriver = {
+    id: 'drv_88',
+    name: 'Nguyễn Văn Hùng',
+    phone: '0912345678',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    rating: 4.9,
+    licensePlate: '29C-874.12',
+    currentLat: 21.0115,
+    currentLng: 105.65,
+    lastLocationAt: new Date().toISOString(),
+  };
+  const base = (
+    code: string,
+    vIdx: number,
+    from: GeoPoint,
+    to: GeoPoint,
+    extra: Partial<ShippingOrder>
+  ): ShippingOrder => {
+    const vehicle = snap(vIdx);
+    const route = mapService.estimateRouteSync(from, to);
+    const fare = calculateFare({ vehicle, ...route, loadingService: true, loadingFee: settings.loadingFee });
+    return {
+      id: `ord_${code}`,
+      code,
+      customerId: 'cust_01',
+      customerName: 'Hoàng Nguyễn Mạnh',
+      customerPhone: '0338967316',
+      pickup: { ...from, contactName: 'Hoàng Mạnh', contactPhone: '0338967316' },
+      dropoff: { ...to, contactName: 'Anh Mạnh', contactPhone: '0338967316' },
+      vehicle,
+      cargo: {
+        type: 'Furniture',
+        description: 'Tủ quần áo 2 cánh, đệm 1m6, 5 thùng carton',
+        quantity: 7,
+        weightKg: 280,
+        largestItem: { lengthCm: 180, widthCm: 60, heightCm: 120 },
+        photos: ['https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80'],
       },
-    ],
-    totalDistanceKm: 7.5,
-    estimatedDurationMins: 22,
-    baseFee: 250000,
-    distanceFee: 150000,
-    servicesFee: 60000,
-    discountFee: 80000,
-    totalFee: 380000,
-    codAmount: 0,
-    status: 'Completed',
-    paymentMethod: 'PayOS',
-    paymentStatus: 'Paid',
-    assignedDriver: {
-      id: 'drv_02',
-      name: 'Lê Hoàng Nam',
-      phone: '0977221199',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-      rating: 5.0,
-      licensePlate: '29D-562.91',
-      currentLat: 20.9995,
-      currentLng: 105.7421,
-      lastUpdated: 'Hoàn tất lúc 11:20',
-    },
-    createdAt: '2026-10-27T09:45:00Z',
-    deliveredAt: '2026-10-27T11:20:00Z',
-  },
-  {
-    id: 'ord_101',
-    code: 'MM-78219',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    pickup: {
-      address: 'Đại học FPT Hà Nội, Khu CNC Hòa Lạc, Thạch Thất, Hà Nội',
-      lat: 21.0131,
-      lng: 105.5268,
-      contactName: 'Hoàng',
-      contactPhone: '0338967316',
-      note: 'Phòng 402 Dom E, đồ đạc đã đóng thùng sẵn',
-    },
-    dropoff: {
-      address: 'Chung cư The Matrix One, Lê Quang Đạo, Nam Từ Liêm, Hà Nội',
-      lat: 21.0102,
-      lng: 105.7725,
-      contactName: 'Anh Mạnh',
-      contactPhone: '0338967316',
-      note: 'Chuyển vào tầng 12, có thang máy hàng',
-    },
-    vehicle: {
-      id: 'veh_truck_1t',
-      name: 'Xe Tải Nhỏ 1 Tấn',
-      category: 'TRUCK_1TON',
-      tag: 'Chuyển nhà 1-2 phòng / Tủ lạnh, nệm',
-      capacityText: 'Tối đa 1000kg',
-      dimensions: '3.0 x 1.6 x 1.7 m',
-      baseFare: 250000,
-      perKmRate: 20000,
-      iconType: 'truck',
-      isAiRecommended: true,
-    },
-    cargo: {
-      name: 'Đồ đạc chuyển phòng trọ: tủ lạnh mini, đệm, bàn gấp, 4 thùng carton',
-      weightKg: 350,
-      quantity: 8,
-      images: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'],
-      aiNotes: 'Phù hợp xe tải 1 tấn thùng bạt. Cần che chắn đệm tránh trời mưa.',
-    },
-    additionalServices: [
-      {
-        id: 'srv_loading_1',
-        name: 'Bốc xếp tầng trệt (Tài xế hỗ trợ)',
-        description: 'Tài xế hỗ trợ khuân vác',
-        price: 60000,
-        isSelected: true,
+      loadingService: true,
+      fare,
+      paymentMethod: 'PayOS',
+      paymentStatus: 'Paid',
+      status: 'Pending',
+      history: [],
+      createdAt: minutesAgo(5),
+      ...extra,
+    };
+  };
+  const P = SAMPLE_PLACES;
+  const all = (q: string) => SAMPLE_PLACES.find((p) => p.address.includes(q)) ?? SAMPLE_PLACES[0];
+  return [
+    base('MM-63211', 2, all('Keangnam'), all('Times City'), {
+      status: 'Pending',
+      paymentMethod: 'Cash',
+      payerRole: 'Sender',
+      paymentStatus: 'Unpaid',
+      createdAt: minutesAgo(2),
+    }),
+    base('MM-78219', 1, all('FPT'), all('Matrix'), {
+      status: 'PickedUp',
+      commissionRate: settings.commissionRate,
+      // Tài xế khác đang chạy đơn này, để tài xế demo (drv_88) còn rảnh nhận đơn mới (GB-09)
+      assignedDriver: { ...driver, id: 'drv_33', name: 'Phạm Quốc Bảo', phone: '0983112233', licensePlate: '30F-992.45' },
+      acceptedAt: minutesAgo(50),
+      pickedUpAt: minutesAgo(5),
+      proof: {
+        pickupPhotos: [
+          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
+        ],
+        pickupSubmissionCount: 1,
+        pickupStatus: 'Pending',
       },
-      {
-        id: 'srv_insured',
-        name: 'Bảo hiểm hàng hóa giá trị cao',
-        description: 'Bảo hiểm 100%',
-        price: 35000,
-        isSelected: true,
+      createdAt: minutesAgo(60),
+      paidAt: minutesAgo(59),
+    }),
+    base('MM-84721', 0, P[4], P[5], {
+      status: 'Delivered',
+      commissionRate: settings.commissionRate,
+      assignedDriver: { ...driver, id: 'drv_33', name: 'Phạm Quốc Bảo', licensePlate: '30F-992.45' },
+      proof: {
+        pickupPhotos: ['https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80'],
+        pickupSubmissionCount: 1,
+        pickupStatus: 'Verified',
+        deliveryPhoto: 'https://images.unsplash.com/photo-1600518464441-9154a4dea21b?auto=format&fit=crop&w=600&q=80',
+        deliveredAt: minutesAgo(90),
       },
-    ],
-    totalDistanceKm: 28.5,
-    estimatedDurationMins: 45,
-    baseFee: 250000,
-    distanceFee: 570000,
-    servicesFee: 95000,
-    discountFee: 50000,
-    totalFee: 865000,
-    codAmount: 0,
-    status: 'PickedUp',
-    paymentMethod: 'PayOS',
-    paymentStatus: 'Paid',
-    assignedDriver: {
-      id: 'drv_88',
-      name: 'Nguyễn Văn Hùng',
-      phone: '0912345678',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      rating: 4.9,
-      licensePlate: '29C-874.12',
-      currentLat: 21.0115,
-      currentLng: 105.6500,
-      lastUpdated: '1 phút trước',
-    },
-    createdAt: '2026-10-27T16:10:00Z',
-    pickedUpAt: '2026-10-27T16:45:00Z',
-  },
-  {
-    id: 'ord_84721',
-    code: 'MM-84721',
-    customerName: 'Nguyễn Văn Nam',
-    customerPhone: '0912889900',
-    pickup: {
-      address: 'Đại học Bách Khoa, Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội',
-      lat: 21.0056,
-      lng: 105.8433,
-      contactName: 'Nam',
-      contactPhone: '0912889900',
-    },
-    dropoff: {
-      address: 'Khu đô thị Times City, 458 Minh Khai, Vĩnh Tuy, Hai Bà Trưng, Hà Nội',
-      lat: 20.9947,
-      lng: 105.8681,
-      contactName: 'Chị Mai',
-      contactPhone: '0912889900',
-    },
-    vehicle: {
-      id: 'veh_pickup',
-      name: 'Xe Bán Tải 500kg',
-      category: 'VAN',
-      tag: 'Giao hàng cồng kềnh',
-      capacityText: 'Tối đa 500kg',
-      dimensions: '1.4 x 1.2 x 1.2 m',
-      baseFare: 150000,
-      perKmRate: 15000,
-      iconType: 'van',
-    },
-    cargo: {
-      name: '1 Máy giặt LG Inverter 9kg nguyên đai nguyên kiện',
-      weightKg: 65,
-      quantity: 1,
-      images: [],
-    },
-    additionalServices: [],
-    totalDistanceKm: 4.5,
-    estimatedDurationMins: 15,
-    baseFee: 150000,
-    distanceFee: 67500,
-    servicesFee: 0,
-    discountFee: 32500,
-    totalFee: 185000,
-    codAmount: 500000,
-    status: 'Delivered',
-    paymentMethod: 'Cash',
-    paymentStatus: 'Paid',
-    assignedDriver: {
-      id: 'drv_33',
-      name: 'Phạm Quốc Bảo',
-      phone: '0983112233',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-      rating: 4.8,
-      licensePlate: '30F-992.45',
-      currentLat: 20.9947,
-      currentLng: 105.8681,
-      lastUpdated: 'Đã đến điểm giao',
-    },
-    createdAt: '2026-10-27T17:20:00Z',
-    deliveredAt: '2026-10-27T17:55:00Z',
-  },
-  {
-    id: 'ord_71930',
-    code: 'MM-71930',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    pickup: {
-      address: 'Ngõ 165 Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
-      lat: 21.0333,
-      lng: 105.7950,
-      contactName: 'Mạnh',
-      contactPhone: '0338967316',
-    },
-    dropoff: {
-      address: 'Số 88 Nguyễn Trãi, Thanh Xuân, Hà Nội',
-      lat: 21.0025,
-      lng: 105.8155,
-      contactName: 'Bạn Mạnh',
-      contactPhone: '0338967316',
-    },
-    vehicle: {
-      id: 'veh_pickup',
-      name: 'Xe Bán Tải 500kg',
-      category: 'VAN',
-      tag: 'Chuyển trọ nhỏ / Đồ gia dụng',
-      capacityText: 'Tối đa 500kg',
-      dimensions: '1.4 x 1.2 x 1.2 m',
-      baseFare: 150000,
-      perKmRate: 15000,
-      iconType: 'van',
-    },
-    cargo: {
-      name: '1 Bàn làm việc chữ L, 1 ghế công thái học',
-      weightKg: 85,
-      quantity: 2,
-      images: [],
-    },
-    additionalServices: [],
-    totalDistanceKm: 6.8,
-    estimatedDurationMins: 20,
-    baseFee: 150000,
-    distanceFee: 102000,
-    servicesFee: 0,
-    discountFee: 0,
-    totalFee: 252000,
-    codAmount: 0,
-    status: 'Accepted',
-    paymentMethod: 'Cash',
-    paymentStatus: 'Unpaid',
-    assignedDriver: {
-      id: 'drv_19',
-      name: 'Đặng Tuấn Anh',
-      phone: '0904556677',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      rating: 4.9,
-      licensePlate: '29H-123.78',
-      currentLat: 21.0300,
-      currentLng: 105.7900,
-      lastUpdated: 'Đang di chuyển đến điểm nhận',
-    },
-    createdAt: '2026-10-27T18:05:00Z',
-  },
-  {
-    id: 'ord_63211',
-    code: 'MM-63211',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    pickup: {
-      address: 'Khu Công Nghiệp Thăng Long, Kim Chung, Đông Anh, Hà Nội',
-      lat: 21.1275,
-      lng: 105.7788,
-      contactName: 'Hoàng',
-      contactPhone: '0338967316',
-    },
-    dropoff: {
-      address: 'Cảng Phà Đen, Thanh Lương, Hai Bà Trưng, Hà Nội',
-      lat: 20.9989,
-      lng: 105.8672,
-      contactName: 'Anh Hoàng',
-      contactPhone: '0338967316',
-    },
-    vehicle: {
-      id: 'veh_truck_2t',
-      name: 'Xe Tải Lớn 2 Tấn',
-      category: 'TRUCK_2TON',
-      tag: 'Hàng nặng công nghiệp',
-      capacityText: 'Tối đa 2000kg',
-      dimensions: '4.3 x 1.8 x 1.9 m',
-      baseFare: 400000,
-      perKmRate: 26000,
-      iconType: 'heavy_truck',
-    },
-    cargo: {
-      name: '15 Thùng linh kiện điện tử và máy phát điện dự phòng',
-      weightKg: 1450,
-      quantity: 16,
-      images: [],
-    },
-    additionalServices: [
-      {
-        id: 'srv_insured',
-        name: 'Bảo hiểm hàng hóa giá trị cao',
-        description: 'Bảo hiểm 100%',
-        price: 35000,
-        isSelected: true,
-      },
-    ],
-    totalDistanceKm: 22.4,
-    estimatedDurationMins: 40,
-    baseFee: 400000,
-    distanceFee: 582400,
-    servicesFee: 35000,
-    discountFee: 100000,
-    totalFee: 917400,
-    codAmount: 0,
-    status: 'PlaceOrder',
-    paymentMethod: 'PayOS',
-    paymentStatus: 'Unpaid',
-    createdAt: '2026-10-27T19:30:00Z',
-  },
-];
+      createdAt: minutesAgo(180),
+      deliveredAt: minutesAgo(90),
+    }),
+    base('MM-90182', 1, P[2], P[1], {
+      status: 'Completed',
+      commissionRate: settings.commissionRate,
+      assignedDriver: { ...driver, id: 'drv_02', name: 'Lê Hoàng Nam', licensePlate: '29D-562.91' },
+      createdAt: minutesAgo(60 * 26),
+      deliveredAt: minutesAgo(60 * 25),
+      completedAt: minutesAgo(60 * 3),
+    }),
+    base('MM-26EG8', 0, P[8], P[7], {
+      status: 'Cancelled',
+      paymentMethod: 'Cash',
+      payerRole: 'Receiver',
+      paymentStatus: 'Unpaid',
+      cancellationReason: 'Khách đổi lịch chuyển',
+      createdAt: minutesAgo(60 * 48),
+      cancelledAt: minutesAgo(60 * 47),
+    }),
+  ];
+}
+
+const load = (): ShippingOrder[] => readStore(KEY, seedOrders);
+const save = (orders: ShippingOrder[]) => writeStore(KEY, orders);
+
+function mutate(orderId: string, fn: (o: ShippingOrder) => ShippingOrder): ShippingOrder {
+  const orders = load();
+  const idx = orders.findIndex((o) => o.id === orderId);
+  if (idx < 0) throw new ServiceError(msg('MSG38'));
+  const next = fn(orders[idx]);
+  orders[idx] = next;
+  save(orders);
+  return next;
+}
+
+function transition(o: ShippingOrder, to: OrderStatus, by: ActorRole, note?: string): ShippingOrder {
+  if (!canTransition(o.status, to)) throw new ServiceError(msg('MSG38'));
+  return { ...o, status: to, history: [...o.history, { from: o.status, to, changedBy: by, note, changedAt: new Date().toISOString() }] };
+}
+
+/**
+ * Mô phỏng background jobs (JOB-MATCH-01, JOB-PAY-01, JOB-ORDER-01) – chạy mỗi lần đọc.
+ * Trên backend đây là scheduled job; FE chỉ đọc kết quả.
+ */
+function runScheduledJobs(orders: ShippingOrder[]): { orders: ShippingOrder[]; changed: boolean } {
+  const now = Date.now();
+  let changed = false;
+  const result = orders.map((o) => {
+    const age = (iso?: string) => (iso ? (now - new Date(iso).getTime()) / 60_000 : 0);
+    // GB-13: PayOS chưa thanh toán sau 30 phút → huỷ
+    if (o.status === 'Pending' && o.paymentMethod === 'PayOS' && o.paymentStatus === 'Unpaid' && age(o.createdAt) > BUSINESS.UNPAID_ORDER_TIMEOUT_MIN) {
+      changed = true;
+      return { ...transition(o, 'Cancelled', 'System', 'Quá hạn thanh toán (GB-13)'), cancellationReason: 'Quá hạn thanh toán', cancelledAt: new Date().toISOString() };
+    }
+    // GB-24: Pending (đã hiển thị cho tài xế) quá 10 phút → huỷ
+    const matchingStart = o.paymentMethod === 'PayOS' ? o.paidAt : o.createdAt;
+    if (isVisibleToDrivers(o) && age(matchingStart) > BUSINESS.MATCHING_TIMEOUT_MIN) {
+      changed = true;
+      return { ...transition(o, 'Cancelled', 'System', msg('MSG35')), cancellationReason: 'Không có tài xế nhận đơn', cancelledAt: new Date().toISOString() };
+    }
+    // GB-23: Delivered quá 24h → tự hoàn thành
+    if (o.status === 'Delivered' && age(o.deliveredAt) > BUSINESS.AUTO_COMPLETE_HOURS * 60) {
+      changed = true;
+      return { ...transition(o, 'Completed', 'System', 'Tự động hoàn thành (GB-23)'), completedAt: new Date().toISOString() };
+    }
+    return o;
+  });
+  return { orders: result, changed };
+}
+
+function loadWithJobs(): ShippingOrder[] {
+  const { orders, changed } = runScheduledJobs(load());
+  if (changed) save(orders);
+  return orders;
+}
+
+/** Callback khi đơn bị huỷ có khoản hoàn (GB-41) – được case.service đăng ký để tránh import vòng */
+let onCancellationRefund: ((o: ShippingOrder, amount: number) => void) | null = null;
+export const registerCancellationRefundHandler = (fn: typeof onCancellationRefund) => {
+  onCancellationRefund = fn;
+};
+/** Callback khi đơn Completed để quyết toán ví tài xế (GB-14/15) */
+let onCompleted: ((o: ShippingOrder) => void) | null = null;
+export const registerCompletionHandler = (fn: typeof onCompleted) => {
+  onCompleted = fn;
+};
+
+const now = () => new Date().toISOString();
 
 export const orderService = {
-  getOrders(): ShippingOrder[] {
-    const raw = localStorage.getItem(ORDERS_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(INITIAL_MOCK_ORDERS));
-      return INITIAL_MOCK_ORDERS;
+  subscribe: (cb: () => void) => subscribeStore(KEY, cb),
+
+  // ------------------------------------------------------------------ Queries
+  listAllSync: (): ShippingOrder[] => loadWithJobs(),
+
+  /** GB-50: khách chỉ xem đơn của mình */
+  listByCustomerSync: (customerId: string): ShippingOrder[] =>
+    loadWithJobs()
+      .filter((o) => o.customerId === customerId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+
+  getByCodeSync: (code: string): ShippingOrder | undefined => loadWithJobs().find((o) => o.code === code || o.id === code),
+
+  /** UC-DRV-08 / GB-31: đơn Pending đủ điều kiện hiển thị cho tài xế */
+  listAvailableJobsSync: (): ShippingOrder[] => loadWithJobs().filter(isVisibleToDrivers),
+
+  getActiveTripOfDriverSync: (driverId: string): ShippingOrder | undefined =>
+    loadWithJobs().find((o) => o.assignedDriver?.id === driverId && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.status)),
+
+  // --------------------------------------------------------------- Customer
+  /** UC-GST-13: ước tính cước cho bản nháp */
+  estimate(draft: BookingDraft) {
+    const vehicle = catalogService.getVehicleTypesSync().find((v) => v.id === draft.vehicleTypeId);
+    if (!vehicle) return null;
+    const route = mapService.estimateRouteSync(draft.pickup, draft.dropoff);
+    const { loadingFee } = catalogService.getSettingsSync();
+    const gross = calculateFare({ vehicle, ...route, loadingService: draft.loadingService, loadingFee });
+    let couponError: string | null = null;
+    let discount = 0;
+    if (draft.couponCode.trim()) {
+      const check = validateCoupon(catalogService.findCouponSync(draft.couponCode), gross.total);
+      if (check.ok) discount = check.discount;
+      else couponError = check.error;
     }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return INITIAL_MOCK_ORDERS;
+    return {
+      vehicle,
+      fare: calculateFare({ vehicle, ...route, loadingService: draft.loadingService, loadingFee, discount }),
+      couponError,
+    };
+  },
+
+  /** UC-GST-17: gửi yêu cầu vận chuyển */
+  async createOrder(draft: BookingDraft, customer: User): Promise<ShippingOrder> {
+    await latency(500);
+    // GB-28 / GB-46
+    if (customer.role !== 'Customer' || customer.status !== 'Active') throw new ServiceError(msg('MSG10'));
+    if (!draft.agreedNoProhibitedCargo || !draft.agreedWarrantyPolicy) throw new ServiceError(msg('MSG32'));
+    // GB-06
+    if (draft.cargo.photos.length < BUSINESS.MIN_CARGO_PHOTOS || draft.cargo.photos.length > BUSINESS.MAX_CARGO_PHOTOS) {
+      throw new ServiceError(msg('MSG03', { field_name: 'Ảnh hàng hoá', constraints: `${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh` }));
     }
+    const est = this.estimate(draft);
+    if (!est || !est.vehicle.isActive) throw new ServiceError(msg('MSG30'));
+    // GB-10
+    if (!canVehicleCarry(est.vehicle, draft.cargo)) throw new ServiceError(msg('MSG30'));
+    if (est.couponError) throw new ServiceError(est.couponError);
+
+    const { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType } = est.vehicle;
+    const createdAt = now();
+    const order: ShippingOrder = {
+      id: `ord_${Date.now().toString(36)}`,
+      code: `MM-${Math.floor(10000 + Math.random() * 90000)}`,
+      customerId: customer.id,
+      customerName: customer.fullName,
+      customerPhone: customer.phoneNumber,
+      pickup: draft.pickup,
+      dropoff: draft.dropoff,
+      vehicle: { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType },
+      cargo: draft.cargo,
+      loadingService: draft.loadingService,
+      couponCode: est.fare.discount > 0 ? draft.couponCode.trim().toUpperCase() : undefined,
+      fare: est.fare,
+      paymentMethod: draft.paymentMethod,
+      payerRole: draft.paymentMethod === 'Cash' ? draft.payerRole : undefined,
+      paymentStatus: 'Unpaid',
+      status: 'Pending',
+      history: [{ from: null, to: 'Pending', changedBy: 'Customer', changedAt: createdAt }],
+      createdAt,
+    };
+    if (order.couponCode) catalogService.consumeCoupon(order.couponCode); // GB-30
+    save([order, ...load()]);
+    return order;
   },
 
-  saveOrder(newOrder: ShippingOrder): ShippingOrder {
-    const orders = this.getOrders();
-    const updated = [newOrder, ...orders];
-    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
-    return newOrder;
+  /** UC-CUS-27 (mock webhook PayOS – API-PAY-01) */
+  async confirmPayment(orderId: string): Promise<ShippingOrder> {
+    await latency(800);
+    return mutate(orderId, (o) => {
+      if (o.status === 'Cancelled') {
+        // GB-41: thanh toán đến sau khi huỷ → hoàn 100%
+        onCancellationRefund?.(o, o.fare.total);
+        throw new ServiceError(msg('MSG37', { order_id: o.code }));
+      }
+      if (o.paymentStatus === 'Paid') return o;
+      return { ...o, paymentStatus: 'Paid', paidAt: now() };
+    });
   },
 
-  getOrderById(id: string): ShippingOrder | undefined {
-    return this.getOrders().find((o) => o.id === id);
+  /** UC-CUS-29 / GB-22 */
+  async cancelByCustomer(orderId: string, customerId: string, reason: string): Promise<ShippingOrder> {
+    await latency();
+    let refund = 0;
+    const updated = mutate(orderId, (o) => {
+      if (o.customerId !== customerId) throw new ServiceError(msg('MSG13'));
+      if (!canCustomerCancel(o)) throw new ServiceError(msg('MSG38'));
+      refund = refundOnCancel(o);
+      return { ...transition(o, 'Cancelled', 'Customer', reason), cancellationReason: reason, cancelledAt: now() };
+    });
+    if (refund > 0) onCancellationRefund?.(updated, refund);
+    return updated;
   },
 
-  updateOrderStatus(orderId: string, status: ShippingOrder['status']): void {
-    const orders = this.getOrders().map((o) => (o.id === orderId ? { ...o, status } : o));
-    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+  /** UC-CUS-12 / GB-26: duyệt ảnh kiểm hàng → InTransit */
+  async approvePickupEvidence(orderId: string): Promise<ShippingOrder> {
+    await latency();
+    return mutate(orderId, (o) => {
+      if (!canReviewPickupEvidence(o)) throw new ServiceError(msg('MSG38'));
+      return { ...transition(o, 'InTransit', 'Customer', 'Khách duyệt ảnh kiểm hàng'), proof: { ...o.proof!, pickupStatus: 'Verified' } };
+    });
+  },
+
+  /** UC-CUS-12 / GB-11: từ chối → tài xế chụp lại */
+  async rejectPickupEvidence(orderId: string, reason: string): Promise<ShippingOrder> {
+    await latency();
+    if (!reason.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Lý do từ chối' }));
+    return mutate(orderId, (o) => {
+      if (!canReviewPickupEvidence(o)) throw new ServiceError(msg('MSG38'));
+      return { ...o, proof: { ...o.proof!, pickupStatus: 'Rejected', pickupRejectReason: reason } };
+    });
+  },
+
+  /** UC-CUS-19: xác nhận đã nhận hàng → Completed */
+  async confirmReceipt(orderId: string): Promise<ShippingOrder> {
+    await latency();
+    const updated = mutate(orderId, (o) => {
+      if (!canConfirmReceipt(o)) throw new ServiceError(msg('MSG38'));
+      return { ...transition(o, 'Completed', 'Customer'), completedAt: now() };
+    });
+    onCompleted?.(updated);
+    return updated;
+  },
+
+  /** UC-CUS-25 / GB-20 */
+  async rateOrder(orderId: string, rating: Omit<Rating, 'createdAt'>): Promise<ShippingOrder> {
+    await latency();
+    if (rating.stars < 1 || rating.stars > 5) throw new ServiceError(msg('MSG56'));
+    return mutate(orderId, (o) => {
+      const restriction = ratingRestriction(o);
+      if (restriction) throw new ServiceError(msg('MSG58', { rating_restriction_message: restriction }));
+      return { ...o, rating: { ...rating, createdAt: now() } };
+    });
+  },
+
+  canComplain,
+
+  // ----------------------------------------------------------------- Driver
+  /** UC-DRV-10 / GB-08, GB-09, GB-16 */
+  async acceptJob(orderId: string, driver: AssignedDriver, depositBalance: number): Promise<ShippingOrder> {
+    await latency();
+    if (this.getActiveTripOfDriverSync(driver.id)) throw new ServiceError('Bạn đang có một đơn đang thực hiện (GB-09).');
+    const { commissionRate } = catalogService.getSettingsSync();
+    return mutate(orderId, (o) => {
+      if (!isVisibleToDrivers(o)) throw new ServiceError(msg('MSG40'));
+      if (o.paymentMethod === 'Cash' && !hasEnoughDeposit(depositBalance, calculateCommission(o.fare.total, commissionRate))) {
+        throw new ServiceError(msg('MSG26', { required_balance: BUSINESS.MIN_COD_DEPOSIT.toLocaleString('vi-VN') + ' đ' }));
+      }
+      return { ...transition(o, 'Accepted', 'Driver'), assignedDriver: driver, commissionRate, acceptedAt: now() };
+    });
+  },
+
+  /** UC-DRV-12 */
+  async markArrived(orderId: string): Promise<ShippingOrder> {
+    await latency();
+    return mutate(orderId, (o) => transition(o, 'Arrived', 'Driver'));
+  },
+
+  /** UC-DRV-13 / GB-11: nộp 2–5 ảnh, tối đa 5 lần */
+  async submitPickupEvidence(orderId: string, photos: string[]): Promise<ShippingOrder> {
+    await latency();
+    if (photos.length < BUSINESS.MIN_PICKUP_PHOTOS || photos.length > BUSINESS.MAX_PICKUP_PHOTOS) {
+      throw new ServiceError(msg('MSG44', { evidence_type: `${BUSINESS.MIN_PICKUP_PHOTOS}–${BUSINESS.MAX_PICKUP_PHOTOS} ảnh kiểm hàng` }));
+    }
+    return mutate(orderId, (o) => {
+      const count = (o.proof?.pickupSubmissionCount ?? 0) + 1;
+      if (count > BUSINESS.MAX_PICKUP_SUBMISSIONS) {
+        throw new ServiceError('Đã quá 5 lần nộp ảnh. Vui lòng báo cáo sự cố cho điều phối viên (GB-11).');
+      }
+      const base = o.status === 'Arrived' ? transition(o, 'PickedUp', 'Driver') : o;
+      if (base.status !== 'PickedUp') throw new ServiceError(msg('MSG38'));
+      return {
+        ...base,
+        pickedUpAt: base.pickedUpAt ?? now(),
+        proof: { pickupPhotos: photos, pickupSubmissionCount: count, pickupStatus: 'Pending' },
+      };
+    });
+  },
+
+  /** UC-DRV-16 / GB-12: cần ảnh giao hàng */
+  async markDelivered(orderId: string, deliveryPhoto: string): Promise<ShippingOrder> {
+    await latency();
+    if (!deliveryPhoto) throw new ServiceError(msg('MSG44', { evidence_type: 'ảnh giao hàng (POD)' }));
+    return mutate(orderId, (o) => {
+      const t = now();
+      return { ...transition(o, 'Delivered', 'Driver'), deliveredAt: t, proof: { ...o.proof!, deliveryPhoto, deliveredAt: t } };
+    });
+  },
+
+  /** UC-DRV-17: ghi nhận thu tiền mặt */
+  async confirmCashCollected(orderId: string): Promise<ShippingOrder> {
+    await latency();
+    return mutate(orderId, (o) => {
+      if (o.paymentMethod !== 'Cash') throw new ServiceError(msg('MSG07'));
+      return { ...o, paymentStatus: 'Paid', paidAt: now() };
+    });
+  },
+
+  // ------------------------------------------------------------- Dispatcher
+  /** UC-DIS-07 / GB-38 */
+  async cancelByDispatcher(orderId: string, reason: string, refundable: boolean): Promise<ShippingOrder> {
+    await latency();
+    let refund = 0;
+    const updated = mutate(orderId, (o) => {
+      refund = refundable ? refundOnCancel(o) : 0;
+      return { ...transition(o, 'Cancelled', 'Dispatcher', reason), cancellationReason: reason, cancelledAt: now() };
+    });
+    if (refund > 0) onCancellationRefund?.(updated, refund);
+    return updated;
+  },
+
+  /** UC-DIS-06 / GB-37: đơn quay về Accepted, đếm lại ảnh kiểm hàng */
+  async reassignDriver(orderId: string, driver: AssignedDriver): Promise<ShippingOrder> {
+    await latency();
+    const { commissionRate } = catalogService.getSettingsSync();
+    return mutate(orderId, (o) => ({
+      ...o,
+      status: 'Accepted',
+      assignedDriver: driver,
+      commissionRate,
+      proof: undefined,
+      history: [...o.history, { from: o.status, to: 'Accepted', changedBy: 'Dispatcher', note: `Đổi tài xế: ${driver.name}`, changedAt: now() }],
+    }));
   },
 };

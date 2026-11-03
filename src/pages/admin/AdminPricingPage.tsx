@@ -1,229 +1,117 @@
-import React, { useState } from 'react';
-import {
-  Settings,
-  Truck,
-  Percent,
-  Check,
-  Save,
-  RotateCcw,
-  Plus,
-  Trash2,
-  DollarSign,
-  Package,
-  Layers,
-  Info,
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Save } from 'lucide-react';
+import { Button } from '../../components/Button';
+import { Banner, confirm, toast } from '../../components/ui/feedback';
+import { Field } from '../../components/ui/Field';
+import { msg } from '../../constants/messages';
+import { calculateFare } from '../../domain/pricing';
+import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
+import { catalogService } from '../../services/catalog.service';
+import { errorMessage } from '../../services/mock/storage';
+import { VehicleType } from '../../types/order.types';
 import { formatCurrency } from '../../utils/format';
 
-interface VehiclePricing {
-  id: string;
-  name: string;
-  baseFare: number;
-  baseKm: number;
-  perKmRate: number;
-  loadingFee: number;
-  floorFee: number;
-}
+type FareRow = Pick<VehicleType, 'id' | 'name' | 'baseFare' | 'pricePerKm' | 'minimumFare' | 'isActive'>;
 
-const INITIAL_PRICING: VehiclePricing[] = [
-  {
-    id: 'van_500kg',
-    name: 'Xe Bán Tải 500kg (Đô thị)',
-    baseFare: 110000,
-    baseKm: 3,
-    perKmRate: 14000,
-    loadingFee: 50000,
-    floorFee: 20000,
-  },
-  {
-    id: 'truck_1t',
-    name: 'Xe tải nhỏ 1 Tấn (990kg - Thùng kín)',
-    baseFare: 150000,
-    baseKm: 4,
-    perKmRate: 18000,
-    loadingFee: 80000,
-    floorFee: 30000,
-  },
-  {
-    id: 'truck_2t',
-    name: 'Xe tải lớn 2 Tấn (1950kg)',
-    baseFare: 280000,
-    baseKm: 4,
-    perKmRate: 24000,
-    loadingFee: 150000,
-    floorFee: 50000,
-  },
-];
-
+/** SCR-35 – Cấu hình giá cước & hoa hồng (GB-29, GB-33) */
 export const AdminPricingPage: React.FC = () => {
-  const [commissionRate, setCommissionRate] = useState<number>(20);
-  const [vehiclePricings, setVehiclePricings] = useState<VehiclePricing[]>(INITIAL_PRICING);
-  const [isSaved, setIsSaved] = useState(false);
+  const vehicles = useVehicleTypes();
+  const settings = usePlatformSettings();
+  const [rows, setRows] = useState<FareRow[]>([]);
+  const [commissionPct, setCommissionPct] = useState(settings.commissionRate * 100);
+  const [loadingFee, setLoadingFee] = useState(settings.loadingFee);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePriceChange = (
-    id: string,
-    field: keyof VehiclePricing,
-    value: number
-  ) => {
-    setVehiclePricings((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
-    setIsSaved(false);
-  };
+  useEffect(() => setRows(vehicles.map(({ id, name, baseFare, pricePerKm, minimumFare, isActive }) => ({ id, name, baseFare, pricePerKm, minimumFare, isActive }))), [vehicles]);
+  useEffect(() => {
+    setCommissionPct(Math.round(settings.commissionRate * 1000) / 10);
+    setLoadingFee(settings.loadingFee);
+  }, [settings]);
 
-  const handleSave = () => {
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const edit = (id: string, key: 'baseFare' | 'pricePerKm' | 'minimumFare', value: number) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+
+  const save = async () => {
+    if (!(await confirm({ title: 'Lưu cấu hình giá', message: `${msg('MSG62', { action_name: 'cập nhật bảng giá và hoa hồng' })} Giá mới áp dụng cho đơn gửi sau thời điểm này; hoa hồng mới áp dụng cho đơn được nhận sau thời điểm này (GB-33).` }))) return;
+    setSaving(true);
+    setError(null);
+    try {
+      for (const r of rows) {
+        const v = vehicles.find((x) => x.id === r.id)!;
+        await catalogService.saveVehicleType({ ...v, baseFare: r.baseFare, pricePerKm: r.pricePerKm, minimumFare: r.minimumFare });
+      }
+      await catalogService.saveSettings({ commissionRate: commissionPct / 100, loadingFee });
+      toast.success(msg('MSG04', { record_name: 'bảng giá' }));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50 select-none">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-amber-500" />
-              <span>Cấu hình bảng cước vận chuyển & Chiết khấu hoa hồng</span>
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Thiết lập giá mở cửa, cước mỗi km, phụ phí bốc xếp và tỷ lệ phần trăm hoa hồng nền tảng
-            </p>
+    <div className="flex-1 h-full overflow-y-auto bg-slate-50 min-w-0">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
+        <header className="flex items-center gap-3">
+          <div className="mr-auto">
+            <h1 className="text-lg font-black text-slate-900">Cấu hình giá cước & hoa hồng</h1>
+            <p className="text-xs text-slate-500">Cước = max(Tối thiểu, Mở cửa + Giá/km × km) + Bốc xếp − Giảm giá. Không phụ phí giờ cao điểm (GB-29).</p>
           </div>
+          <Button size="sm" onClick={save} isLoading={saving}>
+            <Save className="w-4 h-4 mr-1.5" /> Lưu cấu hình
+          </Button>
+        </header>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition shadow-md cursor-pointer ${
-              isSaved
-                ? 'bg-emerald-600 text-white shadow-emerald-600/20'
-                : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-amber-500/20'
-            }`}
-          >
-            {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            <span>{isSaved ? 'Đã lưu cấu hình mới' : 'Lưu thay đổi cước'}</span>
-          </button>
-        </div>
+        {error && <Banner kind="error">{error}</Banner>}
 
-        {/* Commission Rate Card */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
-                <Percent className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm text-slate-900">Tỷ lệ hoa hồng nền tảng (Platform Commission)</h3>
-                <p className="text-xs text-slate-500">Phần trăm cước vận chuyển trừ trực tiếp vào ví đối tác tài xế</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                max={50}
-                value={commissionRate}
-                onChange={(e) => {
-                  setCommissionRate(Number(e.target.value));
-                  setIsSaved(false);
-                }}
-                className="w-20 text-center font-black text-lg p-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-              />
-              <span className="font-black text-base text-slate-700">%</span>
-            </div>
+        <section className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500 text-left">
+              <tr>
+                <th className="p-3">Loại xe</th>
+                <th className="p-3">Giá mở cửa</th>
+                <th className="p-3">Giá / km</th>
+                <th className="p-3">Cước tối thiểu</th>
+                <th className="p-3">Ví dụ 10 km</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-slate-100">
+                  <td className="p-3 font-bold text-slate-800">
+                    {r.name} {!r.isActive && <span className="text-[10px] text-slate-400">(ngừng hoạt động)</span>}
+                  </td>
+                  {(['baseFare', 'pricePerKm', 'minimumFare'] as const).map((k) => (
+                    <td key={k} className="p-2">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        aria-label={`${r.name} ${k}`}
+                        value={r[k]}
+                        onChange={(e) => edit(r.id, k, Number(e.target.value))}
+                        className="w-28 px-2 py-1.5 rounded-lg border border-slate-200 font-semibold"
+                      />
+                    </td>
+                  ))}
+                  <td className="p-3 font-black text-slate-900">{formatCurrency(calculateFare({ vehicle: r, distanceKm: 10, durationMins: 25, loadingService: false, loadingFee }).total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="grid sm:grid-cols-2 gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
+            <Field label="Tỷ lệ hoa hồng nền tảng (%) – UC-ADM-13" type="number" min={0} max={50} step={0.5} value={commissionPct} onChange={(e) => setCommissionPct(Number(e.target.value))} />
+            <p className="text-[11px] text-slate-500">Hoa hồng = tỷ lệ × cước sau giảm giá, chốt khi tài xế nhận đơn (GB-14). Mặc định 10%.</p>
           </div>
-          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-[11px] text-slate-500 flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
-            <span>
-              Lưu ý: Mức hoa hồng mới sẽ chỉ áp dụng cho các chuyến xe được tạo sau thời điểm lưu thay đổi.
-            </span>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
+            <Field label="Phí dịch vụ bốc xếp (đ) – UC-ADM-12" type="number" min={0} step={5000} value={loadingFee} onChange={(e) => setLoadingFee(Number(e.target.value))} />
+            <p className="text-[11px] text-slate-500">Áp dụng khi khách chọn bốc xếp 2 đầu.</p>
           </div>
-        </div>
-
-        {/* Vehicle Pricing Table */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="font-black text-sm text-slate-900">Bảng giá cước vận chuyển theo loại phương tiện</h3>
-              <p className="text-xs text-slate-500">Giá cơ sở áp dụng khi tính toán chi phí vận chuyển tự động</p>
-            </div>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {vehiclePricings.map((vp) => (
-              <div key={vp.id} className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-brand-600" />
-                    <span className="font-black text-sm text-slate-900">{vp.name}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Giá mở cửa (VNĐ)
-                    </label>
-                    <input
-                      type="number"
-                      step={5000}
-                      value={vp.baseFare}
-                      onChange={(e) => handlePriceChange(vp.id, 'baseFare', Number(e.target.value))}
-                      className="w-full text-xs font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Km cơ sở đầu tiên
-                    </label>
-                    <input
-                      type="number"
-                      value={vp.baseKm}
-                      onChange={(e) => handlePriceChange(vp.id, 'baseKm', Number(e.target.value))}
-                      className="w-full text-xs font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Cước mỗi km kế tiếp (VNĐ)
-                    </label>
-                    <input
-                      type="number"
-                      step={1000}
-                      value={vp.perKmRate}
-                      onChange={(e) => handlePriceChange(vp.id, 'perKmRate', Number(e.target.value))}
-                      className="w-full text-xs font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Phí bốc xếp cơ bản (VNĐ)
-                    </label>
-                    <input
-                      type="number"
-                      step={10000}
-                      value={vp.loadingFee}
-                      onChange={(e) => handlePriceChange(vp.id, 'loadingFee', Number(e.target.value))}
-                      className="w-full text-xs font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Phụ phí lên lầu (VNĐ/tầng)
-                    </label>
-                    <input
-                      type="number"
-                      step={5000}
-                      value={vp.floorFee}
-                      onChange={(e) => handlePriceChange(vp.id, 'floorFee', Number(e.target.value))}
-                      className="w-full text-xs font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );

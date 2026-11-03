@@ -17,118 +17,90 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/format';
 
-interface WithdrawalRequest {
-  id: string;
-  driverName: string;
-  driverPhone: string;
-  bankName: string;
-  accountNumber: string;
-  accountHolder: string;
-  amount: number;
-  requestedAt: string;
-  status: 'PENDING' | 'COMPLETED' | 'REJECTED';
-  transferCode?: string;
-  rejectReason?: string;
-}
+import { Button } from '../../components/Button';
+import { Banner, toast } from '../../components/ui/feedback';
+import { Field } from '../../components/ui/Field';
+import { Modal } from '../../components/ui/Modal';
+import { REFUND_SOURCE_LABEL } from '../../constants';
+import { msg } from '../../constants/messages';
+import { useRefunds, useWithdrawals } from '../../hooks/useDomainData';
+import { caseService } from '../../services/case.service';
+import { walletService } from '../../services/wallet.service';
+import { errorMessage } from '../../services/mock/storage';
+import { formatDateTime } from '../../utils/format';
 
-interface CompensationRefundRequest {
-  id: string;
-  orderCode: string;
-  customerName: string;
-  customerPhone: string;
-  proposedAmount: number;
-  reason: string;
-  dispatcherName: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  submittedAt: string;
-}
+type PayoutAction = { kind: 'withdrawal' | 'refund'; id: string; approve: boolean; title: string } | null;
 
-const INITIAL_WITHDRAWALS: WithdrawalRequest[] = [
-  {
-    id: 'wd_101',
-    driverName: 'Nguyễn Văn Hùng',
-    driverPhone: '0912345678',
-    bankName: 'MB Bank (Quân Đội)',
-    accountNumber: '091234567888',
-    accountHolder: 'NGUYEN VAN HUNG',
-    amount: 1500000,
-    requestedAt: 'Hôm nay, 16:15',
-    status: 'PENDING',
-  },
-  {
-    id: 'wd_102',
-    driverName: 'Hoàng Hải Nam',
-    driverPhone: '0988112233',
-    bankName: 'Vietcombank',
-    accountNumber: '10192837465',
-    accountHolder: 'HOANG HAI NAM',
-    amount: 2800000,
-    requestedAt: 'Hôm qua, 11:30',
-    status: 'PENDING',
-  },
-  {
-    id: 'wd_103',
-    driverName: 'Vũ Đức Thịnh',
-    driverPhone: '0971234567',
-    bankName: 'Techcombank',
-    accountNumber: '190345678901',
-    accountHolder: 'VU DUC THINH',
-    amount: 950000,
-    requestedAt: '27/10/2026',
-    status: 'COMPLETED',
-    transferCode: 'MB-TRF-99482',
-  },
-];
-
-const INITIAL_REFUNDS: CompensationRefundRequest[] = [
-  {
-    id: 'rf_01',
-    orderCode: 'MM-90182',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    customerPhone: '0338967316',
-    proposedAmount: 350000,
-    reason: 'Sự cố nổ lốp trên đường, hàng giao trễ 45 phút so với cam kết ban đầu',
-    dispatcherName: 'Trần Thị Thu Thảo',
-    status: 'PENDING',
-    submittedAt: 'Hôm nay, 14:40',
-  },
-];
-
+/** SCR-45 – Duyệt hoàn tiền & rút tiền (UC-ADM-18, UC-ADM-24, GB-19, GB-27) */
 export const AdminWithdrawalsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'WITHDRAWALS' | 'REFUNDS'>('WITHDRAWALS');
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>(INITIAL_WITHDRAWALS);
-  const [refunds, setRefunds] = useState<CompensationRefundRequest[]>(INITIAL_REFUNDS);
+  const rawWithdrawals = useWithdrawals();
+  const rawRefunds = useRefunds();
 
-  // Approve withdrawal
-  const handleApproveWithdrawal = (id: string) => {
-    setWithdrawals((prev) =>
-      prev.map((w) =>
-        w.id === id ? { ...w, status: 'COMPLETED', transferCode: `PAY-${Date.now().toString().slice(-6)}` } : w
-      )
-    );
+  // View model cho phần hiển thị
+  const withdrawals = rawWithdrawals.map((w) => ({
+    id: w.id,
+    driverName: w.driverName,
+    driverPhone: '',
+    bankName: w.bankName,
+    accountNumber: w.bankAccount,
+    accountHolder: w.driverName.toUpperCase(),
+    amount: w.amount,
+    requestedAt: formatDateTime(w.createdAt),
+    status: (w.status === 'Pending' ? 'PENDING' : w.status === 'Paid' ? 'COMPLETED' : 'REJECTED') as 'PENDING' | 'COMPLETED' | 'REJECTED',
+    transferCode: w.bankReferenceCode,
+    rejectReason: w.rejectReason,
+  }));
+  // Admin chỉ thấy refund đã có đề xuất (GB-19) hoặc đã xử lý
+  const refunds = rawRefunds
+    .filter((r) => ['Proposed', 'Approved', 'Processed', 'Rejected'].includes(r.status))
+    .map((r) => ({
+      id: r.id,
+      orderCode: r.orderCode,
+      customerName: r.customerName,
+      customerPhone: REFUND_SOURCE_LABEL[r.source],
+      proposedAmount: r.proposedAmount ?? 0,
+      reason: `${r.reason}${r.proposalNote ? ` — Đề xuất: ${r.proposalNote}` : ''}`,
+      dispatcherName: r.source === 'Cancellation' ? 'Tự động (GB-41)' : 'Điều phối viên',
+      status: (r.status === 'Proposed' ? 'PENDING' : r.status === 'Processed' || r.status === 'Approved' ? 'APPROVED' : 'REJECTED') as 'PENDING' | 'APPROVED' | 'REJECTED',
+      submittedAt: formatDateTime(r.updatedAt),
+    }));
+
+  const [action, setAction] = useState<PayoutAction>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const zeroRefund = action?.kind === 'refund' && action.approve && (rawRefunds.find((r) => r.id === action.id)?.proposedAmount ?? 0) === 0;
+
+  const open = (a: NonNullable<PayoutAction>) => {
+    setAction(a);
+    setInputValue('');
+    setActionError(null);
   };
 
-  // Reject withdrawal
-  const handleRejectWithdrawal = (id: string) => {
-    setWithdrawals((prev) =>
-      prev.map((w) =>
-        w.id === id ? { ...w, status: 'REJECTED', rejectReason: 'Thông tin tài khoản ngân hàng không chính chủ' } : w
-      )
-    );
-  };
+  const handleApproveWithdrawal = (id: string) => open({ kind: 'withdrawal', id, approve: true, title: 'Xác nhận đã chuyển khoản rút tiền' });
+  const handleRejectWithdrawal = (id: string) => open({ kind: 'withdrawal', id, approve: false, title: 'Từ chối yêu cầu rút tiền' });
+  const handleApproveRefund = (id: string) => open({ kind: 'refund', id, approve: true, title: 'Duyệt & xác nhận đã hoàn tiền' });
+  const handleRejectRefund = (id: string) => open({ kind: 'refund', id, approve: false, title: 'Từ chối đề xuất hoàn tiền' });
 
-  // Approve refund
-  const handleApproveRefund = (id: string) => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'APPROVED' } : r))
-    );
-  };
-
-  // Reject refund
-  const handleRejectRefund = (id: string) => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'REJECTED' } : r))
-    );
+  const submitAction = async () => {
+    if (!action) return;
+    setPending(true);
+    setActionError(null);
+    try {
+      if (action.kind === 'withdrawal') {
+        if (action.approve) await walletService.markWithdrawalPaid(action.id, inputValue);
+        else await walletService.rejectWithdrawal(action.id, inputValue);
+      } else if (action.approve) await caseService.approveRefund(action.id, inputValue);
+      else await caseService.rejectRefund(action.id, inputValue);
+      toast.success(msg('MSG04', { record_name: 'quyết định' }));
+      setAction(null);
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -365,6 +337,26 @@ export const AdminWithdrawalsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {action && (
+        <Modal
+          open
+          title={action.title}
+          size="sm"
+          onClose={() => setAction(null)}
+          footer={
+            <Button size="sm" variant={action.approve ? 'primary' : 'danger'} isLoading={pending} onClick={submitAction} disabled={!zeroRefund && !inputValue.trim()}>
+              Xác nhận
+            </Button>
+          }
+        >
+          <div className="space-y-3">
+            {zeroRefund && <Banner kind="info">Đề xuất không hoàn tiền – chỉ cần xác nhận, không có chuyển khoản.</Banner>}
+            {action.approve && !zeroRefund && <Banner kind="info">Chuyển khoản thủ công trong 3 ngày làm việc và ghi lại mã giao dịch ngân hàng (GB-27).</Banner>}
+            <Field label={action.approve ? 'Mã giao dịch ngân hàng' : 'Lý do từ chối'} required value={inputValue} error={actionError} onChange={(e) => setInputValue(e.target.value)} />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

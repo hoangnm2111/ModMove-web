@@ -18,85 +18,39 @@ import {
   Radio,
 } from 'lucide-react';
 
-interface SystemUser {
-  id: string;
-  fullName: string;
-  phoneNumber: string;
-  email: string;
-  role: 'Customer' | 'Driver' | 'Dispatcher' | 'Administrator';
-  status: 'ACTIVE' | 'LOCKED' | 'PENDING';
-  registeredAt: string;
-  ordersCount: number;
-}
+import { Banner, toast } from '../../components/ui/feedback';
+import { Modal } from '../../components/ui/Modal';
+import { TextArea } from '../../components/ui/Field';
+import { Button } from '../../components/Button';
+import { msg } from '../../constants/messages';
+import { useAllOrders, useUsers } from '../../hooks/useDomainData';
+import { authService } from '../../services/auth.service';
+import { errorMessage } from '../../services/mock/storage';
+import { useAuthStore } from '../../store/useAuthStore';
+import { AccountStatus } from '../../types/user.types';
+import { formatDateTime } from '../../utils/format';
 
-const INITIAL_USERS: SystemUser[] = [
-  {
-    id: 'usr_01',
-    fullName: 'Hoàng Nguyễn Mạnh',
-    phoneNumber: '0338967316',
-    email: 'hoangnm@gmail.com',
-    role: 'Customer',
-    status: 'ACTIVE',
-    registeredAt: '24/10/2026',
-    ordersCount: 14,
-  },
-  {
-    id: 'usr_02',
-    fullName: 'Nguyễn Văn Hùng',
-    phoneNumber: '0912345678',
-    email: 'driver.hung@gmail.com',
-    role: 'Driver',
-    status: 'ACTIVE',
-    registeredAt: '26/10/2026',
-    ordersCount: 42,
-  },
-  {
-    id: 'usr_03',
-    fullName: 'Trần Thị Thu Thảo',
-    phoneNumber: '0987654321',
-    email: 'thao.dispatcher@modmove.vn',
-    role: 'Dispatcher',
-    status: 'ACTIVE',
-    registeredAt: '20/10/2026',
-    ordersCount: 0,
-  },
-  {
-    id: 'usr_04',
-    fullName: 'Lê Hoàng Long',
-    phoneNumber: '0901234999',
-    email: 'long.dispatcher@modmove.vn',
-    role: 'Dispatcher',
-    status: 'ACTIVE',
-    registeredAt: '22/10/2026',
-    ordersCount: 0,
-  },
-  {
-    id: 'usr_05',
-    fullName: 'Vũ Đức Thịnh',
-    phoneNumber: '0971234567',
-    email: 'thinhvu@gmail.com',
-    role: 'Driver',
-    status: 'PENDING',
-    registeredAt: '29/10/2026',
-    ordersCount: 0,
-  },
-  {
-    id: 'usr_06',
-    fullName: 'Phạm Minh Tuấn',
-    phoneNumber: '0933445566',
-    email: 'tuanpham@gmail.com',
-    role: 'Customer',
-    status: 'LOCKED',
-    registeredAt: '15/10/2026',
-    ordersCount: 3,
-  },
-];
+/** View model hiển thị – map từ AccountStatus (Active/Locked/Inactive) */
+type ViewStatus = 'ACTIVE' | 'LOCKED' | 'PENDING';
+const VIEW_STATUS: Record<AccountStatus, ViewStatus> = { Active: 'ACTIVE', Locked: 'LOCKED', Inactive: 'PENDING' };
 
+/** SCR-31 – Quản lý tài khoản (UC-ADM-04, UC-ADM-06, UC-ADM-07) */
 export const AdminUsersPage: React.FC = () => {
-  const [users, setUsers] = useState<SystemUser[]>(INITIAL_USERS);
+  const me = useAuthStore((s) => s.user);
+  const rawUsers = useUsers();
+  const orders = useAllOrders();
+  const users = rawUsers
+    .filter((u) => u.role !== 'Administrator')
+    .map((u) => ({
+      ...u,
+      status: VIEW_STATUS[u.status],
+      registeredAt: formatDateTime(u.createdAt),
+      ordersCount: orders.filter((o) => o.customerId === u.id || o.assignedDriver?.id === u.id).length,
+    }));
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'Customer' | 'Driver' | 'Dispatcher'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Form state for creating new Dispatcher
   const [newFullName, setNewFullName] = useState('');
@@ -104,41 +58,50 @@ export const AdminUsersPage: React.FC = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  // Toggle user status: ACTIVE <-> LOCKED
+  /** UC-ADM-06 – bắt buộc lý do + xác nhận (MSG62); MSG65 không tự khoá mình */
+  const [statusTarget, setStatusTarget] = useState<{ id: string; name: string; next: AccountStatus } | null>(null);
+  const [statusReason, setStatusReason] = useState('');
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+
   const toggleUserStatus = (id: string) => {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === id) {
-          const nextStatus = u.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
-          return { ...u, status: nextStatus };
-        }
-        return u;
-      })
-    );
+    const u = rawUsers.find((x) => x.id === id);
+    if (!u) return;
+    setStatusTarget({ id, name: u.fullName, next: u.status === 'Active' ? 'Locked' : 'Active' });
+    setStatusReason('');
+    setStatusError(null);
   };
 
-  // Create new Dispatcher account
-  const handleCreateDispatcher = (e: React.FormEvent) => {
+  const submitStatusChange = async () => {
+    if (!statusTarget || !me) return;
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      await authService.setAccountStatus(me.id, statusTarget.id, statusTarget.next, statusReason);
+      toast.success(msg('MSG04', { record_name: 'trạng thái tài khoản' }));
+      setStatusTarget(null);
+    } catch (e) {
+      setStatusError(errorMessage(e));
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  /** UC-ADM-07 / GB-45 */
+  const handleCreateDispatcher = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFullName || !newPhone || !newEmail) return;
-
-    const newDispatcher: SystemUser = {
-      id: `usr_${Date.now()}`,
-      fullName: newFullName,
-      phoneNumber: newPhone,
-      email: newEmail,
-      role: 'Dispatcher',
-      status: 'ACTIVE',
-      registeredAt: 'Hôm nay',
-      ordersCount: 0,
-    };
-
-    setUsers([newDispatcher, ...users]);
-    setShowCreateModal(false);
-    setNewFullName('');
-    setNewPhone('');
-    setNewEmail('');
-    setNewPassword('');
+    setCreateError(null);
+    try {
+      await authService.createDispatcher({ fullName: newFullName, phoneNumber: newPhone, email: newEmail, password: newPassword });
+      toast.success(msg('MSG04', { record_name: 'tài khoản điều phối viên' }));
+      setShowCreateModal(false);
+      setNewFullName('');
+      setNewPhone('');
+      setNewEmail('');
+      setNewPassword('');
+    } catch (err) {
+      setCreateError(errorMessage(err));
+    }
   };
 
   const filteredUsers = users.filter((u) => {
@@ -232,7 +195,7 @@ export const AdminUsersPage: React.FC = () => {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setRoleFilter(tab.id as any)}
+                  onClick={() => setRoleFilter(tab.id as typeof roleFilter)}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     roleFilter === tab.id
                       ? 'bg-white text-slate-900 shadow-xs font-black'
@@ -309,7 +272,8 @@ export const AdminUsersPage: React.FC = () => {
                               : 'bg-amber-500'
                           }`}
                         />
-                        <span>{u.status === 'ACTIVE' ? 'Hoạt động' : u.status === 'LOCKED' ? 'Bị khóa' : 'Chờ duyệt'}</span>
+                        <span>{u.status === 'ACTIVE' ? 'Hoạt động' : u.status === 'LOCKED' ? 'Bị khóa' : 'Vô hiệu hoá'}</span>
+                        {u.statusReason && u.status !== 'ACTIVE' && <span className="ml-1 font-medium opacity-80 truncate max-w-[140px]" title={u.statusReason}>– {u.statusReason}</span>}
                       </span>
                     </td>
                     <td className="p-3.5 pr-5 text-right">
@@ -365,7 +329,8 @@ export const AdminUsersPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateDispatcher} className="space-y-3">
+            <form onSubmit={handleCreateDispatcher} className="space-y-3" noValidate>
+              {createError && <Banner kind="error">{createError}</Banner>}
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 mb-1">Họ và tên điều phối viên:</label>
                 <input
@@ -432,6 +397,32 @@ export const AdminUsersPage: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {statusTarget && (
+        <Modal
+          open
+          size="sm"
+          title={statusTarget.next === 'Locked' ? `Khoá tài khoản ${statusTarget.name}` : `Mở khoá tài khoản ${statusTarget.name}`}
+          onClose={() => setStatusTarget(null)}
+          footer={
+            <>
+              <Button size="sm" variant="outline" onClick={() => setStatusTarget(null)}>
+                Huỷ
+              </Button>
+              <Button size="sm" variant={statusTarget.next === 'Locked' ? 'danger' : 'primary'} isLoading={statusSaving} disabled={!statusReason.trim()} onClick={submitStatusChange}>
+                Xác nhận
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600">
+              {msg('MSG62', { action_name: statusTarget.next === 'Locked' ? 'khoá tài khoản' : 'mở khoá tài khoản' })}
+              {statusTarget.next === 'Locked' && ' Mọi phiên đăng nhập của người dùng sẽ bị thu hồi (GB-47).'}
+            </p>
+            <TextArea label="Lý do" required value={statusReason} error={statusError} onChange={(e) => setStatusReason(e.target.value)} />
+          </div>
+        </Modal>
       )}
     </div>
   );

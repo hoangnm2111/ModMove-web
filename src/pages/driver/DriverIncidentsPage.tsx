@@ -15,6 +15,10 @@ import {
   RotateCcw,
   Truck
 } from 'lucide-react';
+import { INCIDENT_TYPE_LABEL } from '../../constants';
+import { useAllOrders, useIncidents } from '../../hooks/useDomainData';
+import { useDriverContext } from '../../hooks/useDriverContext';
+import { formatDateTime } from '../../utils/format';
 
 interface IncidentRecord {
   id: string;
@@ -31,56 +35,41 @@ interface IncidentRecord {
   resolvedAt?: string;
 }
 
-const MOCK_INCIDENTS: IncidentRecord[] = [
-  {
-    id: 'inc_881',
-    orderCode: 'MM-90182',
-    reportedAt: '29/10/2026 14:15',
-    incidentType: 'Hỏng xe / nổ lốp / trục trặc động cơ',
-    description: 'Xe bị cán đinh nổ lốp sau tại đoạn đường Vành đai 3 trên cao, đang đợi đội cứu hộ vá lốp lưu động mất tầm 35 phút.',
-    evidencePhoto: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-    gpsLocation: '21.0182° N, 105.7834° E (Vành Đai 3, Cầu Giấy)',
-    status: 'CONTINUE_TRIP',
-    dispatcherName: 'Trần Văn Quyết (Điều phối viên)',
-    dispatcherDecision: 'Cho phép tài xế tiếp tục chuyến sau khi xử lý xong',
-    dispatcherReason: 'Khách hàng đồng ý chờ thêm 40 phút, không cần đổi xe khác.',
-    resolvedAt: '29/10/2026 14:35',
-  },
-  {
-    id: 'inc_742',
-    orderCode: 'MM-81203',
-    reportedAt: '28/10/2026 10:20',
-    incidentType: 'Va chạm giao thông / Ngập lụt tắc đường',
-    description: 'Trục đường ngập sâu do mưa lớn xe không thể vượt qua, ùn tắc kéo dài tại chân cầu vượt.',
-    evidencePhoto: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80',
-    gpsLocation: '20.9781° N, 105.7865° E (Đường Trần Phú, Hà Đông)',
-    status: 'REASSIGNED',
-    dispatcherName: 'Lê Hoàng Anh (Điều phối viên)',
-    dispatcherDecision: 'Điều động xe tải nhỏ tiếp cận hỗ trợ',
-    dispatcherReason: 'Xe tải 2 tấn bị kẹt đường ngập, điều chuyển hàng sang xe tải nhỏ gầm cao để tiếp tục giao đúng giờ.',
-    resolvedAt: '28/10/2026 10:45',
-  },
-  {
-    id: 'inc_615',
-    orderCode: 'MM-72419',
-    reportedAt: '26/10/2026 16:50',
-    incidentType: 'Khách hàng không nghe máy / Từ chối nhận đồ',
-    description: 'Đã tới địa chỉ giao tại chung cư, gọi 5 cuộc khách không bắt máy, bảo vệ không cho gửi sảnh.',
-    evidencePhoto: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-    gpsLocation: '21.0045° N, 105.7483° E (Sảnh S2.05 Smart City)',
-    status: 'CANCELLED',
-    dispatcherName: 'Trần Văn Quyết (Điều phối viên)',
-    dispatcherDecision: 'Hủy chuyến xe và hoàn hàng về kho người gửi',
-    dispatcherReason: 'Khách đặt nhầm ngày nhận, cước phí được hỗ trợ 100% hai chiều cho tài xế.',
-    resolvedAt: '26/10/2026 17:15',
-  },
-];
 
 export const DriverIncidentsPage: React.FC = () => {
   const [selectedIncident, setSelectedIncident] = useState<IncidentRecord | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
-  const filteredIncidents = MOCK_INCIDENTS.filter((item) => {
+  const { driverId } = useDriverContext();
+  const orders = useAllOrders();
+  const rawIncidents = useIncidents();
+  /** UC-DRV-19: sự cố của các đơn tài xế đang/đã nhận, kèm quyết định của điều phối viên */
+  const myOrderIds = new Set(orders.filter((o) => o.assignedDriver?.id === driverId).map((o) => o.id));
+  const records: IncidentRecord[] = rawIncidents
+    .filter((i) => i.reportedBy === 'Driver' && (i.reporterId === driverId || (!i.reporterId && myOrderIds.has(i.orderId))))
+    .map((i) => ({
+      id: i.id,
+      orderCode: i.orderCode,
+      reportedAt: formatDateTime(i.createdAt),
+      incidentType: INCIDENT_TYPE_LABEL[i.type],
+      description: i.description,
+      evidencePhoto: i.photos[0] ?? '',
+      gpsLocation: i.gps ? `${i.gps.lat.toFixed(4)}° N, ${i.gps.lng.toFixed(4)}° E` : 'Không có',
+      status:
+        i.status === 'Open' || i.status === 'InProgress'
+          ? 'PENDING_REVIEW'
+          : i.status === 'Cancelled' || i.decision === 'CancelOrder'
+          ? 'CANCELLED'
+          : i.decision === 'ReassignDriver'
+          ? 'REASSIGNED'
+          : 'CONTINUE_TRIP',
+      dispatcherName: i.status === 'Open' ? undefined : 'Điều phối viên',
+      dispatcherDecision: i.decision === 'ContinueTrip' ? 'Tiếp tục chuyến' : i.decision === 'ReassignDriver' ? 'Bàn giao cho tài xế khác' : i.decision === 'CancelOrder' ? 'Huỷ đơn' : i.status === 'Cancelled' ? 'Huỷ sự cố' : undefined,
+      dispatcherReason: i.decisionNote,
+      resolvedAt: i.resolvedAt ? formatDateTime(i.resolvedAt) : undefined,
+    }));
+
+  const filteredIncidents = records.filter((item) => {
     if (filterStatus === 'ALL') return true;
     return item.status === filterStatus;
   });
@@ -128,7 +117,7 @@ export const DriverIncidentsPage: React.FC = () => {
               filterStatus === 'ALL' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
             }`}
           >
-            Tất cả sự cố ({MOCK_INCIDENTS.length})
+            Tất cả sự cố ({records.length})
           </button>
           <button
             type="button"

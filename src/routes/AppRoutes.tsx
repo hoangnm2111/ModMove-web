@@ -1,291 +1,128 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { MainLayout } from '../layouts/MainLayout';
+import React, { lazy, Suspense } from 'react';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { CustomerLayout } from '../layouts/CustomerLayout';
 import { DriverLayout } from '../layouts/DriverLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
 import { DispatcherLayout } from '../layouts/DispatcherLayout';
-import { LandingPage } from '../pages/landing/LandingPage';
-import { BookingPage } from '../pages/customer/BookingPage';
-import { OrdersPage } from '../pages/customer/OrdersPage';
-import { LiveTrackingPage } from '../pages/customer/LiveTrackingPage';
-import { WalletPage } from '../pages/customer/WalletPage';
-import { DriverHomePage } from '../pages/driver/DriverHomePage';
-import { DriverJobListPage } from '../pages/driver/DriverJobListPage';
-import { DriverTripHistoryPage } from '../pages/driver/DriverTripHistoryPage';
-import { DriverIncidentsPage } from '../pages/driver/DriverIncidentsPage';
-import { DriverEarningsPage } from '../pages/driver/DriverEarningsPage';
-import { DriverProfilePage } from '../pages/driver/DriverProfilePage';
-import { LiveMapPage } from '../pages/dispatcher/LiveMapPage';
-import { IncidentsPage } from '../pages/dispatcher/IncidentsPage';
-import { DispatcherComplaintsPage } from '../pages/dispatcher/DispatcherComplaintsPage';
-import { DashboardPage } from '../pages/admin/DashboardPage';
-import { DriverApprovalPage } from '../pages/admin/DriverApprovalPage';
-import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
-import { AdminWithdrawalsPage } from '../pages/admin/AdminWithdrawalsPage';
-import { AdminPricingPage } from '../pages/admin/AdminPricingPage';
-import { LoginPage } from '../pages/auth/LoginPage';
-import { useAuthStore, getRoleHomePath } from '../store/useAuthStore';
+import { getRoleHomePath, useAuthStore } from '../store/useAuthStore';
 import { UserRole } from '../types/user.types';
 
-interface ProtectedRouteProps {
-  allowedRoles: UserRole[];
-  children: React.ReactElement;
-}
+/** Lazy-load theo trang để giảm bundle ban đầu */
+const page = <K extends string>(loader: () => Promise<Record<K, React.ComponentType>>, name: K) =>
+  lazy(() => loader().then((m) => ({ default: m[name] })));
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, children }) => {
+const LandingPage = page(() => import('../pages/landing/LandingPage'), 'LandingPage');
+const LoginPage = page(() => import('../pages/auth/LoginPage'), 'LoginPage');
+const ProfilePage = page(() => import('../pages/account/ProfilePage'), 'ProfilePage');
+const BookingPage = page(() => import('../pages/customer/BookingPage'), 'BookingPage');
+const OrdersPage = page(() => import('../pages/customer/OrdersPage'), 'OrdersPage');
+const LiveTrackingPage = page(() => import('../pages/customer/LiveTrackingPage'), 'LiveTrackingPage');
+const DriverJobListPage = page(() => import('../pages/driver/DriverJobListPage'), 'DriverJobListPage');
+const DriverHomePage = page(() => import('../pages/driver/DriverHomePage'), 'DriverHomePage');
+const DriverTripHistoryPage = page(() => import('../pages/driver/DriverTripHistoryPage'), 'DriverTripHistoryPage');
+const DriverIncidentsPage = page(() => import('../pages/driver/DriverIncidentsPage'), 'DriverIncidentsPage');
+const DriverEarningsPage = page(() => import('../pages/driver/DriverEarningsPage'), 'DriverEarningsPage');
+const DriverProfilePage = page(() => import('../pages/driver/DriverProfilePage'), 'DriverProfilePage');
+const LiveMapPage = page(() => import('../pages/dispatcher/LiveMapPage'), 'LiveMapPage');
+const IncidentsPage = page(() => import('../pages/dispatcher/IncidentsPage'), 'IncidentsPage');
+const DispatcherComplaintsPage = page(() => import('../pages/dispatcher/DispatcherComplaintsPage'), 'DispatcherComplaintsPage');
+const DashboardPage = page(() => import('../pages/admin/DashboardPage'), 'DashboardPage');
+const DriverApprovalPage = page(() => import('../pages/admin/DriverApprovalPage'), 'DriverApprovalPage');
+const AdminUsersPage = page(() => import('../pages/admin/AdminUsersPage'), 'AdminUsersPage');
+const AdminWithdrawalsPage = page(() => import('../pages/admin/AdminWithdrawalsPage'), 'AdminWithdrawalsPage');
+const AdminPricingPage = page(() => import('../pages/admin/AdminPricingPage'), 'AdminPricingPage');
+const AdminMasterDataPage = page(() => import('../pages/admin/AdminMasterDataPage'), 'AdminMasterDataPage');
+
+const PageFallback = () => <div className="flex-1 flex items-center justify-center text-sm text-slate-400 p-10">Đang tải…</div>;
+
+/** Route guard theo vai trò (SRS 4.4 Permission Matrix) */
+const RequireRole: React.FC<{ roles: UserRole[] }> = ({ roles }) => {
   const { isAuthenticated, activeRole } = useAuthStore();
-
+  const location = useLocation();
   if (!isAuthenticated || !activeRole) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
-
-  if (!allowedRoles.includes(activeRole)) {
-    return <Navigate to={getRoleHomePath(activeRole)} replace />;
-  }
-
-  return children;
+  if (!roles.includes(activeRole)) return <Navigate to={getRoleHomePath(activeRole)} replace />;
+  return <Outlet />;
 };
 
-// Login route handler: if already logged in -> redirect to role home
-const LoginRouteHandler: React.FC = () => {
+/** Guest hoặc Customer (GB-28: Guest được lập nháp đơn) */
+const GuestOrCustomer: React.FC = () => {
   const { isAuthenticated, activeRole } = useAuthStore();
-  if (isAuthenticated && activeRole) {
-    return <Navigate to={getRoleHomePath(activeRole)} replace />;
-  }
-  return <LoginPage />;
+  if (isAuthenticated && activeRole !== 'Customer') return <Navigate to={getRoleHomePath(activeRole)} replace />;
+  return <Outlet />;
 };
 
-// Fallback handler
-const FallbackHandler: React.FC = () => {
+const GuestOnly: React.FC = () => {
   const { isAuthenticated, activeRole } = useAuthStore();
-  if (isAuthenticated && activeRole) {
-    return <Navigate to={getRoleHomePath(activeRole)} replace />;
-  }
-  return <Navigate to="/" replace />;
+  return isAuthenticated ? <Navigate to={getRoleHomePath(activeRole)} replace /> : <Outlet />;
 };
 
-export const AppRoutes: React.FC = () => {
-  return (
+const Fallback: React.FC = () => {
+  const { isAuthenticated, activeRole } = useAuthStore();
+  return <Navigate to={isAuthenticated ? getRoleHomePath(activeRole) : '/'} replace />;
+};
+
+export const AppRoutes: React.FC = () => (
+  <Suspense fallback={<PageFallback />}>
     <Routes>
-      {/* Public Landing Page as Root Screen */}
       <Route path="/" element={<LandingPage />} />
+      <Route element={<GuestOnly />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
 
-      {/* Public Login Route */}
-      <Route path="/login" element={<LoginRouteHandler />} />
+      {/* Customer */}
+      <Route element={<GuestOrCustomer />}>
+        <Route element={<CustomerLayout />}>
+          <Route path="/booking" element={<BookingPage />} />
+        </Route>
+      </Route>
+      <Route element={<RequireRole roles={['Customer']} />}>
+        <Route element={<CustomerLayout />}>
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/tracking" element={<LiveTrackingPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+        </Route>
+      </Route>
 
-      {/* Customer Routes (Tất cả màn hình khách hàng dùng CustomerLayout đồng nhất) */}
-      <Route
-        path="/booking"
-        element={
-          <ProtectedRoute allowedRoles={['Customer']}>
-            <CustomerLayout>
-              <BookingPage />
-            </CustomerLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/orders"
-        element={
-          <ProtectedRoute allowedRoles={['Customer']}>
-            <CustomerLayout>
-              <OrdersPage />
-            </CustomerLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tracking"
-        element={
-          <ProtectedRoute allowedRoles={['Customer']}>
-            <CustomerLayout>
-              <LiveTrackingPage />
-            </CustomerLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/wallet"
-        element={
-          <ProtectedRoute allowedRoles={['Customer']}>
-            <CustomerLayout>
-              <WalletPage />
-            </CustomerLayout>
-          </ProtectedRoute>
-        }
-      />
+      {/* Driver */}
+      <Route element={<RequireRole roles={['Driver']} />}>
+        <Route path="/driver" element={<DriverLayout />}>
+          <Route index element={<DriverJobListPage />} />
+          <Route path="trip" element={<DriverHomePage />} />
+          <Route path="history" element={<DriverTripHistoryPage />} />
+          <Route path="incidents" element={<DriverIncidentsPage />} />
+          <Route path="earnings" element={<DriverEarningsPage />} />
+          <Route path="profile" element={<DriverProfilePage />} />
+        </Route>
+      </Route>
 
-      {/* Driver Routes (Dùng DriverLayout đồng bộ phong cách với Customer) */}
-      <Route
-        path="/driver"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverJobListPage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/driver/trip"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverHomePage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/driver/history"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverTripHistoryPage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/driver/incidents"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverIncidentsPage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/driver/earnings"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverEarningsPage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/driver/profile"
-        element={
-          <ProtectedRoute allowedRoles={['Driver']}>
-            <DriverLayout>
-              <DriverProfilePage />
-            </DriverLayout>
-          </ProtectedRoute>
-        }
-      />
+      {/* Dispatcher */}
+      <Route element={<RequireRole roles={['Dispatcher']} />}>
+        <Route path="/dispatcher" element={<DispatcherLayout />}>
+          <Route index element={<Navigate to="live-map" replace />} />
+          <Route path="live-map" element={<LiveMapPage />} />
+          <Route path="incidents" element={<IncidentsPage />} />
+          <Route path="complaints" element={<DispatcherComplaintsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+      </Route>
 
-      {/* Dispatcher Routes */}
-      <Route
-        path="/dispatcher"
-        element={<Navigate to="/dispatcher/live-map" replace />}
-      />
-      <Route
-        path="/dispatcher/live-map"
-        element={
-          <ProtectedRoute allowedRoles={['Dispatcher']}>
-            <DispatcherLayout>
-              <LiveMapPage />
-            </DispatcherLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dispatcher/incidents"
-        element={
-          <ProtectedRoute allowedRoles={['Dispatcher']}>
-            <DispatcherLayout>
-              <IncidentsPage />
-            </DispatcherLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dispatcher/reassign"
-        element={<Navigate to="/dispatcher/incidents" replace />}
-      />
-      <Route
-        path="/dispatcher/complaints"
-        element={
-          <ProtectedRoute allowedRoles={['Dispatcher']}>
-            <DispatcherLayout>
-              <DispatcherComplaintsPage />
-            </DispatcherLayout>
-          </ProtectedRoute>
-        }
-      />
+      {/* Administrator */}
+      <Route element={<RequireRole roles={['Administrator']} />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="drivers" element={<DriverApprovalPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="withdrawals" element={<AdminWithdrawalsPage />} />
+          <Route path="pricing" element={<AdminPricingPage />} />
+          <Route path="master-data" element={<AdminMasterDataPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+      </Route>
 
-      {/* Administrator Routes */}
-      <Route
-        path="/admin"
-        element={<Navigate to="/admin/dashboard" replace />}
-      />
-      <Route
-        path="/admin/dashboard"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <DashboardPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/drivers"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <DriverApprovalPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/users"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <AdminUsersPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/withdrawals"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <AdminWithdrawalsPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/pricing"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <AdminPricingPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/reports"
-        element={
-          <ProtectedRoute allowedRoles={['Administrator']}>
-            <AdminLayout>
-              <DashboardPage />
-            </AdminLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Fallback */}
-      <Route path="*" element={<FallbackHandler />} />
+      <Route path="*" element={<Fallback />} />
     </Routes>
-  );
-};
+  </Suspense>
+);

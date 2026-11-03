@@ -16,7 +16,15 @@ import {
   Clock,
   Check,
 } from 'lucide-react';
-import { formatCurrency } from '../../utils/format';
+import { downloadCsv, formatCurrency, formatDateTime } from '../../utils/format';
+import { msg } from '../../constants/messages';
+import { toast } from '../../components/ui/feedback';
+import { BUSINESS } from '../../config/business';
+import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL } from '../../constants';
+import { calculateCommission } from '../../domain/pricing';
+import { useAllOrders, useIncidents, usePlatformSettings } from '../../hooks/useDomainData';
+import { useLiveData } from '../../hooks/useLiveData';
+import { driverService } from '../../services/driver.service';
 
 export const DashboardPage: React.FC = () => {
   const [period, setPeriod] = useState<'DAY' | 'WEEK' | 'MONTH'>('MONTH');
@@ -24,47 +32,82 @@ export const DashboardPage: React.FC = () => {
   // Export report modal states per UC-ADM-23
   const [showExportModal, setShowExportModal] = useState(false);
   const [reportType, setReportType] = useState<'REVENUE' | 'INCIDENTS'>('REVENUE');
-  const [fromDate, setFromDate] = useState('2026-10-01');
-  const [toDate, setToDate] = useState('2026-10-29');
-  const [fileFormat, setFileFormat] = useState<'XLSX' | 'CSV'>('XLSX');
+  const [fromDate, setFromDate] = useState(() => new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fileFormat, setFileFormat] = useState<'XLSX' | 'CSV'>('CSV');
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccessNotice, setExportSuccessNotice] = useState(false);
 
+  const orders = useAllOrders();
+  const incidents = useIncidents();
+  const { commissionRate } = usePlatformSettings();
+  const [onlineDrivers] = useLiveData(
+    () => driverService.listLatestApplicationsSync().filter((a) => a.status === 'Approved' && driverService.isOnlineSync(a.driverId)).length,
+    driverService.subscribe
+  );
+
+  /** UC-ADM-21/22: doanh thu & hoa hồng từ đơn Completed (hoa hồng theo tỷ lệ chốt trên từng đơn – GB-14) */
+  const periodDays = period === 'DAY' ? 1 : period === 'WEEK' ? 7 : 30;
+  const completed = orders.filter((o) => o.status === 'Completed' && Date.now() - new Date(o.completedAt ?? 0).getTime() <= periodDays * 86_400_000);
+  const commissionOf = (o: (typeof orders)[number]) => calculateCommission(o.fare.total, o.commissionRate ?? BUSINESS.DEFAULT_COMMISSION_RATE);
   const stats = {
-    grossRevenue: period === 'DAY' ? 12850000 : period === 'WEEK' ? 84200000 : 348500000,
-    commissionRevenue: period === 'DAY' ? 2570000 : period === 'WEEK' ? 16840000 : 69700000,
-    completedTrips: period === 'DAY' ? 42 : period === 'WEEK' ? 268 : 1150,
-    activeDrivers: 28,
+    grossRevenue: completed.reduce((s, o) => s + o.fare.total, 0),
+    commissionRevenue: completed.reduce((s, o) => s + commissionOf(o), 0),
+    completedTrips: completed.length,
+    activeDrivers: onlineDrivers,
   };
 
+  /** UC-ADM-23 – xuất báo cáo theo khoảng ngày (MSG63) */
   const handleConfirmExport = () => {
+    const from = new Date(`${fromDate}T00:00:00`).getTime();
+    const to = new Date(`${toDate}T23:59:59`).getTime();
+    const inRange = (iso?: string) => {
+      const t = new Date(iso ?? 0).getTime();
+      return t >= from && t <= to;
+    };
     setIsExporting(true);
-    setTimeout(() => {
-      setIsExporting(false);
-      setShowExportModal(false);
-      setExportSuccessNotice(true);
-      setTimeout(() => setExportSuccessNotice(false), 4000);
-
-      // Trigger actual download of the configured report
-      const extension = fileFormat === 'XLSX' ? 'xlsx' : 'csv';
-      const csvHeader =
-        reportType === 'REVENUE'
-          ? 'MaChuyen,NgayHoanThanh,KhachHang,TaiXe,BienSoXe,LoaiXe,QuangDuongKm,GiaMoCua,PhiBocXep,TongCuocPhi,HoaHong20,ThucNhanTaiXe,PhuongThuc\n'
-          : 'MaSuCo,MaDon,ThoiGian,LoaiSuCo,TaiXe,BienSo,TrangThaiXuLy,QuyetDinhDieuPhoi\n';
-      const sampleRow =
-        reportType === 'REVENUE'
-          ? `MM20261029001,29/10/2026 14:15,Hoàng Mạnh,Nguyễn Hùng,29C-874.12,Xe Tải 1T,8.5,150000,80000,320000,64000,256000,PayOS\n`
-          : `INC881,MM-90182,29/10/2026 14:15,Hỏng xe nổ lốp,Nguyễn Hùng,29C-874.12,DaXuLy,TiepTucChuyenDi\n`;
-
-      const content = 'data:text/csv;charset=utf-8,\uFEFF' + csvHeader + sampleRow;
-      const encodedUri = encodeURI(content);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `ModMove_${reportType}_${fromDate}_den_${toDate}.${extension}`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }, 1000);
+    if (reportType === 'REVENUE') {
+      const rows = orders.filter((o) => o.status === 'Completed' && inRange(o.completedAt));
+      if (rows.length === 0) {
+        toast.info(msg('MSG63', { report_status_message: 'Không có dữ liệu trong khoảng thời gian đã chọn' }));
+        setIsExporting(false);
+        return;
+      }
+      downloadCsv(
+        `ModMove_DoanhThu_${fromDate}_${toDate}.csv`,
+        ['Mã đơn', 'Hoàn thành', 'Khách hàng', 'Tài xế', 'Biển số', 'Loại xe', 'Km', 'Tổng cước', 'Tỷ lệ HH', 'Hoa hồng', 'Tài xế nhận', 'Thanh toán'],
+        rows.map((o) => [
+          o.code,
+          formatDateTime(o.completedAt),
+          o.customerName,
+          o.assignedDriver?.name ?? '',
+          o.assignedDriver?.licensePlate ?? '',
+          o.vehicle.name,
+          o.fare.distanceKm,
+          o.fare.total,
+          `${Math.round((o.commissionRate ?? BUSINESS.DEFAULT_COMMISSION_RATE) * 100)}%`,
+          commissionOf(o),
+          o.fare.total - commissionOf(o),
+          o.paymentMethod,
+        ])
+      );
+    } else {
+      const rows = incidents.filter((i) => inRange(i.createdAt));
+      if (rows.length === 0) {
+        toast.info(msg('MSG63', { report_status_message: 'Không có dữ liệu trong khoảng thời gian đã chọn' }));
+        setIsExporting(false);
+        return;
+      }
+      downloadCsv(
+        `ModMove_SuCo_${fromDate}_${toDate}.csv`,
+        ['Mã sự cố', 'Mã đơn', 'Thời gian', 'Loại', 'Người báo', 'Trạng thái', 'Quyết định'],
+        rows.map((i) => [i.id, i.orderCode, formatDateTime(i.createdAt), INCIDENT_TYPE_LABEL[i.type], i.reportedBy, INCIDENT_STATUS_LABEL[i.status], i.decisionNote ?? ''])
+      );
+    }
+    setIsExporting(false);
+    setShowExportModal(false);
+    setExportSuccessNotice(true);
+    toast.success(msg('MSG63', { report_status_message: 'Báo cáo đã được tạo và tải xuống' }));
   };
 
   return (
@@ -94,7 +137,7 @@ export const DashboardPage: React.FC = () => {
               <span>Bảng điều khiển & Doanh thu Nền tảng (Admin KPI)</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Theo dõi thời gian thực tổng sản lượng vận chuyển, hoa hồng 20% và đội xe trực tuyến
+              Theo dõi thời gian thực tổng sản lượng vận chuyển, hoa hồng {Math.round(commissionRate * 100)}% và đội xe trực tuyến
             </p>
           </div>
 
@@ -118,7 +161,7 @@ export const DashboardPage: React.FC = () => {
               ].map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setPeriod(item.id as any)}
+                  onClick={() => setPeriod(item.id as typeof period)}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     period === item.id
                       ? 'bg-slate-900 text-white font-black shadow-xs'
@@ -149,7 +192,7 @@ export const DashboardPage: React.FC = () => {
 
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider">Hoa hồng nền tảng (20%)</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Hoa hồng nền tảng ({Math.round(commissionRate * 100)}%)</span>
               <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
                 <TrendingUp className="w-4 h-4" />
               </div>
@@ -271,7 +314,7 @@ export const DashboardPage: React.FC = () => {
                     {reportType === 'REVENUE' && <Check className="w-4 h-4 text-amber-600" />}
                   </div>
                   <span className="text-[10px] text-slate-400 font-normal block mt-1">
-                    Cước phí, hoa hồng 20%, thu nhập tài xế
+                    Cước phí, hoa hồng, thu nhập tài xế
                   </span>
                 </button>
 
@@ -325,12 +368,11 @@ export const DashboardPage: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 mb-2">Định dạng tệp tải về:</label>
               <div className="flex items-center gap-3">
                 {[
-                  { id: 'XLSX', label: 'Microsoft Excel (.xlsx)' },
-                  { id: 'CSV', label: 'Tệp phân cách dấu phẩy (.csv)' },
+                  { id: 'CSV', label: 'CSV (mở được bằng Excel)' },
                 ].map((fmt) => (
                   <label
                     key={fmt.id}
-                    onClick={() => setFileFormat(fmt.id as any)}
+                    onClick={() => setFileFormat(fmt.id as 'CSV')}
                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer transition ${
                       fileFormat === fmt.id
                         ? 'border-amber-500 bg-amber-50 text-slate-900'

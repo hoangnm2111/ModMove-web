@@ -20,36 +20,35 @@ import {
   Eye,
   Info
 } from 'lucide-react';
-import { useDriverStore } from '../../store/useDriverStore';
+import { toast } from '../../components/ui/feedback';
+import { msg } from '../../constants/messages';
+import { useDriverContext } from '../../hooks/useDriverContext';
+import { useVehicleTypes } from '../../hooks/useDomainData';
+import { driverService } from '../../services/driver.service';
+import { errorMessage } from '../../services/mock/storage';
 
 export const DriverProfilePage: React.FC = () => {
-  const {
-    profileApprovalStatus,
-    setProfileApprovalStatus,
-    rejectionReason,
-  } = useDriverStore();
+  const { user, driverId, application, approvalStatus: profileApprovalStatus } = useDriverContext();
+  const rejectionReason = application?.rejectionReason ?? '';
+  const vehicleTypes = useVehicleTypes();
+  /** UC-DRV-03/05: chỉ sửa & nộp khi chưa nộp hoặc bị từ chối (mỗi lúc 1 phiên bản Pending) */
+  const canEdit = profileApprovalStatus === 'Draft' || profileApprovalStatus === 'Rejected';
 
   // Form states for uploading / updating documents
-  const [vehicleCategory, setVehicleCategory] = useState('TRUCK_1TON');
-  const [licensePlate, setLicensePlate] = useState('29C-874.12');
-  const [payloadKg, setPayloadKg] = useState('990');
-  const [boxDimensions, setBoxDimensions] = useState('3.0 x 1.6 x 1.7 m');
-  const [nationalId, setNationalId] = useState('001201004567');
-  const [licenseNumber, setLicenseNumber] = useState('B2-88219482');
+  const [vehicleCategory, setVehicleCategory] = useState(application?.vehicleCategory ?? 'vt_truck_1t');
+  const [licensePlate, setLicensePlate] = useState(application?.licensePlate ?? '');
+  const [payloadKg, setPayloadKg] = useState(String(application?.payloadCapacityKg ?? ''));
+  const [boxDimensions, setBoxDimensions] = useState(application?.boxDimensions ?? '');
+  const [nationalId, setNationalId] = useState(application?.nationalId ?? '');
+  const [licenseNumber, setLicenseNumber] = useState(application?.licenseNumber ?? '');
 
   // Document photo states (URLs)
-  const [gplxPhoto, setGplxPhoto] = useState(
-    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80'
-  );
+  const [gplxPhoto, setGplxPhoto] = useState(application?.licensePhotoUrl ?? '');
   const [cccdPhoto, setCccdPhoto] = useState(
     'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80'
   );
-  const [cavetPhoto, setCavetPhoto] = useState(
-    'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=600&q=80'
-  );
-  const [dangKiemPhoto, setDangKiemPhoto] = useState(
-    'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=600&q=80'
-  );
+  const [cavetPhoto, setCavetPhoto] = useState(application?.registrationPhotoUrl ?? '');
+  const [dangKiemPhoto, setDangKiemPhoto] = useState(application?.inspectionPhotoUrl ?? '');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -73,15 +72,34 @@ export const DriverProfilePage: React.FC = () => {
   };
 
   // Submit documents for Admin Review
-  const handleSubmitDocuments = (e: React.FormEvent) => {
+  const handleSubmitDocuments = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setProfileApprovalStatus('Pending');
+    try {
+      await driverService.submitApplication(driverId, {
+        fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        nationalId: nationalId.trim(),
+        licenseNumber: licenseNumber.trim(),
+        licensePlate: licensePlate.trim().toUpperCase(),
+        licensePhotoUrl: gplxPhoto,
+        registrationPhotoUrl: cavetPhoto,
+        inspectionPhotoUrl: dangKiemPhoto,
+        vehiclePhotoUrl: application?.vehiclePhotoUrl || dangKiemPhoto, // thẻ 4: đăng kiểm & ảnh xe
+        vehicleCategory,
+        payloadCapacityKg: Number(payloadKg) || 0,
+        boxDimensions,
+      });
+      toast.success(msg('MSG23'));
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 3000);
-    }, 800);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,52 +116,6 @@ export const DriverProfilePage: React.FC = () => {
             <p className="text-xs text-slate-500 mt-0.5 font-medium">
               Thông tin xác thực danh tính, giấy phép lái xe và phân hạng phương tiện hoạt động theo quy chuẩn
             </p>
-          </div>
-
-          {/* Quick Demo Switcher (Để bạn dễ dàng kiểm thử 3 trạng thái duyệt của Admin) */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs">
-            <span className="text-[10px] text-slate-400 font-bold uppercase pl-1 hidden sm:inline">Demo Trạng Thái:</span>
-            <button
-              type="button"
-              onClick={() => setProfileApprovalStatus('Draft')}
-              className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-[11px] ${
-                profileApprovalStatus === 'Draft' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Chưa nộp
-            </button>
-            <button
-              type="button"
-              onClick={() => setProfileApprovalStatus('Pending')}
-              className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-[11px] ${
-                profileApprovalStatus === 'Pending' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:text-amber-700'
-              }`}
-            >
-              Chờ duyệt
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setProfileApprovalStatus(
-                  'Rejected',
-                  'Ảnh chụp sổ đăng kiểm bị mờ nhòe góc tem kiểm định, vui lòng chụp lại rõ nét cả 2 trang.'
-                )
-              }
-              className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-[11px] ${
-                profileApprovalStatus === 'Rejected' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 hover:text-rose-700'
-              }`}
-            >
-              Bị từ chối
-            </button>
-            <button
-              type="button"
-              onClick={() => setProfileApprovalStatus('Approved')}
-              className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-[11px] ${
-                profileApprovalStatus === 'Approved' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-emerald-700'
-              }`}
-            >
-              Đã duyệt (Active)
-            </button>
           </div>
         </div>
       </div>
@@ -323,12 +295,14 @@ export const DriverProfilePage: React.FC = () => {
                     <select
                       value={vehicleCategory}
                       onChange={(e) => setVehicleCategory(e.target.value)}
-                      disabled={profileApprovalStatus === 'Approved'}
+                      disabled={!canEdit}
                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-slate-100"
                     >
-                      <option value="VAN">Xe Bán Tải 500kg</option>
-                      <option value="TRUCK_1TON">Xe Tải Nhỏ 1 Tấn</option>
-                      <option value="TRUCK_2TON">Xe Tải 2 Tấn</option>
+                      {vehicleTypes.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -340,7 +314,7 @@ export const DriverProfilePage: React.FC = () => {
                       type="text"
                       value={licensePlate}
                       onChange={(e) => setLicensePlate(e.target.value)}
-                      disabled={profileApprovalStatus === 'Approved'}
+                      disabled={!canEdit}
                       placeholder="VD: 29C-874.12"
                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-slate-100"
                     />
@@ -354,7 +328,7 @@ export const DriverProfilePage: React.FC = () => {
                       type="number"
                       value={payloadKg}
                       onChange={(e) => setPayloadKg(e.target.value)}
-                      disabled={profileApprovalStatus === 'Approved'}
+                      disabled={!canEdit}
                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-slate-100"
                     />
                   </div>
@@ -367,7 +341,7 @@ export const DriverProfilePage: React.FC = () => {
                       type="text"
                       value={boxDimensions}
                       onChange={(e) => setBoxDimensions(e.target.value)}
-                      disabled={profileApprovalStatus === 'Approved'}
+                      disabled={!canEdit}
                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-slate-100"
                     />
                   </div>
@@ -395,7 +369,7 @@ export const DriverProfilePage: React.FC = () => {
                     </div>
                     <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-300 bg-slate-200 group">
                       <img src={gplxPhoto} alt="GPLX" className="w-full h-full object-cover" />
-                      {profileApprovalStatus !== 'Approved' && (
+                      {canEdit && (
                         <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold">
                           <Camera className="w-4 h-4" />
                           <span>Chụp / Thay ảnh</span>
@@ -418,7 +392,7 @@ export const DriverProfilePage: React.FC = () => {
                     </div>
                     <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-300 bg-slate-200 group">
                       <img src={cccdPhoto} alt="CCCD" className="w-full h-full object-cover" />
-                      {profileApprovalStatus !== 'Approved' && (
+                      {canEdit && (
                         <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold">
                           <Camera className="w-4 h-4" />
                           <span>Chụp / Thay ảnh</span>
@@ -443,7 +417,7 @@ export const DriverProfilePage: React.FC = () => {
                     </div>
                     <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-300 bg-slate-200 group">
                       <img src={cavetPhoto} alt="Cà vẹt" className="w-full h-full object-cover" />
-                      {profileApprovalStatus !== 'Approved' && (
+                      {canEdit && (
                         <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold">
                           <Camera className="w-4 h-4" />
                           <span>Chụp / Thay ảnh</span>
@@ -472,7 +446,7 @@ export const DriverProfilePage: React.FC = () => {
                     </div>
                     <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-300 bg-slate-200 group">
                       <img src={dangKiemPhoto} alt="Sổ đăng kiểm" className="w-full h-full object-cover" />
-                      {profileApprovalStatus !== 'Approved' && (
+                      {canEdit && (
                         <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold">
                           <Camera className="w-4 h-4" />
                           <span>Chụp / Thay ảnh</span>
@@ -489,7 +463,7 @@ export const DriverProfilePage: React.FC = () => {
                 </div>
 
                 {/* Nút nộp hồ sơ / nộp lại nếu bị từ chối */}
-                {profileApprovalStatus !== 'Approved' && (
+                {canEdit && (
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                     <div className="text-[11px] text-slate-500">
                       Đảm bảo các ảnh chụp đủ góc cạnh, rõ ràng chữ số và còn hạn sử dụng.
