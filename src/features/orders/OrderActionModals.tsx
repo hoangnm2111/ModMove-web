@@ -9,7 +9,9 @@ import { BUSINESS } from '../../config/business';
 import { INCIDENT_TYPE_LABEL } from '../../constants';
 import { msg } from '../../constants/messages';
 import { isRefundable, refundOnCancel } from '../../domain/orderRules';
+import { useCancellationReasons, useComplaintReasons } from '../../hooks/useDomainData';
 import { caseService } from '../../services/case.service';
+import { customerUploadService } from '../../services/customer-upload.service';
 import { orderService } from '../../services/order.service';
 import { errorMessage } from '../../services/mock/storage';
 import { IncidentType, Refund } from '../../types/case.types';
@@ -42,9 +44,13 @@ function useSubmit(onClose: () => void) {
 
 /* --------------------------------------------- UC-CUS-29 Huỷ đơn (MSG36) */
 export const CancelOrderModal: React.FC<BaseProps & { customerId: string }> = ({ order, customerId, onClose }) => {
+  const reasons = useCancellationReasons();
+  const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const { pending, error, submit } = useSubmit(onClose);
   const refund = refundOnCancel(order);
+  const code = reasonCode || reasons[0]?.code || 'OTHER';
+  const isOther = code.toUpperCase() === 'OTHER';
   return (
     <Modal
       open
@@ -56,7 +62,13 @@ export const CancelOrderModal: React.FC<BaseProps & { customerId: string }> = ({
           <Button variant="outline" size="sm" onClick={onClose}>
             Giữ đơn
           </Button>
-          <Button variant="danger" size="sm" isLoading={pending} onClick={() => submit(() => orderService.cancelByCustomer(order.id, customerId, reason || 'Khách huỷ đơn'), msg('MSG37', { order_id: order.code }))}>
+          <Button
+            variant="danger"
+            size="sm"
+            isLoading={pending}
+            disabled={isOther && !reason.trim()}
+            onClick={() => submit(() => orderService.cancelByCustomer(order.id, customerId, code, reason), msg('MSG37', { order_id: order.code }))}
+          >
             Xác nhận huỷ
           </Button>
         </>
@@ -65,7 +77,19 @@ export const CancelOrderModal: React.FC<BaseProps & { customerId: string }> = ({
       <div className="space-y-3">
         <p>{msg('MSG36', { order_id: order.code })}</p>
         {refund > 0 && <Banner kind="info">Bạn sẽ được hoàn {formatCurrency(refund)} sau khi quản trị viên duyệt (GB-41).</Banner>}
-        <TextArea label="Lý do huỷ" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Không bắt buộc" />
+        {reasons.length > 0 && (
+          <div>
+            <span className="block text-xs font-bold text-slate-700 mb-1">Lý do huỷ</span>
+            <select value={code} onChange={(e) => setReasonCode(e.target.value)} className="w-full text-xs p-2.5 rounded-xl border border-slate-300">
+              {reasons.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <TextArea label="Chi tiết" required={isOther} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isOther ? 'Bắt buộc với lý do "Khác"' : 'Không bắt buộc'} />
         {error && <Banner kind="error">{error}</Banner>}
       </div>
     </Modal>
@@ -75,25 +99,46 @@ export const CancelOrderModal: React.FC<BaseProps & { customerId: string }> = ({
 /* -------------------------------------- UC-CUS-21/22 Khiếu nại (GB-18/42) */
 export const ComplaintModal: React.FC<BaseProps> = ({ order, onClose }) => {
   const refundable = isRefundable(order);
+  const reasons = useComplaintReasons();
+  const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [amount, setAmount] = useState(refundable ? order.fare.total : 0);
   const { pending, error, submit } = useSubmit(onClose);
+  const code = reasonCode || reasons[0]?.code || 'OTHER';
+  const isOther = code.toUpperCase() === 'OTHER';
   return (
     <Modal
       open
       title={`Khiếu nại đơn ${order.code}`}
       onClose={onClose}
       footer={
-        <Button size="sm" isLoading={pending} onClick={() => submit(() => caseService.submitComplaint(order, { reason, evidence: photos, requestedAmount: amount }), 'Đã gửi khiếu nại. Điều phối viên sẽ xem xét.')}>
+        <Button
+          size="sm"
+          isLoading={pending}
+          disabled={isOther && !reason.trim()}
+          onClick={() => submit(() => caseService.submitComplaint(order, { reasonCode: code, reason, evidence: photos, requestedAmount: amount }), 'Đã gửi khiếu nại. Điều phối viên sẽ xem xét.')}
+        >
           Gửi khiếu nại
         </Button>
       }
     >
       <div className="space-y-3">
         <Banner kind="info">Chỉ được khiếu nại trong {BUSINESS.COMPLAINT_WINDOW_HOURS} giờ sau khi giao và trước khi xác nhận đã nhận hàng (GB-18).</Banner>
-        <TextArea label="Nội dung khiếu nại" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Mô tả vấn đề về dịch vụ / hàng hoá" />
-        <PhotoUploader label="Ảnh minh chứng *" value={photos} onChange={setPhotos} max={BUSINESS.MAX_EVIDENCE_PHOTOS} />
+        {reasons.length > 0 && (
+          <div>
+            <span className="block text-xs font-bold text-slate-700 mb-1">Lý do khiếu nại</span>
+            <select value={code} onChange={(e) => setReasonCode(e.target.value)} className="w-full text-xs p-2.5 rounded-xl border border-slate-300">
+              {reasons.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <TextArea label="Nội dung khiếu nại" required={isOther} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Mô tả vấn đề về dịch vụ / hàng hoá" />
+        <PhotoUploader label="Ảnh minh chứng *" value={photos} onChange={setPhotos} max={BUSINESS.MAX_EVIDENCE_PHOTOS} upload={customerUploadService.uploadImage} />
         {refundable ? (
           <Field
             label={`Số tiền yêu cầu hoàn (tối đa ${formatCurrency(order.fare.total)})`}
@@ -131,7 +176,7 @@ export const ReplyInfoModal: React.FC<{ refund: Refund; onClose: () => void }> =
       <div className="space-y-3">
         <Banner kind="warning">{msg('MSG60', { case_type: 'Yêu cầu', case_id: refund.id, requested_information: refund.infoRequest ?? '' })}</Banner>
         <TextArea label="Câu trả lời" required value={answer} onChange={(e) => setAnswer(e.target.value)} />
-        <PhotoUploader label="Ảnh bổ sung" value={photos} onChange={setPhotos} max={Math.max(0, BUSINESS.MAX_EVIDENCE_PHOTOS - refund.evidence.length)} />
+        <PhotoUploader label="Ảnh bổ sung" value={photos} onChange={setPhotos} max={Math.max(0, BUSINESS.MAX_EVIDENCE_PHOTOS - refund.evidence.length)} upload={customerUploadService.uploadImage} />
         {error && <Banner kind="error">{error}</Banner>}
       </div>
     </Modal>
@@ -187,10 +232,10 @@ export const RatingModal: React.FC<BaseProps> = ({ order, onClose }) => {
 };
 
 /* ------------------------------------ UC-CUS-15 Báo sự cố + UC-CUS-17 hoàn tiền */
-const CUSTOMER_INCIDENT_TYPES: IncidentType[] = ['Delay', 'WrongRoute', 'DriverMisconduct', 'DamagedCargo', 'Other'];
+const CUSTOMER_INCIDENT_TYPES: IncidentType[] = ['DamagedCargo', 'VehicleBreakdown', 'Accident', 'Other'];
 
 export const IncidentReportModal: React.FC<BaseProps> = ({ order, onClose }) => {
-  const [type, setType] = useState<IncidentType>('Delay');
+  const [type, setType] = useState<IncidentType>('Other');
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [wantRefund, setWantRefund] = useState(false);
@@ -200,8 +245,8 @@ export const IncidentReportModal: React.FC<BaseProps> = ({ order, onClose }) => 
 
   const handle = () =>
     submit(async () => {
-      await caseService.reportIncident(order, { reportedBy: 'Customer', type, description, photos });
-      if (wantRefund) await caseService.requestIncidentRefund(order, { reason: description, evidence: photos, requestedAmount: amount });
+      const incident = await caseService.reportIncident(order, { reportedBy: 'Customer', type, description, photos });
+      if (wantRefund) await caseService.requestIncidentRefund(incident.id, { reason: description, evidence: photos, requestedAmount: amount });
     }, 'Đã gửi báo cáo sự cố tới điều phối viên.');
 
   return (
@@ -215,7 +260,7 @@ export const IncidentReportModal: React.FC<BaseProps> = ({ order, onClose }) => 
           ))}
         </div>
         <TextArea label="Mô tả sự cố" required value={description} onChange={(e) => setDescription(e.target.value)} />
-        <PhotoUploader label="Ảnh minh chứng" value={photos} onChange={setPhotos} max={BUSINESS.MAX_EVIDENCE_PHOTOS} />
+        <PhotoUploader label="Ảnh minh chứng" value={photos} onChange={setPhotos} max={BUSINESS.MAX_EVIDENCE_PHOTOS} upload={customerUploadService.uploadImage} />
         {refundable && (
           <label className="flex items-center gap-2 text-xs font-semibold">
             <input type="checkbox" checked={wantRefund} onChange={(e) => setWantRefund(e.target.checked)} />

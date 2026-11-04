@@ -21,47 +21,41 @@ import { formatCurrency } from '../../utils/format';
 import { toast } from '../../components/ui/feedback';
 import { REFUND_SOURCE_LABEL, REFUND_STATUS_LABEL } from '../../constants';
 import { msg } from '../../constants/messages';
-import { useAllOrders, useRefunds } from '../../hooks/useDomainData';
+import { useDispatcherComplaints } from '../../hooks/useDomainData';
 import { caseService } from '../../services/case.service';
 import { errorMessage } from '../../services/mock/storage';
 import { Refund } from '../../types/case.types';
 import { formatDateTime } from '../../utils/format';
 
 type ViewStatus = 'PENDING_PROPOSAL' | 'PROPOSED_TO_ADMIN' | 'REJECTED';
-const toView = (r: Refund): ViewStatus =>
-  r.status === 'Requested' || r.status === 'InfoRequested' ? 'PENDING_PROPOSAL' : r.status === 'Rejected' || r.status === 'Withdrawn' ? 'REJECTED' : 'PROPOSED_TO_ADMIN';
+const toView = (r: Refund & { stage?: string }): ViewStatus =>
+  r.stage === 'ProposedToAdmin' ? 'PROPOSED_TO_ADMIN' : r.status === 'Rejected' || r.status === 'Withdrawn' ? 'REJECTED' : 'PENDING_PROPOSAL';
 
-/** SCR-42 – Xử lý khiếu nại & yêu cầu hoàn tiền sự cố (UC-DIS-08/09/11–15/17) */
+/** SCR-42 – Xử lý khiếu nại (UC-DIS-08/09/11–15/17). Hoàn tiền do sự cố xem trong màn Sự cố; hoàn do huỷ đơn đi thẳng Admin. */
 export const DispatcherComplaintsPage: React.FC = () => {
-  const refunds = useRefunds();
-  const orders = useAllOrders();
+  const refunds = useDispatcherComplaints();
 
-  // Hoàn tiền huỷ đơn (GB-41) đi thẳng Admin, Dispatcher không duyệt
-  const complaints = refunds
-    .filter((r) => r.source !== 'Cancellation')
-    .map((r) => {
-      const o = orders.find((x) => x.id === r.orderId);
-      return {
-        id: r.id,
-        raw: r,
-        orderCode: r.orderCode,
-        customerName: r.customerName,
-        customerPhone: o?.customerPhone ?? '',
-        driverName: o?.assignedDriver?.name ?? '—',
-        driverPhone: o?.assignedDriver?.phone ?? '',
-        ratingScore: o?.rating?.stars ?? 0,
-        complaintType: `${REFUND_SOURCE_LABEL[r.source]} • ${REFUND_STATUS_LABEL[r.status]}`,
-        complaintContent: `${r.reason}${r.infoReply ? `\n— Khách bổ sung: ${r.infoReply}` : ''}`,
-        damageEvidenceUrl: r.evidence[0] ?? '',
-        // UC-DIS-13: đối chiếu với ảnh kiểm hàng & POD
-        podEvidenceUrl: o?.proof?.deliveryPhoto ?? o?.proof?.pickupPhotos[0] ?? '',
-        orderTotalFee: r.requestedAmount,
-        status: toView(r),
-        proposedRefundAmount: r.proposedAmount,
-        proposalNote: r.proposalNote,
-        submittedAt: formatDateTime(r.createdAt),
-      };
-    });
+  const complaints = refunds.map((r) => {
+    return {
+      id: r.id,
+      raw: r,
+      orderCode: r.orderCode,
+      customerName: r.customerName,
+      customerPhone: '',
+      driverName: '—',
+      driverPhone: '',
+      ratingScore: 0,
+      complaintType: `${REFUND_SOURCE_LABEL[r.source]} • ${REFUND_STATUS_LABEL[r.status]}`,
+      complaintContent: `${r.reason}${r.infoReply ? `\n— Khách bổ sung: ${r.infoReply}` : ''}`,
+      damageEvidenceUrl: r.evidence[0] ?? '',
+      podEvidenceUrl: '',
+      orderTotalFee: r.requestedAmount,
+      status: toView(r),
+      proposedRefundAmount: r.proposedAmount,
+      proposalNote: r.proposalNote,
+      submittedAt: formatDateTime(r.createdAt),
+    };
+  });
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedComplaint = complaints.find((c) => c.id === selectedId) ?? complaints[0];
@@ -110,7 +104,7 @@ export const DispatcherComplaintsPage: React.FC = () => {
     return <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Không có khiếu nại / yêu cầu hoàn tiền nào.</div>;
   }
 
-  const awaitingInfo = selectedComplaint.raw.status === 'InfoRequested';
+  const awaitingInfo = selectedComplaint.raw.stage === 'WaitingForCustomer';
 
   return (
     <div className="flex h-full w-full bg-slate-100 overflow-hidden select-none">

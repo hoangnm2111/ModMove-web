@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Landmark, PiggyBank, Wallet } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, confirm, toast } from '../../components/ui/feedback';
@@ -7,8 +7,6 @@ import { Modal } from '../../components/ui/Modal';
 import { PayOsModal } from '../../features/payment/PayOsModal';
 import { BUSINESS } from '../../config/business';
 import { msg } from '../../constants/messages';
-import { calculateCommission } from '../../domain/pricing';
-import { useAllOrders, useWithdrawals } from '../../hooks/useDomainData';
 import { useDriverContext } from '../../hooks/useDriverContext';
 import { walletService } from '../../services/wallet.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -28,8 +26,6 @@ const TX_LABEL: Record<WalletTxType, string> = {
 /** SCR-28/29 – Ví tài xế, nạp ký quỹ, rút tiền, tổng hợp doanh thu */
 export const DriverEarningsPage: React.FC = () => {
   const { user, driverId, wallet } = useDriverContext();
-  const orders = useAllOrders();
-  const withdrawals = useWithdrawals();
   const [period, setPeriod] = useState<Period>('WEEK');
   const [topUp, setTopUp] = useState<number | null>(null);
   const [topUpInput, setTopUpInput] = useState(String(BUSINESS.MIN_COD_DEPOSIT));
@@ -37,16 +33,9 @@ export const DriverEarningsPage: React.FC = () => {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawErr, setWithdrawErr] = useState<string | null>(null);
 
-  /** UC-DRV-23: tính từ các đơn Completed của tài xế */
-  const summary = useMemo(() => {
-    const since = Date.now() - PERIODS[period].days * 86_400_000;
-    const done = orders.filter((o) => o.assignedDriver?.id === driverId && o.status === 'Completed' && new Date(o.completedAt ?? 0).getTime() >= since);
-    const gross = done.reduce((s, o) => s + o.fare.total, 0);
-    const commission = done.reduce((s, o) => s + calculateCommission(o.fare.total, o.commissionRate ?? BUSINESS.DEFAULT_COMMISSION_RATE), 0);
-    return { trips: done.length, gross, commission, net: gross - commission };
-  }, [orders, driverId, period]);
-
-  const pendingWithdrawal = withdrawals.find((w) => w.driverId === driverId && w.status === 'Pending');
+  // Backend chưa có API tổng hợp doanh thu theo kỳ cho tài xế trên web (DECISIONS C11); chỉ số dư ví (driver/status) là dữ liệu thật.
+  const summary = { trips: 0, gross: 0, commission: 0, net: 0 };
+  const pendingWithdrawal = undefined as { amount: number } | undefined;
 
   const startTopUp = () => {
     const amount = Number(topUpInput);

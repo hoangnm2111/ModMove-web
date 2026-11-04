@@ -23,7 +23,7 @@ import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
 import { REFUND_SOURCE_LABEL } from '../../constants';
 import { msg } from '../../constants/messages';
-import { useRefunds, useWithdrawals } from '../../hooks/useDomainData';
+import { useAdminRefunds, useWithdrawals } from '../../hooks/useDomainData';
 import { caseService } from '../../services/case.service';
 import { walletService } from '../../services/wallet.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -35,7 +35,7 @@ type PayoutAction = { kind: 'withdrawal' | 'refund'; id: string; approve: boolea
 export const AdminWithdrawalsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'WITHDRAWALS' | 'REFUNDS'>('WITHDRAWALS');
   const rawWithdrawals = useWithdrawals();
-  const rawRefunds = useRefunds();
+  const rawRefunds = useAdminRefunds();
 
   // View model cho phần hiển thị
   const withdrawals = rawWithdrawals.map((w) => ({
@@ -51,20 +51,18 @@ export const AdminWithdrawalsPage: React.FC = () => {
     transferCode: w.bankReferenceCode,
     rejectReason: w.rejectReason,
   }));
-  // Admin chỉ thấy refund đã có đề xuất (GB-19) hoặc đã xử lý
-  const refunds = rawRefunds
-    .filter((r) => ['Proposed', 'Approved', 'Processed', 'Rejected'].includes(r.status))
-    .map((r) => ({
-      id: r.id,
-      orderCode: r.orderCode,
-      customerName: r.customerName,
-      customerPhone: REFUND_SOURCE_LABEL[r.source],
-      proposedAmount: r.proposedAmount ?? 0,
-      reason: `${r.reason}${r.proposalNote ? ` — Đề xuất: ${r.proposalNote}` : ''}`,
-      dispatcherName: r.source === 'Cancellation' ? 'Tự động (GB-41)' : 'Điều phối viên',
-      status: (r.status === 'Proposed' ? 'PENDING' : r.status === 'Processed' || r.status === 'Approved' ? 'APPROVED' : 'REJECTED') as 'PENDING' | 'APPROVED' | 'REJECTED',
-      submittedAt: formatDateTime(r.updatedAt),
-    }));
+  // GB-19: hoàn do huỷ đơn đi thẳng Admin (Requested); hoàn sự cố/khiếu nại cần Dispatcher đề xuất trước (proposedAmount)
+  const refunds = rawRefunds.map((r) => ({
+    id: r.id,
+    orderCode: r.orderCode,
+    customerName: r.customerName,
+    customerPhone: REFUND_SOURCE_LABEL[r.source],
+    proposedAmount: r.proposedAmount ?? r.requestedAmount,
+    reason: `${r.reason}${r.proposalNote ? ` — Đề xuất: ${r.proposalNote}` : ''}`,
+    dispatcherName: r.source === 'Cancellation' ? 'Tự động (GB-41)' : 'Điều phối viên',
+    status: (r.status === 'Requested' ? 'PENDING' : r.status === 'Approved' || r.status === 'Processed' ? 'APPROVED' : 'REJECTED') as 'PENDING' | 'APPROVED' | 'REJECTED',
+    submittedAt: formatDateTime(r.updatedAt),
+  }));
 
   const [action, setAction] = useState<PayoutAction>(null);
   const [inputValue, setInputValue] = useState('');
@@ -92,8 +90,11 @@ export const AdminWithdrawalsPage: React.FC = () => {
       if (action.kind === 'withdrawal') {
         if (action.approve) await walletService.markWithdrawalPaid(action.id, inputValue);
         else await walletService.rejectWithdrawal(action.id, inputValue);
-      } else if (action.approve) await caseService.approveRefund(action.id, inputValue);
-      else await caseService.rejectRefund(action.id, inputValue);
+      } else if (action.approve) {
+        // Backend tách quyết định (approve) và xác nhận chuyển khoản (payout) làm 2 bước (GB-19, GB-27)
+        await caseService.approveRefund(action.id);
+        if (!zeroRefund) await caseService.payoutRefund(action.id, inputValue);
+      } else await caseService.rejectRefund(action.id, inputValue);
       toast.success(msg('MSG04', { record_name: 'quyết định' }));
       setAction(null);
     } catch (e) {

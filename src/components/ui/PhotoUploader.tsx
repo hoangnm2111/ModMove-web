@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { BUSINESS } from '../../config/business';
 import { validatePhotoFile } from '../../domain/validators';
 
@@ -9,6 +9,8 @@ interface PhotoUploaderProps {
   max?: number;
   label?: string;
   hint?: string;
+  /** Khi có: upload thật lên backend (Cloudinary) và lưu URL trả về. Không có: chỉ xem trước cục bộ (chưa có API upload cho luồng này). */
+  upload?: (file: File) => Promise<string>;
 }
 
 const readAsDataUrl = (file: File) =>
@@ -20,9 +22,10 @@ const readAsDataUrl = (file: File) =>
   });
 
 /** Upload ảnh theo GB-06: JPG/PNG ≤ 5MB, giới hạn số lượng */
-export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, max = BUSINESS.MAX_CARGO_PHOTOS, label, hint }) => {
+export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, max = BUSINESS.MAX_CARGO_PHOTOS, label, hint, upload }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -30,17 +33,29 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, m
     const room = max - value.length;
     const list = Array.from(files);
     if (list.length > room) setError(`Chỉ được tải tối đa ${max} ảnh.`);
-    const accepted: string[] = [];
-    for (const f of list.slice(0, Math.max(0, room))) {
+    const toAccept = list.slice(0, Math.max(0, room));
+    const validFiles: File[] = [];
+    for (const f of toAccept) {
       const err = validatePhotoFile(f);
-      if (err) {
-        setError(err);
-        continue;
-      }
-      accepted.push(await readAsDataUrl(f));
+      if (err) setError(err);
+      else validFiles.push(f);
     }
-    if (accepted.length) onChange([...value, ...accepted]);
-    if (inputRef.current) inputRef.current.value = '';
+    if (validFiles.length === 0) return;
+    setUploading(true);
+    try {
+      const accepted: string[] = [];
+      for (const f of validFiles) {
+        try {
+          accepted.push(upload ? await upload(f) : await readAsDataUrl(f));
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Tải ảnh lên thất bại.');
+        }
+      }
+      if (accepted.length) onChange([...value, ...accepted]);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
   };
 
   return (
@@ -70,15 +85,16 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, m
         {value.length < max && (
           <button
             type="button"
+            disabled={uploading}
             onClick={() => inputRef.current?.click()}
-            className="aspect-square rounded-xl border-2 border-dashed border-slate-300 hover:border-brand-500 hover:bg-brand-50 text-slate-400 hover:text-brand-600 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition"
+            className="aspect-square rounded-xl border-2 border-dashed border-slate-300 hover:border-brand-500 hover:bg-brand-50 text-slate-400 hover:text-brand-600 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition disabled:opacity-60"
           >
-            <ImagePlus className="w-5 h-5" />
-            Thêm ảnh
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+            {uploading ? 'Đang tải...' : 'Thêm ảnh'}
           </button>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/jpeg,image/png" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png" multiple hidden disabled={uploading} onChange={(e) => handleFiles(e.target.files)} />
       <p className="mt-1.5 text-[11px] text-slate-400">{hint ?? `JPG/PNG, tối đa ${BUSINESS.MAX_PHOTO_SIZE_MB}MB mỗi ảnh.`}</p>
       {error && <p className="mt-1 text-[11px] font-semibold text-rose-600">{error}</p>}
     </div>

@@ -23,21 +23,27 @@ export const getRoleHomePath = (role?: UserRole | null): string => {
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   activeRole: UserRole | null;
   signIn: (identifier: string, password: string) => Promise<User>;
   setUser: (user: User) => void;
   logout: () => void;
+  /** Gọi lại từ api.ts sau khi refresh access token thành công */
+  applyRefreshedTokens: (accessToken: string, refreshToken: string) => void;
+  /** Nạp lại hồ sơ khi mở ứng dụng, để xác nhận token cục bộ còn hợp lệ với server */
+  bootstrap: () => Promise<void>;
 }
 
 const fromSession = (s: Session | null) => ({
   user: s?.user ?? null,
   token: s?.accessToken ?? null,
+  refreshToken: s?.refreshToken ?? null,
   isAuthenticated: Boolean(s),
   activeRole: s?.user.role ?? null,
 });
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   ...fromSession(authService.restoreSession()),
 
   signIn: async (identifier, password) => {
@@ -46,10 +52,29 @@ export const useAuthStore = create<AuthState>((set) => ({
     return session.user;
   },
 
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    set({ user });
+    const token = get().token;
+    const refreshToken = get().refreshToken;
+    if (token && refreshToken) authService.saveSession({ user, accessToken: token, refreshToken });
+  },
 
   logout: () => {
-    authService.signOut();
+    void authService.signOut();
     set(fromSession(null));
+  },
+
+  applyRefreshedTokens: (accessToken, refreshToken) => {
+    const user = get().user;
+    if (!user) return;
+    authService.saveSession({ user, accessToken, refreshToken });
+    set({ token: accessToken, refreshToken });
+  },
+
+  bootstrap: async () => {
+    if (!get().isAuthenticated) return;
+    const user = await authService.refreshProfile();
+    if (user) set({ user });
+    else set(fromSession(null));
   },
 }));

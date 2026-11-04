@@ -17,10 +17,7 @@ import {
   Camera,
   Filter
 } from 'lucide-react';
-import { formatCurrency, formatDateTime, formatDistance } from '../../utils/format';
-import { BUSINESS } from '../../config/business';
-import { calculateDriverEarning } from '../../domain/pricing';
-import { useAllOrders } from '../../hooks/useDomainData';
+import { formatCurrency, formatDistance } from '../../utils/format';
 import { useDriverContext } from '../../hooks/useDriverContext';
 
 interface CompletedTrip {
@@ -53,37 +50,9 @@ export const DriverTripHistoryPage: React.FC = () => {
   const [selectedTrip, setSelectedTrip] = useState<(CompletedTrip & { commissionRate: number }) | null>(null);
   const [photoZoom, setPhotoZoom] = useState<string | null>(null);
 
-  const { driverId } = useDriverContext();
-  const orders = useAllOrders();
-  /** Lịch sử chuyến của tài xế: đơn đã hoàn thành hoặc đã huỷ */
-  const trips: (CompletedTrip & { commissionRate: number })[] = orders
-    .filter((o) => o.assignedDriver?.id === driverId && (o.status === 'Completed' || o.status === 'Cancelled'))
-    .map((o) => {
-      const rate = o.commissionRate ?? BUSINESS.DEFAULT_COMMISSION_RATE;
-      return {
-        id: o.id,
-        code: o.code,
-        completedAt: formatDateTime(o.completedAt ?? o.cancelledAt),
-        customerName: o.customerName,
-        customerPhone: o.customerPhone,
-        pickupAddress: o.pickup.address,
-        dropoffAddress: o.dropoff.address,
-        cargoName: o.cargo.description,
-        cargoWeightKg: o.cargo.weightKg,
-        totalDistanceKm: o.fare.distanceKm,
-        durationMins: o.fare.durationMins,
-        totalFee: o.fare.total,
-        netEarnings: o.status === 'Completed' ? calculateDriverEarning(o.fare.total, rate) : 0,
-        paymentMethod: o.paymentMethod,
-        status: o.status as 'Completed' | 'Cancelled',
-        cancelReason: o.cancellationReason,
-        rating: o.rating?.stars,
-        customerFeedback: o.rating?.comment,
-        podPhoto: o.proof?.deliveryPhoto ?? '',
-        signaturePhoto: o.proof?.pickupPhotos[0] ?? '',
-        commissionRate: rate,
-      };
-    });
+  useDriverContext();
+  // Backend chưa có API lịch sử chuyến cho tài xế trên web (DECISIONS C11: nghiệp vụ tài xế thuộc app di động).
+  const trips: (CompletedTrip & { commissionRate: number })[] = [];
 
   const filteredTrips = trips.filter((trip) => {
     if (statusFilter !== 'ALL' && trip.status !== statusFilter) return false;

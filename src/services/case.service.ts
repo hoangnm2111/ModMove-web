@@ -1,249 +1,491 @@
-import { BUSINESS } from '../config/business';
 import { msg } from '../constants/messages';
-import { canComplain, canReportIncident, isRefundable } from '../domain/orderRules';
-import { Incident, IncidentDecision, IncidentType, Refund, RefundStatus } from '../types/case.types';
+import { DispatcherIncidentDetail, Incident, IncidentDecision, IncidentType, Refund } from '../types/case.types';
 import { AssignedDriver, ShippingOrder } from '../types/order.types';
-import { latency, readStore, ServiceError, subscribeStore, uid, writeStore } from './mock/storage';
-import { orderService, registerCancellationRefundHandler } from './order.service';
+import { apiClient, toServiceError } from './api';
+import { readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
+import { PagedResult } from './pagination';
 
 /**
- * Incident & Refund service – API /incidents, /refunds.
- * Luồng hoàn tiền: GB-19, GB-41, GB-42; khiếu nại: GB-18.
+ * Incident & Refund service.
+ * Customer: api/customer/incidents, api/customer/refunds.
+ * Dispatcher: api/dispatcher/incidents, api/dispatcher/complaints.
+ * Admin: api/admin/refunds.
  */
-const INCIDENTS = 'incidents';
-const REFUNDS = 'refunds';
-const now = () => new Date().toISOString();
+const MY_INCIDENTS = 'myIncidents';
+const DISPATCHER_INCIDENTS = 'dispatcherIncidents';
+const MY_REFUNDS = 'myRefunds';
+const DISPATCHER_COMPLAINTS = 'dispatcherComplaints';
+const ADMIN_REFUNDS = 'adminRefunds';
 
-const seedIncidents = (): Incident[] => [
-  {
-    id: 'INC-881',
-    orderId: 'ord_MM-78219',
-    orderCode: 'MM-78219',
-    reportedBy: 'Driver',
-    reporterId: 'drv_88',
-    type: 'VehicleBreakdown',
-    description: 'Xe nổ lốp trên Đại lộ Thăng Long, cần 30 phút thay lốp.',
-    photos: ['https://images.unsplash.com/photo-1597007066704-67bf2068d5b2?auto=format&fit=crop&w=600&q=80'],
-    gps: { lat: 21.0115, lng: 105.65 },
-    status: 'Open',
-    createdAt: new Date(Date.now() - 8 * 60_000).toISOString(),
-  },
-];
-
-const seedRefunds = (): Refund[] => [
-  {
-    id: 'RF-1001',
-    orderId: 'ord_MM-84721',
-    orderCode: 'MM-84721',
-    customerName: 'Hoàng Nguyễn Mạnh',
-    source: 'Complaint',
-    reason: 'Cạnh tủ bị trầy xước khi bốc xuống.',
-    evidence: ['https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=600&q=80'],
-    amountPaid: 300_000,
-    requestedAmount: 150_000,
-    status: 'Requested',
-    createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-    updatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-  },
-];
-
-const incidents = () => readStore(INCIDENTS, seedIncidents);
-const refunds = () => readStore(REFUNDS, seedRefunds);
-
-function updateRefund(id: string, fn: (r: Refund) => Refund): Refund {
-  const list = refunds();
-  const r = list.find((x) => x.id === id);
-  if (!r) throw new ServiceError(msg('MSG07'));
-  const next = { ...fn(r), updatedAt: now() };
-  writeStore(REFUNDS, list.map((x) => (x.id === id ? next : x)));
-  return next;
+// -------------------------------------------------------------------- Incidents
+interface MyIncidentDto {
+  id: number;
+  orderId: number;
+  orderCode: string;
+  incidentType: IncidentType;
+  description: string;
+  photoUrls: string[];
+  reportedByYou: boolean;
+  resolutionStatus: Incident['status'];
+  resolutionDecision?: IncidentDecision;
+  resolutionNote?: string;
+  createdAt: string;
+  resolvedAt?: string;
 }
 
-function updateIncident(id: string, fn: (i: Incident) => Incident): Incident {
-  const list = incidents();
-  const i = list.find((x) => x.id === id);
-  if (!i) throw new ServiceError(msg('MSG07'));
-  const next = fn(i);
-  writeStore(INCIDENTS, list.map((x) => (x.id === id ? next : x)));
-  return next;
-}
-
-const hasOpenRefund = (orderId: string, source: Refund['source']) =>
-  refunds().some((r) => r.orderId === orderId && r.source === source && ['Requested', 'InfoRequested', 'Proposed', 'Approved'].includes(r.status));
-
-function createRefund(order: ShippingOrder, data: Pick<Refund, 'source' | 'reason' | 'evidence' | 'requestedAmount'>, status: RefundStatus = 'Requested'): Refund {
-  const r: Refund = {
-    id: uid('RF').toUpperCase(),
-    orderId: order.id,
-    orderCode: order.code,
-    customerName: order.customerName,
-    amountPaid: order.fare.total,
-    status,
-    createdAt: now(),
-    updatedAt: now(),
-    ...data,
-  };
-  writeStore(REFUNDS, [r, ...refunds()]);
-  return r;
-}
-
-// GB-41: huỷ đơn PayOS đã thanh toán → tự tạo refund 100%, chuyển thẳng Admin (bỏ qua Dispatcher)
-registerCancellationRefundHandler((order, amount) => {
-  if (hasOpenRefund(order.id, 'Cancellation')) return;
-  createRefund(order, { source: 'Cancellation', reason: order.cancellationReason ?? 'Huỷ đơn', evidence: [], requestedAmount: amount }, 'Proposed');
-  const list = refunds();
-  writeStore(REFUNDS, list.map((r, i) => (i === 0 ? { ...r, proposedAmount: amount, proposalNote: 'Tự động hoàn 100% (GB-41)' } : r)));
+const myIncidentToFe = (d: MyIncidentDto): Incident => ({
+  id: String(d.id),
+  orderId: String(d.orderId),
+  orderCode: d.orderCode,
+  reportedBy: d.reportedByYou ? 'Customer' : 'Driver',
+  type: d.incidentType,
+  description: d.description,
+  photos: d.photoUrls,
+  status: d.resolutionStatus,
+  decision: d.resolutionDecision,
+  decisionNote: d.resolutionNote,
+  createdAt: d.createdAt,
+  resolvedAt: d.resolvedAt,
 });
+
+interface DispatcherIncidentDto {
+  id: number;
+  orderId: number;
+  orderCode: string;
+  orderStatus: string;
+  incidentType: IncidentType;
+  description: string;
+  reportedById: number;
+  reporterName: string;
+  reporterRole: string;
+  resolutionStatus: Incident['status'];
+  handledById?: number;
+  handledByName?: string;
+  createdAt: string;
+}
 
 export const caseService = {
   subscribe: (cb: () => void) => {
-    const a = subscribeStore(INCIDENTS, cb);
-    const b = subscribeStore(REFUNDS, cb);
+    const a = subscribeStore(MY_INCIDENTS, cb);
+    const b = subscribeStore(DISPATCHER_INCIDENTS, cb);
+    const c = subscribeStore(MY_REFUNDS, cb);
+    const d = subscribeStore(DISPATCHER_COMPLAINTS, cb);
+    const e = subscribeStore(ADMIN_REFUNDS, cb);
     return () => {
       a();
       b();
+      c();
+      d();
+      e();
     };
   },
 
-  listIncidentsSync: (): Incident[] => incidents().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  listRefundsSync: (): Refund[] => refunds().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  listRefundsByOrderSync: (orderId: string) => refunds().filter((r) => r.orderId === orderId),
-  listIncidentsByOrderSync: (orderId: string) => incidents().filter((i) => i.orderId === orderId),
+  // --------------------------------------------------------------- Customer
+  listIncidentsSync: (): Incident[] => readStore<Incident[]>(MY_INCIDENTS, () => []),
+  listIncidentsByOrderSync: (orderId: string) => readStore<Incident[]>(MY_INCIDENTS, () => []).filter((i) => i.orderId === orderId),
 
-  /** UC-CUS-15 / UC-DRV-18 */
-  async reportIncident(order: ShippingOrder, input: { reportedBy: 'Customer' | 'Driver'; reporterId?: string; type: IncidentType; description: string; photos: string[] }): Promise<Incident> {
-    await latency();
-    if (!canReportIncident(order)) throw new ServiceError(msg('MSG38'));
-    if (!input.description.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Mô tả sự cố' }));
-    if (input.photos.length > BUSINESS.MAX_EVIDENCE_PHOTOS) {
-      throw new ServiceError(msg('MSG03', { field_name: 'Ảnh minh chứng', constraints: `tối đa ${BUSINESS.MAX_EVIDENCE_PHOTOS} ảnh` }));
+  /** UC-CUS-16: GET /customer/incidents */
+  async loadMyIncidents(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<PagedResult<MyIncidentDto>>('/customer/Incidents', { params: { page: 1, pageSize: 50 } });
+      writeStore(MY_INCIDENTS, data.items.map(myIncidentToFe));
+    } catch {
+      /* ignore */
     }
-    const incident: Incident = {
-      id: uid('INC').toUpperCase(),
-      orderId: order.id,
-      orderCode: order.code,
-      status: 'Open',
-      createdAt: now(),
-      gps: order.assignedDriver ? { lat: order.assignedDriver.currentLat, lng: order.assignedDriver.currentLng } : undefined,
-      ...input,
-    };
-    writeStore(INCIDENTS, [incident, ...incidents()]);
-    return incident;
   },
 
-  /** UC-CUS-17 / GB-42 */
-  async requestIncidentRefund(order: ShippingOrder, input: { reason: string; evidence: string[]; requestedAmount: number }): Promise<Refund> {
-    await latency();
-    if (!isRefundable(order)) throw new ServiceError('Đơn tiền mặt được giải quyết ngoài hệ thống (GB-42).');
-    if (input.requestedAmount <= 0 || input.requestedAmount > order.fare.total) {
-      throw new ServiceError(msg('MSG03', { field_name: 'Số tiền yêu cầu', constraints: `1 – ${order.fare.total.toLocaleString('vi-VN')} đ` }));
+  /** UC-CUS-15: POST /customer/incidents → trả về sự cố vừa tạo (dùng để mở yêu cầu hoàn tiền kèm theo) */
+  async reportIncident(
+    order: ShippingOrder,
+    input: { reportedBy: 'Customer' | 'Driver'; reporterId?: string; type: IncidentType; description: string; photos: string[] }
+  ): Promise<Incident> {
+    try {
+      const { data } = await apiClient.post<{ incidentId: number }>('/customer/Incidents', {
+        orderId: Number(order.id),
+        incidentType: input.type,
+        description: input.description,
+        photoUrls: input.photos,
+      });
+      const incident: Incident = {
+        id: String(data.incidentId),
+        orderId: order.id,
+        orderCode: order.code,
+        reportedBy: input.reportedBy,
+        type: input.type,
+        description: input.description,
+        photos: input.photos,
+        status: 'Open',
+        createdAt: new Date().toISOString(),
+      };
+      writeStore(MY_INCIDENTS, [incident, ...readStore<Incident[]>(MY_INCIDENTS, () => [])]);
+      return incident;
+    } catch (e) {
+      throw toServiceError(e);
     }
-    if (hasOpenRefund(order.id, 'Incident')) throw new ServiceError('Đơn đã có yêu cầu hoàn tiền sự cố đang xử lý.');
-    return createRefund(order, { source: 'Incident', ...input });
   },
 
-  /** UC-CUS-21 / GB-18 */
-  async submitComplaint(order: ShippingOrder, input: { reason: string; evidence: string[]; requestedAmount: number }): Promise<Refund> {
-    await latency();
-    if (!canComplain(order)) throw new ServiceError('Chỉ khiếu nại khi đơn ở trạng thái Đã giao và trong 24 giờ sau giao (GB-18).');
-    if (hasOpenRefund(order.id, 'Complaint')) throw new ServiceError('Đơn đã có một khiếu nại đang mở (GB-18).');
-    if (!input.reason.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Nội dung khiếu nại' }));
-    if (input.evidence.length === 0) throw new ServiceError(msg('MSG44', { evidence_type: 'ảnh minh chứng' }));
-    const max = isRefundable(order) ? order.fare.total : 0;
-    if (input.requestedAmount < 0 || input.requestedAmount > max) {
-      throw new ServiceError(msg('MSG03', { field_name: 'Số tiền yêu cầu', constraints: `0 – ${max.toLocaleString('vi-VN')} đ` }));
+  // ----------------------------------------------------------------- Refunds
+  listRefundsSync: (): Refund[] => readStore<Refund[]>(MY_REFUNDS, () => []),
+  listRefundsByOrderSync: (orderId: string) => readStore<Refund[]>(MY_REFUNDS, () => []).filter((r) => r.orderId === orderId),
+
+  /** UC-CUS-16/23: GET /customer/refunds (+ chi tiết từng khoản để có đủ reason/evidence) */
+  async loadMyRefunds(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<
+        PagedResult<{ id: number; orderId: number; orderCode: string; sourceType: Refund['source']; refundStatus: Refund['status']; requestedAmount: number; approvedAmount?: number; decisionReason?: string; waitingForYourReply: boolean; createdAt: string }>
+      >('/customer/Refunds', { params: { page: 1, pageSize: 50 } });
+      const details = await Promise.all(
+        data.items.map(async (s) => {
+          try {
+            const { data: d } = await apiClient.get<{
+              id: number; orderId: number; orderCode: string; incidentId?: number; sourceType: Refund['source']; refundStatus: Refund['status']; reason: string; reasonCode?: string;
+              evidenceUrls: string[]; requestedAmount: number; approvedAmount?: number; decisionReason?: string; infoRequestNote?: string; customerReply?: string; waitingForYourReply: boolean;
+              createdAt: string; decidedAt?: string; processedAt?: string;
+            }>(`/customer/Refunds/${s.id}`);
+            const r: Refund & { incidentId?: string } = {
+              id: String(d.id),
+              orderId: String(d.orderId),
+              orderCode: d.orderCode,
+              incidentId: d.incidentId != null ? String(d.incidentId) : undefined,
+              customerName: '',
+              source: d.sourceType,
+              reason: d.reason,
+              evidence: d.evidenceUrls,
+              amountPaid: d.requestedAmount,
+              requestedAmount: d.requestedAmount,
+              approvedAmount: d.approvedAmount,
+              decisionReason: d.decisionReason,
+              infoRequest: d.infoRequestNote,
+              infoReply: d.customerReply,
+              waitingForYourReply: d.waitingForYourReply,
+              status: d.refundStatus,
+              createdAt: d.createdAt,
+              updatedAt: d.decidedAt ?? d.processedAt ?? d.createdAt,
+            };
+            return r;
+          } catch {
+            return {
+              id: String(s.id),
+              orderId: String(s.orderId),
+              orderCode: s.orderCode,
+              customerName: '',
+              source: s.sourceType,
+              reason: '',
+              evidence: [],
+              amountPaid: s.requestedAmount,
+              requestedAmount: s.requestedAmount,
+              approvedAmount: s.approvedAmount,
+              decisionReason: s.decisionReason,
+              waitingForYourReply: s.waitingForYourReply,
+              status: s.refundStatus,
+              createdAt: s.createdAt,
+              updatedAt: s.createdAt,
+            } satisfies Refund;
+          }
+        })
+      );
+      writeStore(MY_REFUNDS, details);
+    } catch {
+      /* ignore */
     }
-    return createRefund(order, { source: 'Complaint', ...input });
   },
 
-  /** UC-CUS-24: chỉ rút khi còn Requested */
+  /** UC-CUS-17/18: cần incidentId (từ reportIncident) – POST /customer/refunds/incidents */
+  async requestIncidentRefund(incidentId: string, input: { reason: string; evidence: string[]; requestedAmount: number }): Promise<Refund> {
+    try {
+      const { data } = await apiClient.post<{ refundId: number }>('/customer/Refunds/incidents', {
+        incidentId: Number(incidentId),
+        reason: input.reason,
+        evidenceUrls: input.evidence,
+        requestedAmount: Math.round(input.requestedAmount),
+      });
+      await caseService.loadMyRefunds();
+      return readStore<Refund[]>(MY_REFUNDS, () => []).find((r) => r.id === String(data.refundId)) ?? ({ id: String(data.refundId) } as Refund);
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-CUS-21/22: POST /customer/refunds/complaints */
+  async submitComplaint(order: ShippingOrder, input: { reasonCode: string; reason: string; evidence: string[]; requestedAmount: number }): Promise<Refund> {
+    try {
+      const { data } = await apiClient.post<{ refundId: number }>('/customer/Refunds/complaints', {
+        orderId: Number(order.id),
+        reasonCode: input.reasonCode,
+        reason: input.reason || null,
+        evidenceUrls: input.evidence,
+        requestedAmount: Math.round(input.requestedAmount),
+      });
+      await caseService.loadMyRefunds();
+      return readStore<Refund[]>(MY_REFUNDS, () => []).find((r) => r.id === String(data.refundId)) ?? ({ id: String(data.refundId) } as Refund);
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-CUS-24: POST /customer/refunds/{id}/withdraw */
   async withdrawComplaint(refundId: string): Promise<Refund> {
-    await latency();
-    return updateRefund(refundId, (r) => {
-      if (r.status !== 'Requested' && r.status !== 'InfoRequested') throw new ServiceError(msg('MSG07'));
-      return { ...r, status: 'Withdrawn' };
-    });
+    try {
+      await apiClient.post(`/customer/Refunds/${refundId}/withdraw`);
+      await caseService.loadMyRefunds();
+      return readStore<Refund[]>(MY_REFUNDS, () => []).find((r) => r.id === refundId) ?? ({ id: refundId } as Refund);
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  /** UC-DIS-14 / GB-43 */
-  async requestMoreInfo(refundId: string, question: string): Promise<Refund> {
-    await latency();
-    if (!question.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Nội dung cần bổ sung' }));
-    return updateRefund(refundId, (r) => ({ ...r, status: 'InfoRequested', infoRequest: question }));
-  },
-
-  /** GB-43: khách trả lời 1 lần, tổng ảnh ≤ 5 */
+  /** GB-43: POST /customer/refunds/{id}/reply */
   async replyMoreInfo(refundId: string, answer: string, photos: string[]): Promise<Refund> {
-    await latency();
-    return updateRefund(refundId, (r) => {
-      if (r.status !== 'InfoRequested') throw new ServiceError(msg('MSG07'));
-      if (r.evidence.length + photos.length > BUSINESS.MAX_EVIDENCE_PHOTOS) {
-        throw new ServiceError(msg('MSG03', { field_name: 'Ảnh minh chứng', constraints: `tổng tối đa ${BUSINESS.MAX_EVIDENCE_PHOTOS} ảnh` }));
-      }
-      return { ...r, status: 'Requested', infoReply: answer, evidence: [...r.evidence, ...photos] };
-    });
-  },
-
-  /** UC-DIS-09 / UC-DIS-15 / GB-42: đề xuất ≤ số tiền yêu cầu, gửi Admin (UC-DIS-17) */
-  async proposeRefund(refundId: string, amount: number, note: string): Promise<Refund> {
-    await latency();
-    return updateRefund(refundId, (r) => {
-      if (r.status !== 'Requested') throw new ServiceError(msg('MSG07'));
-      if (amount < 0 || amount > r.requestedAmount) {
-        throw new ServiceError(msg('MSG03', { field_name: 'Số tiền đề xuất', constraints: `0 – ${r.requestedAmount.toLocaleString('vi-VN')} đ` }));
-      }
-      if (!note.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Lý do đề xuất' }));
-      return { ...r, status: 'Proposed', proposedAmount: amount, proposalNote: note };
-    });
-  },
-
-  /** UC-ADM-18 / GB-19, GB-27 */
-  async approveRefund(refundId: string, bankReferenceCode: string): Promise<Refund> {
-    await latency();
-    return updateRefund(refundId, (r) => {
-      if (r.status !== 'Proposed') throw new ServiceError(msg('MSG07'));
-      const amount = r.proposedAmount ?? 0;
-      // Đề xuất "không hoàn tiền" chỉ cần Admin chốt, không có chuyển khoản
-      if (amount === 0) return { ...r, status: 'Approved', approvedAmount: 0 };
-      if (!bankReferenceCode.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Mã giao dịch ngân hàng' }));
-      return { ...r, status: 'Processed', approvedAmount: amount, bankReferenceCode };
-    });
-  },
-
-  async rejectRefund(refundId: string, reason: string): Promise<Refund> {
-    await latency();
-    return updateRefund(refundId, (r) => {
-      if (!['Proposed', 'Requested'].includes(r.status)) throw new ServiceError(msg('MSG07'));
-      return { ...r, status: 'Rejected', proposalNote: reason || r.proposalNote };
-    });
-  },
-
-  /** UC-DIS-05: quyết định xử lý sự cố */
-  async resolveIncident(incidentId: string, decision: IncidentDecision, note: string, opts?: { newDriver?: AssignedDriver; refundable?: boolean }): Promise<Incident> {
-    await latency();
-    const inc = incidents().find((i) => i.id === incidentId);
-    if (!inc || inc.status === 'Resolved' || inc.status === 'Cancelled') throw new ServiceError(msg('MSG07'));
-    if (decision === 'ReassignDriver') {
-      if (!opts?.newDriver) throw new ServiceError('Vui lòng chọn tài xế thay thế.');
-      await orderService.reassignDriver(inc.orderId, opts.newDriver);
+    try {
+      await apiClient.post(`/customer/Refunds/${refundId}/reply`, { reply: answer, photoUrls: photos });
+      await caseService.loadMyRefunds();
+      return readStore<Refund[]>(MY_REFUNDS, () => []).find((r) => r.id === refundId) ?? ({ id: refundId } as Refund);
+    } catch (e) {
+      throw toServiceError(e);
     }
-    if (decision === 'CancelOrder') {
-      await orderService.cancelByDispatcher(inc.orderId, note || 'Huỷ do sự cố', opts?.refundable ?? true);
+  },
+
+  canComplain: (o: ShippingOrder) => o.status === 'Delivered',
+
+  // ------------------------------------------------------------- Dispatcher
+  listDispatcherComplaintsSync: (): (Refund & { stage: string })[] => readStore(DISPATCHER_COMPLAINTS, () => []),
+
+  /** UC-DIS-11: GET /dispatcher/complaints – chỉ khiếu nại (Complaint); hoàn tiền sự cố xem trong chi tiết sự cố */
+  async loadDispatcherComplaints(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<
+        PagedResult<{
+          id: number; orderId: number; orderCode: string; customerName: string; reason: string; requestedAmount: number; proposedAmount?: number; stage: string; refundStatus: Refund['status']; deliveredAt?: string; createdAt: string;
+        }>
+      >('/dispatcher/Complaints', { params: { page: 1, pageSize: 50 } });
+      writeStore(
+        DISPATCHER_COMPLAINTS,
+        data.items.map((d) => ({
+          id: String(d.id),
+          orderId: String(d.orderId),
+          orderCode: d.orderCode,
+          customerName: d.customerName,
+          source: 'Complaint' as const,
+          reason: d.reason,
+          evidence: [],
+          amountPaid: d.requestedAmount,
+          requestedAmount: d.requestedAmount,
+          proposedAmount: d.proposedAmount,
+          status: d.refundStatus,
+          stage: d.stage,
+          createdAt: d.createdAt,
+          updatedAt: d.createdAt,
+        }))
+      );
+    } catch {
+      /* ignore */
     }
-    return updateIncident(incidentId, (i) => ({ ...i, status: 'Resolved', decision, decisionNote: note, resolvedAt: now() }));
   },
 
-  /** UC-DIS-10: huỷ sự cố không hợp lệ */
-  async cancelIncident(incidentId: string, reason: string): Promise<Incident> {
-    await latency();
-    if (!reason.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Lý do huỷ sự cố' }));
-    return updateIncident(incidentId, (i) => {
-      if (i.status === 'Resolved' || i.status === 'Cancelled') throw new ServiceError(msg('MSG07'));
-      return { ...i, status: 'Cancelled', decisionNote: reason, resolvedAt: now() };
-    });
+  /** UC-DIS-14: POST /dispatcher/complaints/{id}/request-info */
+  async requestMoreInfo(refundId: string, question: string): Promise<void> {
+    try {
+      await apiClient.post(`/dispatcher/Complaints/${refundId}/request-info`, { note: question });
+      await caseService.loadDispatcherComplaints();
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  async markIncidentInProgress(incidentId: string): Promise<Incident> {
-    return updateIncident(incidentId, (i) => (i.status === 'Open' ? { ...i, status: 'InProgress' } : i));
+  /** UC-DIS-09/15/17: POST /dispatcher/complaints/{id}/proposal */
+  async proposeRefund(refundId: string, amount: number, note: string): Promise<void> {
+    try {
+      await apiClient.post(`/dispatcher/Complaints/${refundId}/proposal`, { amount: Math.round(amount), reason: note });
+      await caseService.loadDispatcherComplaints();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  listIncidentsDispatcherSync: (): DispatcherIncidentDetail[] => readStore(DISPATCHER_INCIDENTS, () => []),
+
+  /** UC-DIS-03: GET /dispatcher/incidents */
+  async loadDispatcherIncidents(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<PagedResult<DispatcherIncidentDto>>('/dispatcher/Incidents', { params: { page: 1, pageSize: 50 } });
+      writeStore(
+        DISPATCHER_INCIDENTS,
+        data.items.map(
+          (d): Incident => ({
+            id: String(d.id),
+            orderId: String(d.orderId),
+            orderCode: d.orderCode,
+            reportedBy: d.reporterRole === 'Driver' ? 'Driver' : 'Customer',
+            type: d.incidentType,
+            description: d.description,
+            photos: [],
+            status: d.resolutionStatus,
+            createdAt: d.createdAt,
+          })
+        )
+      );
+    } catch {
+      /* ignore */
+    }
+  },
+
+  /** UC-DIS-04: GET /dispatcher/incidents/{id} – nạp đầy đủ khách/tài xế/xe/ảnh khi mở chi tiết 1 sự cố */
+  async loadDispatcherIncidentDetail(incidentId: string): Promise<DispatcherIncidentDetail | undefined> {
+    try {
+      const { data } = await apiClient.get<{
+        id: number; orderId: number; orderCode: string; orderStatus: string; incidentType: IncidentType; description: string; photoUrls: string[];
+        reporterName: string; reporterRole: string; createdAt: string; resolvedAt?: string; resolutionStatus: Incident['status']; resolutionDecision?: IncidentDecision; resolutionNote?: string;
+        order: { paymentMethod: string };
+        customer: { fullName: string; phoneNumber: string };
+        driver?: { driverProfileId: number; fullName: string; phoneNumber: string; licensePlate?: string; vehicleTypeName?: string };
+      }>(`/dispatcher/Incidents/${incidentId}`);
+      const list = readStore<Incident[]>(DISPATCHER_INCIDENTS, () => []);
+      const idx = list.findIndex((i) => i.id === incidentId);
+      const detail: DispatcherIncidentDetail = {
+        id: String(data.id),
+        orderId: String(data.orderId),
+        orderCode: data.orderCode,
+        reportedBy: data.reporterRole === 'Driver' ? 'Driver' : 'Customer',
+        type: data.incidentType,
+        description: data.description,
+        photos: data.photoUrls,
+        status: data.resolutionStatus,
+        decision: data.resolutionDecision,
+        decisionNote: data.resolutionNote,
+        createdAt: data.createdAt,
+        resolvedAt: data.resolvedAt,
+        customerName: data.customer.fullName,
+        customerPhone: data.customer.phoneNumber,
+        driverName: data.driver?.fullName,
+        driverPhone: data.driver?.phoneNumber,
+        driverProfileId: data.driver ? String(data.driver.driverProfileId) : undefined,
+        vehiclePlate: data.driver?.licensePlate,
+        vehicleTypeName: data.driver?.vehicleTypeName,
+        paymentMethod: data.order.paymentMethod as ShippingOrder['paymentMethod'],
+      };
+      if (idx >= 0) list[idx] = detail;
+      else list.push(detail);
+      writeStore(DISPATCHER_INCIDENTS, list);
+      return detail;
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-DIS-06: GET /dispatcher/incidents/{id}/replacement-drivers */
+  async getReplacementDrivers(incidentId: string): Promise<AssignedDriver[]> {
+    try {
+      const { data } = await apiClient.get<
+        { driverProfileId: number; fullName: string; phoneNumber: string; licensePlate: string; latitude: number; longitude: number; lastLocationAt: string }[]
+      >(`/dispatcher/Incidents/${incidentId}/replacement-drivers`);
+      return data.map((d) => ({ id: String(d.driverProfileId), name: d.fullName, phone: d.phoneNumber, avatar: '', rating: 0, licensePlate: d.licensePlate, currentLat: d.latitude, currentLng: d.longitude, lastLocationAt: d.lastLocationAt }));
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-DIS-05/06/07: quyết định xử lý sự cố */
+  async resolveIncident(incidentId: string, decision: IncidentDecision, note: string, opts?: { newDriver?: AssignedDriver; refundable?: boolean }): Promise<void> {
+    try {
+      if (decision === 'ContinueTrip') {
+        await apiClient.post(`/dispatcher/Incidents/${incidentId}/resolve`, { reason: note });
+      } else if (decision === 'ReassignDriver') {
+        if (!opts?.newDriver) throw new ServiceError('Vui lòng chọn tài xế thay thế.');
+        await apiClient.post(`/dispatcher/Incidents/${incidentId}/reassign`, { newDriverProfileId: Number(opts.newDriver.id), reason: note });
+      } else {
+        await apiClient.post(`/dispatcher/Incidents/${incidentId}/cancel-order`, { reason: note, refund: opts?.refundable ?? false });
+      }
+      await caseService.loadDispatcherIncidents();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-DIS-10: POST /dispatcher/incidents/{id}/cancel */
+  async cancelIncident(incidentId: string, reason: string): Promise<void> {
+    try {
+      await apiClient.post(`/dispatcher/Incidents/${incidentId}/cancel`, { reason });
+      await caseService.loadDispatcherIncidents();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  async markIncidentInProgress(incidentId: string): Promise<void> {
+    try {
+      await apiClient.post(`/dispatcher/Incidents/${incidentId}/start`);
+      await caseService.loadDispatcherIncidents();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  // ------------------------------------------------------------------ Admin
+  listAdminRefundsSync: (): Refund[] => readStore(ADMIN_REFUNDS, () => []),
+
+  /** UC-ADM-18: GET /admin/refunds */
+  async loadAdminRefunds(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<
+        PagedResult<{
+          id: number; orderId: number; orderCode: string; customerName: string; customerPhone: string; sourceType: Refund['source']; refundStatus: Refund['status'];
+          requestedAmount: number; proposedAmount?: number; reason: string; proposalReason?: string; proposedByName?: string; decisionNote?: string; bankReferenceCode?: string; decidedAt?: string; processedAt?: string; createdAt: string;
+        }>
+      >('/admin/Refunds', { params: { page: 1, pageSize: 50 } });
+      writeStore(
+        ADMIN_REFUNDS,
+        data.items.map(
+          (d): Refund => ({
+            id: String(d.id),
+            orderId: String(d.orderId),
+            orderCode: d.orderCode,
+            customerName: d.customerName,
+            source: d.sourceType,
+            reason: d.reason,
+            evidence: [],
+            amountPaid: d.requestedAmount,
+            requestedAmount: d.requestedAmount,
+            proposedAmount: d.proposedAmount,
+            proposalNote: d.proposalReason,
+            decisionReason: d.decisionNote,
+            bankReferenceCode: d.bankReferenceCode,
+            status: d.refundStatus,
+            createdAt: d.createdAt,
+            updatedAt: d.decidedAt ?? d.processedAt ?? d.createdAt,
+          })
+        )
+      );
+    } catch {
+      /* ignore */
+    }
+  },
+
+  /** UC-ADM-19: POST /admin/refunds/{id}/approve (quyết định); chuyển khoản thật thực hiện riêng ở payoutRefund */
+  async approveRefund(refundId: string, note?: string): Promise<void> {
+    try {
+      await apiClient.post(`/admin/Refunds/${refundId}/approve`, { note: note || null });
+      await caseService.loadAdminRefunds();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-ADM-20 / GB-27: POST /admin/refunds/{id}/payout – ghi mã chuyển khoản sau khi đã Approved */
+  async payoutRefund(refundId: string, bankReferenceCode: string): Promise<void> {
+    try {
+      await apiClient.post(`/admin/Refunds/${refundId}/payout`, { bankReferenceCode });
+      await caseService.loadAdminRefunds();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  async rejectRefund(refundId: string, note?: string): Promise<void> {
+    try {
+      await apiClient.post(`/admin/Refunds/${refundId}/reject`, { note: note || null });
+      await caseService.loadAdminRefunds();
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 };

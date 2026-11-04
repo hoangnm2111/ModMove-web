@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   Repeat,
@@ -23,10 +23,8 @@ import { formatCurrency } from '../../utils/format';
 import { toast } from '../../components/ui/feedback';
 import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL } from '../../constants';
 import { msg } from '../../constants/messages';
-import { useAllOrders, useIncidents, useUsers } from '../../hooks/useDomainData';
-import { useLiveData } from '../../hooks/useLiveData';
+import { useDispatcherIncidents } from '../../hooks/useDomainData';
 import { caseService } from '../../services/case.service';
-import { driverService } from '../../services/driver.service';
 import { errorMessage } from '../../services/mock/storage';
 import { IncidentDecision } from '../../types/case.types';
 import { AssignedDriver } from '../../types/order.types';
@@ -41,28 +39,23 @@ const DECISION_STATUS: Record<IncidentDecision, TicketStatus> = {
 
 /** SCR-40/41 – Xử lý sự cố (UC-DIS-03/04/05/06/07/10) */
 export const IncidentsPage: React.FC = () => {
-  const rawIncidents = useIncidents();
-  const orders = useAllOrders();
-  const users = useUsers();
-  const [apps] = useLiveData(driverService.listLatestApplicationsSync, driverService.subscribe);
+  const rawIncidents = useDispatcherIncidents();
 
   const incidents = rawIncidents.map((i) => {
-    const o = orders.find((x) => x.id === i.orderId);
     const status: TicketStatus =
       i.status === 'Open' ? 'OPEN' : i.status === 'InProgress' ? 'RESOLVING' : i.status === 'Cancelled' ? 'CANCELLED' : DECISION_STATUS[i.decision ?? 'ContinueTrip'];
     return {
       id: i.id,
       orderId: i.orderId,
       orderCode: i.orderCode,
-      vehicleTypeId: o?.vehicle.id,
-      currentDriverId: o?.assignedDriver?.id,
-      paymentMethod: o?.paymentMethod,
-      customerName: o?.customerName ?? '—',
-      customerPhone: o?.customerPhone ?? '',
-      driverName: o?.assignedDriver?.name ?? '—',
-      driverPhone: o?.assignedDriver?.phone ?? '',
-      vehiclePlate: o?.assignedDriver?.licensePlate ?? '',
-      vehicleType: o?.vehicle.name ?? '',
+      driverProfileId: i.driverProfileId,
+      paymentMethod: i.paymentMethod,
+      customerName: i.customerName ?? '—',
+      customerPhone: i.customerPhone ?? '',
+      driverName: i.driverName ?? '—',
+      driverPhone: i.driverPhone ?? '',
+      vehiclePlate: i.vehiclePlate ?? '',
+      vehicleType: i.vehicleTypeName ?? '',
       type: `${INCIDENT_TYPE_LABEL[i.type]} (${i.reportedBy === 'Driver' ? 'tài xế báo' : 'khách báo'})`,
       description: i.description,
       evidencePhoto: i.photos[0] ?? '',
@@ -81,27 +74,24 @@ export const IncidentsPage: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReasonInput, setCancelReasonInput] = useState('');
   const [cancelRefundable, setCancelRefundable] = useState(true);
+  const [candidates, setCandidates] = useState<AssignedDriver[]>([]);
+  const [candidatesError, setCandidatesError] = useState<string | null>(null);
 
-  /**
-   * GB-37: tài xế thay thế phải Approved, cùng loại xe, không có đơn đang chạy.
-   * (Online & ký quỹ được kiểm tra thêm ở backend.)
-   */
-  const candidates: AssignedDriver[] = selectedIncident
-    ? apps
-        .filter((a) => a.status === 'Approved' && a.vehicleCategory === selectedIncident.vehicleTypeId && a.driverId !== selectedIncident.currentDriverId)
-        .filter((a) => !orders.some((o) => o.assignedDriver?.id === a.driverId && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.status)))
-        .map((a) => ({
-          id: a.driverId,
-          name: a.fullName,
-          phone: a.phoneNumber,
-          avatar: users.find((x) => x.id === a.driverId)?.avatarUrl ?? '',
-          rating: 4.8,
-          licensePlate: a.licensePlate,
-          currentLat: 21.03,
-          currentLng: 105.8,
-          lastLocationAt: new Date().toISOString(),
-        }))
-    : [];
+  // Nạp chi tiết đầy đủ (khách/tài xế/xe/ảnh) khi chọn 1 sự cố (UC-DIS-04)
+  useEffect(() => {
+    if (selectedIncident) void caseService.loadDispatcherIncidentDetail(selectedIncident.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIncident?.id]);
+
+  /** UC-DIS-06: tài xế thay thế đủ điều kiện – GET /dispatcher/incidents/{id}/replacement-drivers */
+  useEffect(() => {
+    if (!showReassignModal || !selectedIncident) return;
+    setCandidatesError(null);
+    caseService
+      .getReplacementDrivers(selectedIncident.id)
+      .then(setCandidates)
+      .catch((e) => setCandidatesError(errorMessage(e)));
+  }, [showReassignModal, selectedIncident]);
 
   const isClosed = !selectedIncident || !['OPEN', 'RESOLVING'].includes(selectedIncident.status);
 
@@ -396,7 +386,8 @@ export const IncidentsPage: React.FC = () => {
 
             {/* Candidate Drivers List */}
             <div className="space-y-2">
-              {candidates.length === 0 && <p className="text-xs text-slate-500">Không có tài xế phù hợp (cùng loại xe, đã duyệt, đang rảnh). Hãy huỷ đơn theo GB-38.</p>}
+              {candidatesError && <p className="text-xs text-rose-600 font-semibold">{candidatesError}</p>}
+              {!candidatesError && candidates.length === 0 && <p className="text-xs text-slate-500">Không có tài xế phù hợp (cùng loại xe, đã duyệt, đang rảnh). Hãy huỷ đơn theo GB-38.</p>}
               {candidates.map((cand, idx) => (
                 <div
                   key={idx}

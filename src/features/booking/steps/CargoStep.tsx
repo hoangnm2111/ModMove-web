@@ -1,8 +1,9 @@
 import React from 'react';
 import { Field, TextArea } from '../../../components/ui/Field';
 import { PhotoUploader } from '../../../components/ui/PhotoUploader';
-import { CARGO_TYPE_OPTIONS } from '../../../constants';
 import { BUSINESS } from '../../../config/business';
+import { useCargoTypes } from '../../../hooks/useDomainData';
+import { customerUploadService } from '../../../services/customer-upload.service';
 import { CargoDetail } from '../../../types/order.types';
 import { StepErrors } from '../bookingValidation';
 
@@ -18,23 +19,25 @@ interface Props {
 const num = (v: string) => (v === '' ? 0 : Number(v));
 
 /** Bước 2 – Khai báo hàng hoá (UC-GST-10, GB-06) */
-export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, errors, onChange, onAgree, onShowProhibited }) => (
+export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, errors, onChange, onAgree, onShowProhibited }) => {
+  const cargoTypes = useCargoTypes();
+  return (
   <div className="space-y-4">
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
       <h3 className="text-sm font-extrabold text-slate-900">Thông tin hàng hoá</h3>
       <div>
         <span className="block text-xs font-bold text-slate-700 mb-1">Loại hàng *</span>
         <div className="flex flex-wrap gap-2">
-          {CARGO_TYPE_OPTIONS.map((o) => (
+          {cargoTypes.map((o) => (
             <button
-              key={o.value}
+              key={o.code}
               type="button"
-              onClick={() => onChange({ type: o.value })}
+              onClick={() => onChange({ type: o.code })}
               className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                cargo.type === o.value ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                cargo.type === o.code ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
               }`}
             >
-              {o.label}
+              {o.name}
             </button>
           ))}
         </div>
@@ -91,7 +94,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
         {errors['cargo.largestItem'] && <p className="mt-1 text-[11px] font-semibold text-rose-600">{errors['cargo.largestItem']}</p>}
       </div>
       <div>
-        <PhotoUploader label={`Ảnh hàng hoá (${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh) *`} value={cargo.photos} onChange={(photos) => onChange({ photos })} />
+        <PhotoUploader label={`Ảnh hàng hoá (${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh) *`} value={cargo.photos} onChange={(photos) => onChange({ photos })} upload={customerUploadService.uploadImage} />
         {errors['cargo.photos'] && <p className="mt-1 text-[11px] font-semibold text-rose-600">{errors['cargo.photos']}</p>}
       </div>
       <TextArea
@@ -113,4 +116,5 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
       </span>
     </label>
   </div>
-);
+  );
+};

@@ -22,9 +22,9 @@ import { toast } from '../../components/ui/feedback';
 import { BUSINESS } from '../../config/business';
 import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL } from '../../constants';
 import { calculateCommission } from '../../domain/pricing';
-import { useAllOrders, useIncidents, usePlatformSettings } from '../../hooks/useDomainData';
-import { useLiveData } from '../../hooks/useLiveData';
-import { driverService } from '../../services/driver.service';
+import { usePlatformSettings } from '../../hooks/useDomainData';
+import { Incident } from '../../types/case.types';
+import { ShippingOrder } from '../../types/order.types';
 
 export const DashboardPage: React.FC = () => {
   const [period, setPeriod] = useState<'DAY' | 'WEEK' | 'MONTH'>('MONTH');
@@ -38,13 +38,11 @@ export const DashboardPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccessNotice, setExportSuccessNotice] = useState(false);
 
-  const orders = useAllOrders();
-  const incidents = useIncidents();
+  // Admin chưa có API tổng hợp đơn/doanh thu hay danh sách tài xế online trên backend (chỉ Dispatcher mới có); để trống chờ API báo cáo (UC-ADM-21/22/23).
+  const orders: ShippingOrder[] = [];
+  const incidents: Incident[] = [];
   const { commissionRate } = usePlatformSettings();
-  const [onlineDrivers] = useLiveData(
-    () => driverService.listLatestApplicationsSync().filter((a) => a.status === 'Approved' && driverService.isOnlineSync(a.driverId)).length,
-    driverService.subscribe
-  );
+  const onlineDrivers = 0;
 
   /** UC-ADM-21/22: doanh thu & hoa hồng từ đơn Completed (hoa hồng theo tỷ lệ chốt trên từng đơn – GB-14) */
   const periodDays = period === 'DAY' ? 1 : period === 'WEEK' ? 7 : 30;
@@ -113,6 +111,9 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50 select-none">
       <div className="max-w-6xl mx-auto space-y-6">
+        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
+          Backend chưa có API báo cáo doanh thu / danh sách tài xế online cho Admin (chỉ Dispatcher có). Các số liệu dưới đây tạm hiển thị 0 cho tới khi API đó được bổ sung.
+        </div>
         {/* Export Success Notification Banner */}
         {exportSuccessNotice && (
           <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-emerald-800 text-xs font-bold animate-fadeIn shadow-xs">

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Truck } from 'lucide-react';
 import { Button } from '../../components/Button';
@@ -44,8 +44,41 @@ export const BookingPage: React.FC = () => {
   const [payOrder, setPayOrder] = useState<ShippingOrder | null>(null);
   const [modal, setModal] = useState<'prohibited' | 'warranty' | null>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const estimate = useMemo(() => (draft.pickup.lat && draft.dropoff.lat ? orderService.estimate(draft) : null), [draft, vehicles, settings]);
+  const [estimate, setEstimate] = useState<Awaited<ReturnType<typeof orderService.estimate>>>(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draft.pickup.address || !draft.dropoff.address || !draft.vehicleTypeId) {
+      setEstimate(null);
+      setEstimateError(null);
+      return;
+    }
+    let cancelled = false;
+    setEstimating(true);
+    const t = setTimeout(() => {
+      orderService
+        .estimate(draft)
+        .then((res) => {
+          if (cancelled) return;
+          setEstimate(res);
+          setEstimateError(null);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setEstimate(null);
+          setEstimateError(errorMessage(e));
+        })
+        .finally(() => {
+          if (!cancelled) setEstimating(false);
+        });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.pickup.address, draft.dropoff.address, draft.vehicleTypeId, draft.loadingService, draft.couponCode, draft.cargo.weightKg, draft.cargo.largestItem.lengthCm, draft.cargo.largestItem.widthCm, draft.cargo.largestItem.heightCm]);
 
   const validators: Record<number, () => StepErrors> = {
     1: () => validateRoute(draft),
@@ -174,6 +207,7 @@ export const BookingPage: React.FC = () => {
             />
           )}
 
+          {step === 4 && estimateError && <Banner kind="error">Không tính được giá cước: {estimateError}</Banner>}
           {submitError && <Banner kind="error">{submitError}</Banner>}
 
           <div className="flex items-center justify-between gap-3 pt-2">
@@ -185,7 +219,7 @@ export const BookingPage: React.FC = () => {
                 Tiếp tục <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} isLoading={submitting} disabled={Boolean(estimate?.couponError && draft.couponCode)}>
+              <Button onClick={handleSubmit} isLoading={submitting || estimating} disabled={Boolean((estimate?.couponError && draft.couponCode) || estimateError || !estimate)}>
                 {isAuthenticated ? `Gửi yêu cầu • ${formatCurrency(estimate?.fare.total ?? 0)}` : 'Đăng nhập để gửi yêu cầu'}
               </Button>
             )}

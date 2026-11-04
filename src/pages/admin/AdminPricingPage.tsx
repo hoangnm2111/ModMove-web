@@ -5,7 +5,7 @@ import { Banner, confirm, toast } from '../../components/ui/feedback';
 import { Field } from '../../components/ui/Field';
 import { msg } from '../../constants/messages';
 import { calculateFare } from '../../domain/pricing';
-import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
+import { useAdminVehicleTypes, usePlatformSettings } from '../../hooks/useDomainData';
 import { catalogService } from '../../services/catalog.service';
 import { errorMessage } from '../../services/mock/storage';
 import { VehicleType } from '../../types/order.types';
@@ -15,7 +15,7 @@ type FareRow = Pick<VehicleType, 'id' | 'name' | 'baseFare' | 'pricePerKm' | 'mi
 
 /** SCR-35 – Cấu hình giá cước & hoa hồng (GB-29, GB-33) */
 export const AdminPricingPage: React.FC = () => {
-  const vehicles = useVehicleTypes();
+  const vehicles = useAdminVehicleTypes();
   const settings = usePlatformSettings();
   const [rows, setRows] = useState<FareRow[]>([]);
   const [commissionPct, setCommissionPct] = useState(settings.commissionRate * 100);
@@ -38,8 +38,7 @@ export const AdminPricingPage: React.FC = () => {
     setError(null);
     try {
       for (const r of rows) {
-        const v = vehicles.find((x) => x.id === r.id)!;
-        await catalogService.saveVehicleType({ ...v, baseFare: r.baseFare, pricePerKm: r.pricePerKm, minimumFare: r.minimumFare });
+        await catalogService.updateVehicleTypeFares(r.id, { baseFare: r.baseFare, pricePerKm: r.pricePerKm, minimumFare: r.minimumFare });
       }
       await catalogService.saveSettings({ commissionRate: commissionPct / 100, loadingFee });
       toast.success(msg('MSG04', { record_name: 'bảng giá' }));

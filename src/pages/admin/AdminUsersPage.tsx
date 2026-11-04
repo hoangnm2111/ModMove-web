@@ -23,7 +23,7 @@ import { Modal } from '../../components/ui/Modal';
 import { TextArea } from '../../components/ui/Field';
 import { Button } from '../../components/Button';
 import { msg } from '../../constants/messages';
-import { useAllOrders, useUsers } from '../../hooks/useDomainData';
+import { useUsers } from '../../hooks/useDomainData';
 import { authService } from '../../services/auth.service';
 import { errorMessage } from '../../services/mock/storage';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -38,14 +38,14 @@ const VIEW_STATUS: Record<AccountStatus, ViewStatus> = { Active: 'ACTIVE', Locke
 export const AdminUsersPage: React.FC = () => {
   const me = useAuthStore((s) => s.user);
   const rawUsers = useUsers();
-  const orders = useAllOrders();
+  // Backend chưa có API đếm số đơn theo người dùng (chỉ UC-ADM-05 xem chi tiết 1 user mới có); tạm để trống.
   const users = rawUsers
     .filter((u) => u.role !== 'Administrator')
     .map((u) => ({
       ...u,
       status: VIEW_STATUS[u.status],
       registeredAt: formatDateTime(u.createdAt),
-      ordersCount: orders.filter((o) => o.customerId === u.id || o.assignedDriver?.id === u.id).length,
+      ordersCount: null as number | null,
     }));
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'Customer' | 'Driver' | 'Dispatcher'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -251,7 +251,7 @@ export const AdminUsersPage: React.FC = () => {
                           : 'Admin'}
                       </span>
                     </td>
-                    <td className="p-3.5 font-bold text-slate-700">{u.ordersCount} đơn</td>
+                    <td className="p-3.5 font-bold text-slate-700">{u.ordersCount === null ? '—' : `${u.ordersCount} đơn`}</td>
                     <td className="p-3.5 text-slate-500 font-medium">{u.registeredAt}</td>
                     <td className="p-3.5">
                       <span

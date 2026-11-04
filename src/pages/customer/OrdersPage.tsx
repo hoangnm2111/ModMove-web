@@ -287,14 +287,14 @@ export const OrdersPage: React.FC = () => {
                         Yêu cầu: {formatCurrency(r.requestedAmount)}
                         {r.approvedAmount !== undefined && ` • Đã duyệt: ${formatCurrency(r.approvedAmount)}`}
                       </p>
-                      {r.proposalNote && <p className="text-slate-500">Ghi chú: {r.proposalNote}</p>}
+                      {r.decisionReason && <p className="text-slate-500">Ghi chú: {r.decisionReason}</p>}
                       <div className="flex gap-2 pt-1">
-                        {r.status === 'InfoRequested' && (
+                        {r.waitingForYourReply && (
                           <Button size="sm" onClick={() => setModal({ kind: 'reply', refund: r })}>
                             Bổ sung thông tin
                           </Button>
                         )}
-                        {r.source === 'Complaint' && (r.status === 'Requested' || r.status === 'InfoRequested') && (
+                        {r.source === 'Complaint' && r.status === 'Requested' && (
                           <Button size="sm" variant="outline" onClick={() => handleWithdraw(r)}>
                             Rút khiếu nại
                           </Button>

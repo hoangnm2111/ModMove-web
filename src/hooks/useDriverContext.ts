@@ -1,21 +1,22 @@
 import { useMemo } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
-import { driverService } from '../services/driver.service';
 import { useLiveData } from './useLiveData';
-import { useDriverActiveTrip, useDriverWallet } from './useDomainData';
-import { AssignedDriver } from '../types/order.types';
+import { useMyDriverStatus } from './useDomainData';
+import { driverService } from '../services/driver.service';
+import { AssignedDriver, ShippingOrder } from '../types/order.types';
 import { ApplicationStatus } from '../types/user.types';
+import { WalletTransaction } from '../types/case.types';
 
 /**
- * Gom dữ liệu của tài xế đang đăng nhập: hồ sơ, trạng thái Online, ví, chuyến đang chạy.
+ * Gom dữ liệu của tài xế đang đăng nhập: hồ sơ (api/driver/onboarding/status),
+ * trạng thái Online/ví (api/driver/status).
  */
 export function useDriverContext() {
   const user = useAuthStore((s) => s.user);
   const driverId = user?.id ?? '';
-  const [application] = useLiveData(() => driverService.getLatestSync(driverId), driverService.subscribe, [driverId]);
-  const [isOnline] = useLiveData(() => driverService.isOnlineSync(driverId), driverService.subscribe, [driverId]);
-  const wallet = useDriverWallet(driverId);
-  const activeTrip = useDriverActiveTrip(driverId);
+  const [application] = useLiveData(() => driverService.getLatestSync(driverId), driverService.subscribe, [driverId], () => driverService.loadMyApplicationStatus());
+  const status = useMyDriverStatus();
+  const wallet = { driverId, depositBalance: status.depositBalance, earningsBalance: status.earningsBalance, bankName: undefined as string | undefined, bankAccount: undefined as string | undefined, transactions: [] as WalletTransaction[] };
 
   /** Thông tin gắn vào đơn khi nhận (snapshot) */
   const asAssigned: AssignedDriver | null = useMemo(
@@ -26,10 +27,10 @@ export function useDriverContext() {
             name: user.fullName,
             phone: user.phoneNumber,
             avatar: user.avatarUrl ?? '',
-            rating: 4.9,
+            rating: 0,
             licensePlate: application?.licensePlate ?? '',
-            currentLat: 21.0285,
-            currentLng: 105.8542,
+            currentLat: 0,
+            currentLng: 0,
             lastLocationAt: new Date().toISOString(),
           }
         : null,
@@ -40,11 +41,11 @@ export function useDriverContext() {
     user,
     driverId,
     application,
-    approvalStatus: (application?.status ?? 'Draft') as ApplicationStatus | 'Draft',
-    isApproved: application?.status === 'Approved',
-    isOnline,
+    approvalStatus: (status.approvalStatus ?? (status.hasProfile ? 'Pending' : 'Draft')) as ApplicationStatus | 'Draft',
+    isApproved: status.approvalStatus === 'Approved',
+    isOnline: status.isOnline,
     wallet,
-    activeTrip,
+    activeTrip: undefined as ShippingOrder | undefined,
     asAssigned,
   };
 }

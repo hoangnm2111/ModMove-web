@@ -1,187 +1,302 @@
-import { msg } from '../constants/messages';
-import { DriverApplication } from '../types/user.types';
-import { latency, readStore, ServiceError, subscribeStore, uid, writeStore } from './mock/storage';
+import { ApplicationStatus } from '../types/user.types';
+import { apiClient, toServiceError } from './api';
+import { readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
+import { PagedResult } from './pagination';
 
 /**
- * Driver onboarding – SRS DriverApplication: mỗi lần nộp tạo version mới,
- * một version đã quyết định thì không đổi; mỗi tài xế tối đa 1 version Pending.
+ * Driver onboarding & online status – api/driver/onboarding, api/driver/status,
+ * api/driver/online-status, api/admin/driver-applications.
  */
-export interface DriverApplicationRecord extends DriverApplication {
+export interface DriverApplicationRecord {
+  id: string;
   driverId: string;
+  version: number;
+  fullName: string;
+  phoneNumber: string;
+  email: string;
+  nationalId: string;
+  licenseNumber: string;
+  licensePhotoUrl: string;
+  registrationPhotoUrl: string;
+  inspectionPhotoUrl: string;
+  vehiclePhotoUrl: string;
+  vehicleCategory: string;
+  payloadCapacityKg: number;
+  boxDimensions: string;
+  licensePlate: string;
+  submittedAt: string;
+  status: ApplicationStatus;
+  rejectionReason?: string;
 }
 
-export type ApplicationInput = Omit<DriverApplication, 'id' | 'version' | 'submittedAt' | 'status' | 'rejectionReason'>;
+export type ApplicationInput = {
+  vehicleCategory: string;
+  licensePlate: string;
+  payloadCapacityKg: number;
+  nationalId: string;
+  licenseNumber: string;
+  licensePhotoUrl: string;
+  registrationPhotoUrl: string;
+  inspectionPhotoUrl: string;
+  vehiclePhotoUrl: string;
+};
 
-const KEY = 'driverApplications';
-const ONLINE = 'driverOnline';
+const MY_STATUS = 'driverOnboardingStatus';
+const ADMIN_APPLICATIONS = 'adminDriverApplications';
+const DRIVER_STATUS = 'driverStatus';
 
-const photo = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=80`;
-const seed = (): DriverApplicationRecord[] => [
-  {
-    id: 'app_drv88_v1',
-    driverId: 'drv_88',
-    version: 1,
-    fullName: 'Nguyễn Văn Hùng',
-    phoneNumber: '0912345678',
-    email: 'driver@modmove.vn',
-    nationalId: '001201004567',
-    licenseNumber: 'B2-88219482',
-    licensePhotoUrl: photo('photo-1589829545856-d10d557cf95f'),
-    registrationPhotoUrl: photo('photo-1450133064473-71024230f91b'),
-    inspectionPhotoUrl: photo('photo-1601584115197-04ecc0da31d7'),
-    vehiclePhotoUrl: photo('photo-1519003722824-194d4455a60c'),
-    vehicleCategory: 'vt_truck_1t',
-    payloadCapacityKg: 950,
-    boxDimensions: '2.2 x 1.4 x 1.5 m',
-    licensePlate: '29C-874.12',
-    submittedAt: '2026-10-20T08:00:00Z',
-    status: 'Approved',
-  },
-  {
-    id: 'app_thinh_v1',
-    driverId: 'drv_51',
-    version: 1,
-    fullName: 'Vũ Đức Thịnh',
-    phoneNumber: '0971234567',
-    email: 'thinhvu@gmail.com',
-    nationalId: '001201009988',
-    licenseNumber: 'B2-99120482',
-    licensePhotoUrl: photo('photo-1554224155-8d04cb21cd6c'),
-    registrationPhotoUrl: photo('photo-1450133064473-71024230f91b'),
-    inspectionPhotoUrl: photo('photo-1601584115197-04ecc0da31d7'),
-    vehiclePhotoUrl: photo('photo-1519003722824-194d4455a60c'),
-    vehicleCategory: 'vt_truck_2t',
-    payloadCapacityKg: 1950,
-    boxDimensions: '3.8 x 1.7 x 1.8 m',
-    licensePlate: '29C-998.54',
-    submittedAt: new Date(Date.now() - 86_400_000).toISOString(),
-    status: 'Pending',
-  },
-  {
-    id: 'app_nam_v1',
-    driverId: 'drv_52',
-    version: 1,
-    fullName: 'Hoàng Hải Nam',
-    phoneNumber: '0988112233',
-    email: 'namhoang@gmail.com',
-    nationalId: '001202008899',
-    licenseNumber: 'C-10294812',
-    licensePhotoUrl: photo('photo-1589829545856-d10d557cf95f'),
-    registrationPhotoUrl: photo('photo-1554224155-8d04cb21cd6c'),
-    inspectionPhotoUrl: photo('photo-1450133064473-71024230f91b'),
-    vehiclePhotoUrl: photo('photo-1601584115197-04ecc0da31d7'),
-    vehicleCategory: 'vt_pickup_500',
-    payloadCapacityKg: 500,
-    boxDimensions: '1.8 x 1.4 x 1.2 m',
-    licensePlate: '30F-441.20',
-    submittedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    status: 'Rejected',
-    rejectionReason: 'Ảnh sổ đăng kiểm bị mờ góc tem kiểm định.',
-  },
-];
-
-const apps = () => readStore(KEY, seed);
-
-function latestOf(driverId: string): DriverApplicationRecord | undefined {
-  return apps()
-    .filter((a) => a.driverId === driverId)
-    .sort((a, b) => b.version - a.version)[0];
+interface MyStatusDto {
+  hasApplication: boolean;
+  canSubmit: boolean;
+  profileApprovalStatus?: ApplicationStatus;
+  applicationId?: number;
+  latestVersionNumber?: number;
+  submittedAt?: string;
+  vehicleTypeId?: number;
+  vehicleTypeName?: string;
+  licensePlate?: string;
+  maxLoadWeightKg?: number;
+  citizenIdNumber?: string;
+  driverLicenseNumber?: string;
+  documentUrls: string[];
+  rejectionReasons?: string[];
 }
 
-function decide(appId: string, patch: Partial<DriverApplicationRecord>): DriverApplicationRecord {
-  const list = apps();
-  const app = list.find((a) => a.id === appId);
-  if (!app || app.status !== 'Pending') throw new ServiceError(msg('MSG07')); // version đã quyết định là bất biến
-  const next = { ...app, ...patch };
-  writeStore(KEY, list.map((a) => (a.id === appId ? next : a)));
-  return next;
+function myStatusToRecord(d: MyStatusDto): DriverApplicationRecord | undefined {
+  if (!d.hasApplication) return undefined;
+  const [licensePhotoUrl = '', , registrationPhotoUrl = '', inspectionPhotoUrl = '', vehiclePhotoUrl = ''] = d.documentUrls;
+  return {
+    id: String(d.applicationId ?? ''),
+    driverId: '',
+    version: d.latestVersionNumber ?? 1,
+    fullName: '',
+    phoneNumber: '',
+    email: '',
+    nationalId: d.citizenIdNumber ?? '',
+    licenseNumber: d.driverLicenseNumber ?? '',
+    licensePhotoUrl,
+    registrationPhotoUrl,
+    inspectionPhotoUrl,
+    vehiclePhotoUrl,
+    vehicleCategory: d.vehicleTypeId != null ? String(d.vehicleTypeId) : '',
+    payloadCapacityKg: d.maxLoadWeightKg ?? 0,
+    boxDimensions: '',
+    licensePlate: d.licensePlate ?? '',
+    submittedAt: d.submittedAt ?? '',
+    status: d.profileApprovalStatus ?? 'Pending',
+    rejectionReason: d.rejectionReasons?.join('; '),
+  };
+}
+
+export interface DriverStatusInfo {
+  hasProfile: boolean;
+  approvalStatus?: ApplicationStatus;
+  isOnline: boolean;
+  depositBalance: number;
+  earningsBalance: number;
+  activeOrderId: string | null;
+  canReceiveOrders: boolean;
 }
 
 export const driverService = {
   subscribe: (cb: () => void) => {
-    const a = subscribeStore(KEY, cb);
-    const b = subscribeStore(ONLINE, cb);
+    const a = subscribeStore(MY_STATUS, cb);
+    const b = subscribeStore(ADMIN_APPLICATIONS, cb);
+    const c = subscribeStore(DRIVER_STATUS, cb);
     return () => {
       a();
       b();
+      c();
     };
   },
 
-  /** UC-ADM-08: chỉ version mới nhất của mỗi tài xế */
-  listLatestApplicationsSync: (): DriverApplicationRecord[] => {
-    const byDriver = new Map<string, DriverApplicationRecord>();
-    apps().forEach((a) => {
-      const cur = byDriver.get(a.driverId);
-      if (!cur || a.version > cur.version) byDriver.set(a.driverId, a);
-    });
-    return [...byDriver.values()].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  },
+  // ----------------------------------------------------------- Tài xế (của tôi)
+  getMyStatusSync: (): DriverStatusInfo => readStore(DRIVER_STATUS, () => ({ hasProfile: false, isOnline: false, depositBalance: 0, earningsBalance: 0, activeOrderId: null, canReceiveOrders: false })),
 
-  listVersionsSync: (driverId: string) => apps().filter((a) => a.driverId === driverId).sort((a, b) => b.version - a.version),
-
-  /** UC-DRV-04 */
-  getLatestSync: (driverId: string) => latestOf(driverId),
-
-  /** UC-DRV-03 / UC-DRV-05 / GB-04 */
-  async submitApplication(driverId: string, input: ApplicationInput): Promise<DriverApplicationRecord> {
-    await latency(600);
-    const required: [keyof ApplicationInput, string][] = [
-      ['nationalId', 'Số CCCD'],
-      ['licenseNumber', 'Số GPLX'],
-      ['licensePlate', 'Biển số xe'],
-      ['licensePhotoUrl', 'Ảnh GPLX'],
-      ['registrationPhotoUrl', 'Ảnh đăng ký xe'],
-      ['inspectionPhotoUrl', 'Ảnh đăng kiểm'],
-      ['vehiclePhotoUrl', 'Ảnh xe'],
-    ];
-    for (const [k, label] of required) {
-      if (!String(input[k] ?? '').trim()) throw new ServiceError(msg('MSG44', { evidence_type: label }));
+  /** UC-DRV-08: GET /driver/status */
+  async loadMyStatus(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<{
+        hasProfile: boolean;
+        approvalStatus?: ApplicationStatus;
+        isOnline: boolean;
+        depositBalance: number;
+        earningsBalance: number;
+        activeOrderId?: number;
+        canReceiveOrders: boolean;
+      }>('/driver/status');
+      writeStore(DRIVER_STATUS, {
+        hasProfile: data.hasProfile,
+        approvalStatus: data.approvalStatus,
+        isOnline: data.isOnline,
+        depositBalance: data.depositBalance,
+        earningsBalance: data.earningsBalance,
+        activeOrderId: data.activeOrderId != null ? String(data.activeOrderId) : null,
+        canReceiveOrders: data.canReceiveOrders,
+      });
+    } catch {
+      /* ignore */
     }
-    if (!/^\d{12}$/.test(input.nationalId)) throw new ServiceError(msg('MSG02', { field_name: 'số CCCD (12 chữ số)' }));
-    const others = apps().filter((a) => a.driverId !== driverId);
-    if (others.some((a) => a.nationalId === input.nationalId)) throw new ServiceError(msg('MSG18', { field_name: 'Số CCCD' }));
-    if (others.some((a) => a.licenseNumber === input.licenseNumber)) throw new ServiceError(msg('MSG18', { field_name: 'Số GPLX' }));
-    if (others.some((a) => a.licensePlate.toUpperCase() === input.licensePlate.toUpperCase())) throw new ServiceError(msg('MSG18', { field_name: 'Biển số xe' }));
-    const latest = latestOf(driverId);
-    if (latest?.status === 'Pending') throw new ServiceError('Hồ sơ đang chờ duyệt, không thể nộp thêm phiên bản mới.');
-    const app: DriverApplicationRecord = {
-      ...input,
-      id: uid('app'),
-      driverId,
-      version: (latest?.version ?? 0) + 1,
-      submittedAt: new Date().toISOString(),
-      status: 'Pending',
-    };
-    writeStore(KEY, [...apps(), app]);
-    // Hồ sơ mới chờ duyệt → không được Online
-    this.setOnlineUnsafe(driverId, false);
-    return app;
+  },
+
+  getLatestSync: (_driverId: string): DriverApplicationRecord | undefined => readStore<DriverApplicationRecord | undefined>(MY_STATUS, () => undefined),
+  listVersionsSync: (driverId: string) => {
+    const latest = driverService.getLatestSync(driverId);
+    return latest ? [latest] : [];
+  },
+
+  /** UC-DRV-04: GET /driver/onboarding/status */
+  async loadMyApplicationStatus(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<MyStatusDto>('/driver/Onboarding/status');
+      writeStore(MY_STATUS, myStatusToRecord(data));
+    } catch {
+      /* ignore */
+    }
+  },
+
+  /** UC-DRV-03/05: POST /driver/onboarding */
+  async submitApplication(_driverId: string, input: ApplicationInput): Promise<void> {
+    try {
+      await apiClient.post('/driver/Onboarding', {
+        vehicleTypeId: Number(input.vehicleCategory),
+        citizenIdNumber: input.nationalId,
+        driverLicenseNumber: input.licenseNumber,
+        licensePlate: input.licensePlate,
+        maxLoadWeightKg: input.payloadCapacityKg,
+        documentUrls: [input.licensePhotoUrl, input.licensePhotoUrl, input.registrationPhotoUrl, input.inspectionPhotoUrl, input.vehiclePhotoUrl],
+      });
+      await driverService.loadMyApplicationStatus();
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  // ----------------------------------------------------------------- Online/Offline
+  isOnlineSync: (_driverId: string): boolean => driverService.getMyStatusSync().isOnline,
+
+  /** GB-03: PATCH /driver/online-status */
+  async setOnline(_driverId: string, online: boolean): Promise<boolean> {
+    try {
+      await apiClient.patch('/driver/online-status', { isOnline: online });
+      await driverService.loadMyStatus();
+      return online;
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  // ------------------------------------------------------------------- Admin
+  listLatestApplicationsSync: (): DriverApplicationRecord[] => readStore(ADMIN_APPLICATIONS, () => []),
+
+  /** UC-ADM-08: GET /admin/driver-applications/pending */
+  async loadPendingApplications(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<PagedResult<{ applicationId: number; driverProfileId: number; fullName: string; phoneNumber: string; vehicleTypeName: string; licensePlate: string; versionNumber: number; submittedAt: string }>>(
+        '/admin/driver-applications/pending',
+        { params: { page: 1, pageSize: 50 } }
+      );
+      const existing = readStore<DriverApplicationRecord[]>(ADMIN_APPLICATIONS, () => []);
+      writeStore(
+        ADMIN_APPLICATIONS,
+        data.items.map((d): DriverApplicationRecord => {
+          const prev = existing.find((e) => e.id === String(d.applicationId));
+          return {
+            ...(prev ?? {
+              nationalId: '',
+              licenseNumber: '',
+              licensePhotoUrl: '',
+              registrationPhotoUrl: '',
+              inspectionPhotoUrl: '',
+              vehiclePhotoUrl: '',
+              email: '',
+              boxDimensions: '',
+              payloadCapacityKg: 0,
+            }),
+            id: String(d.applicationId),
+            driverId: String(d.driverProfileId),
+            version: d.versionNumber,
+            fullName: d.fullName,
+            phoneNumber: d.phoneNumber,
+            vehicleCategory: d.vehicleTypeName,
+            licensePlate: d.licensePlate,
+            submittedAt: d.submittedAt,
+            status: 'Pending',
+          };
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+  },
+
+  /** UC-ADM-09: GET /admin/driver-applications/{id} – nạp đầy đủ ảnh/kích thước thùng xe khi xem chi tiết */
+  async loadApplicationDetail(applicationId: string): Promise<void> {
+    try {
+      const { data } = await apiClient.get<{
+        applicationId: number;
+        fullName: string;
+        phoneNumber: string;
+        email: string;
+        citizenIdNumber: string;
+        driverLicenseNumber: string;
+        vehicleTypeId: number;
+        licensePlate: string;
+        maxLoadWeightKg: number;
+        applicationStatus: ApplicationStatus;
+        submittedAt: string;
+        documentUrls: string[];
+        rejectionReasons?: string[];
+      }>(`/admin/driver-applications/${applicationId}`);
+      const [licensePhotoUrl = '', , registrationPhotoUrl = '', inspectionPhotoUrl = '', vehiclePhotoUrl = ''] = data.documentUrls;
+      const list = readStore<DriverApplicationRecord[]>(ADMIN_APPLICATIONS, () => []);
+      const idx = list.findIndex((a) => a.id === applicationId);
+      const merged: DriverApplicationRecord = {
+        id: String(data.applicationId),
+        driverId: idx >= 0 ? list[idx].driverId : '',
+        version: idx >= 0 ? list[idx].version : 1,
+        fullName: data.fullName,
+        phoneNumber: data.phoneNumber,
+        email: data.email,
+        nationalId: data.citizenIdNumber,
+        licenseNumber: data.driverLicenseNumber,
+        licensePhotoUrl,
+        registrationPhotoUrl,
+        inspectionPhotoUrl,
+        vehiclePhotoUrl,
+        vehicleCategory: String(data.vehicleTypeId),
+        payloadCapacityKg: data.maxLoadWeightKg,
+        boxDimensions: '',
+        licensePlate: data.licensePlate,
+        submittedAt: data.submittedAt,
+        status: data.applicationStatus,
+        rejectionReason: data.rejectionReasons?.join('; '),
+      };
+      if (idx >= 0) list[idx] = merged;
+      else list.push(merged);
+      writeStore(ADMIN_APPLICATIONS, list);
+    } catch {
+      /* ignore */
+    }
   },
 
   /** UC-ADM-09 */
-  async approve(appId: string): Promise<DriverApplicationRecord> {
-    await latency();
-    return decide(appId, { status: 'Approved', rejectionReason: undefined });
+  async approve(appId: string): Promise<void> {
+    try {
+      await apiClient.post(`/admin/driver-applications/${appId}/approve`);
+      await driverService.loadPendingApplications();
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  async reject(appId: string, reason: string): Promise<DriverApplicationRecord> {
-    await latency();
-    if (!reason.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Lý do từ chối' }));
-    return decide(appId, { status: 'Rejected', rejectionReason: reason });
-  },
-
-  // --------------------------------------------------------- Online/Offline
-  isOnlineSync: (driverId: string): boolean => Boolean(readStore<Record<string, boolean>>(ONLINE, () => ({ drv_88: false }))[driverId]),
-
-  setOnlineUnsafe(driverId: string, online: boolean) {
-    writeStore(ONLINE, { ...readStore<Record<string, boolean>>(ONLINE, () => ({})), [driverId]: online });
-  },
-
-  /** GB-03: chỉ Online khi hồ sơ Approved */
-  async setOnline(driverId: string, online: boolean): Promise<boolean> {
-    await latency(150);
-    if (online && latestOf(driverId)?.status !== 'Approved') throw new ServiceError(msg('MSG25'));
-    this.setOnlineUnsafe(driverId, online);
-    return online;
+  async reject(appId: string, reason: string): Promise<void> {
+    if (!reason.trim()) throw new ServiceError('Vui lòng nhập lý do từ chối.');
+    try {
+      await apiClient.post(`/admin/driver-applications/${appId}/reject`, { reasons: [reason] });
+      await driverService.loadPendingApplications();
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 };

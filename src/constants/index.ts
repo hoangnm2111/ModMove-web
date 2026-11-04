@@ -16,9 +16,6 @@ export const INCIDENT_TYPE_LABEL: Record<IncidentType, string> = {
   VehicleBreakdown: 'Hỏng xe',
   DamagedCargo: 'Hư hỏng hàng hoá',
   Accident: 'Tai nạn',
-  Delay: 'Giao chậm',
-  WrongRoute: 'Sai lộ trình',
-  DriverMisconduct: 'Tài xế không đúng mực',
   Other: 'Khác',
 };
 
@@ -36,12 +33,11 @@ export const REFUND_SOURCE_LABEL: Record<RefundSource, string> = {
 };
 
 export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
-  Requested: 'Chờ điều phối xem xét',
-  InfoRequested: 'Cần bổ sung thông tin',
-  Proposed: 'Chờ Admin duyệt',
+  Requested: 'Đang xử lý',
   Approved: 'Đã duyệt',
   Rejected: 'Từ chối',
   Processed: 'Đã hoàn tiền',
+  Failed: 'Hoàn tiền lỗi',
   Withdrawn: 'Đã rút',
 };
 

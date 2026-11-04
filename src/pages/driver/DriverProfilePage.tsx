@@ -78,9 +78,6 @@ export const DriverProfilePage: React.FC = () => {
     setIsSubmitting(true);
     try {
       await driverService.submitApplication(driverId, {
-        fullName: user.fullName,
-        phoneNumber: user.phoneNumber,
-        email: user.email,
         nationalId: nationalId.trim(),
         licenseNumber: licenseNumber.trim(),
         licensePlate: licensePlate.trim().toUpperCase(),
@@ -90,7 +87,6 @@ export const DriverProfilePage: React.FC = () => {
         vehiclePhotoUrl: application?.vehiclePhotoUrl || dangKiemPhoto, // thẻ 4: đăng kiểm & ảnh xe
         vehicleCategory,
         payloadCapacityKg: Number(payloadKg) || 0,
-        boxDimensions,
       });
       toast.success(msg('MSG23'));
       setSubmitSuccess(true);

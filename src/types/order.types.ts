@@ -18,7 +18,8 @@ export type PaymentStatus = 'Unpaid' | 'Paid';
 /** PaymentTransaction.PayerRole */
 export type PayerRole = 'Sender' | 'Receiver';
 
-export type CargoType = 'Furniture' | 'Electronics' | 'Household' | 'Documents' | 'Other';
+/** Mã loại hàng – lấy từ api/public/lookups/cargo-types (master data, Admin cấu hình) */
+export type CargoType = string;
 
 export type ActorRole = 'Customer' | 'Driver' | 'Dispatcher' | 'Admin' | 'System';
 

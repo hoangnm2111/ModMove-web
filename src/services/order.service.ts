@@ -1,464 +1,518 @@
-import { BUSINESS } from '../config/business';
 import { msg } from '../constants/messages';
-import { calculateCommission, calculateFare, validateCoupon } from '../domain/pricing';
 import {
-  canComplain,
-  canConfirmReceipt,
-  canCustomerCancel,
-  canReviewPickupEvidence,
-  canTransition,
-  hasEnoughDeposit,
-  isVisibleToDrivers,
-  ratingRestriction,
-  refundOnCancel,
-} from '../domain/orderRules';
-import { canVehicleCarry } from '../domain/vehicleFit';
-import {
-  ActorRole,
   AssignedDriver,
   BookingDraft,
+  CargoDetail,
+  FareBreakdown,
   OrderStatus,
+  OrderStatusHistory,
   Rating,
   ShippingOrder,
+  VehicleSnapshot,
 } from '../types/order.types';
 import { User } from '../types/user.types';
-import { catalogService } from './catalog.service';
-import { GeoPoint, mapService, SAMPLE_PLACES } from './map.service';
-import { latency, readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
+import { apiClient, toServiceError } from './api';
+import { readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
+import { PagedResult } from './pagination';
 
 /**
- * Order service – tương ứng API /orders của backend.
- * Mỗi hàm kiểm tra Business Rule (GB-xx) giống phía server để FE báo lỗi sớm.
+ * Order service – api/customer/orders, api/customer/ratings, api/customer/coupons,
+ * api/driver/matching, api/dispatcher/orders, api/dispatcher/incidents (huỷ/đổi tài xế).
+ * Danh sách được cache cục bộ (localStorage) để các hook useLiveData đọc đồng bộ; mỗi
+ * hàm `loadX()` nạp dữ liệu thật từ backend vào cache đó.
  */
-const KEY = 'orders';
+const MY_ORDERS = 'orders';
+const AVAILABLE_JOBS = 'availableJobs';
+const ALL_ORDERS = 'dispatcherOrders';
 
-const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+const emptyVehicle = (name = ''): VehicleSnapshot => ({
+  id: '',
+  name,
+  baseFare: 0,
+  pricePerKm: 0,
+  minimumFare: 0,
+  maxLoadKg: 0,
+  cargoBed: { lengthCm: 0, widthCm: 0, heightCm: 0 },
+  iconType: 'truck',
+});
 
-function seedOrders(): ShippingOrder[] {
-  const vehicles = catalogService.getVehicleTypesSync();
-  const snap = (i: number) => {
-    const { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType } = vehicles[i] ?? vehicles[0];
-    return { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType };
+const emptyCargo = (): CargoDetail => ({
+  type: '',
+  description: '',
+  quantity: 0,
+  weightKg: 0,
+  largestItem: { lengthCm: 0, widthCm: 0, heightCm: 0 },
+  photos: [],
+});
+
+const emptyFare = (total = 0): FareBreakdown => ({ distanceKm: 0, durationMins: 0, distanceFare: total, loadingFee: 0, discount: 0, total });
+
+// ---------------------------------------------------------------- DTO -> FE
+interface OrderSummaryDto {
+  id: number;
+  orderCode: string;
+  orderStatus: OrderStatus;
+  pickupAddress: string;
+  dropoffAddress: string;
+  vehicleTypeName: string;
+  totalFee: number;
+  paymentMethod: ShippingOrder['paymentMethod'];
+  paymentStatus: ShippingOrder['paymentStatus'];
+  createdAt: string;
+  receiverName: string;
+  receiverPhone: string;
+}
+
+function summaryToOrder(d: OrderSummaryDto, customer: Pick<User, 'id' | 'fullName' | 'phoneNumber'>): ShippingOrder {
+  return {
+    id: String(d.id),
+    code: d.orderCode,
+    customerId: customer.id,
+    customerName: customer.fullName,
+    customerPhone: customer.phoneNumber,
+    pickup: { address: d.pickupAddress, lat: 0, lng: 0, contactName: customer.fullName, contactPhone: customer.phoneNumber },
+    dropoff: { address: d.dropoffAddress, lat: 0, lng: 0, contactName: d.receiverName, contactPhone: d.receiverPhone },
+    vehicle: emptyVehicle(d.vehicleTypeName),
+    cargo: emptyCargo(),
+    loadingService: false,
+    fare: emptyFare(d.totalFee),
+    paymentMethod: d.paymentMethod,
+    paymentStatus: d.paymentStatus,
+    status: d.orderStatus,
+    history: [],
+    createdAt: d.createdAt,
   };
-  const settings = catalogService.getSettingsSync();
-  const driver: AssignedDriver = {
-    id: 'drv_88',
-    name: 'Nguyễn Văn Hùng',
-    phone: '0912345678',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    rating: 4.9,
-    licensePlate: '29C-874.12',
-    currentLat: 21.0115,
-    currentLng: 105.65,
-    lastLocationAt: new Date().toISOString(),
+}
+
+interface OrderDetailDto {
+  id: number;
+  orderCode: string;
+  orderStatus: OrderStatus;
+  pickupAddress: string;
+  dropoffAddress: string;
+  vehicleTypeName: string;
+  receiverName: string;
+  receiverPhone: string;
+  estimatedDistanceKm: number;
+  estimatedDurationMin: number;
+  hasLoadingService: boolean;
+  distanceFee: number;
+  serviceFee: number;
+  discountAmount: number;
+  totalFee: number;
+  paymentMethod: ShippingOrder['paymentMethod'];
+  payerRole?: ShippingOrder['payerRole'];
+  paymentStatus: ShippingOrder['paymentStatus'];
+  createdAt: string;
+  cargo: { cargoType: string; quantity: number; weightKg: number; lengthCm: number; widthCm: number; heightCm: number; photoUrls: string[]; specialNotes?: string; cargoTypeName?: string };
+  driver: { fullName: string; phoneNumber: string; licensePlate?: string } | null;
+  proof: { pickupPhotoUrls: string[]; proofStatus: 'Pending' | 'Verified' | 'Rejected'; pickupSubmissionCount: number; rejectionReason?: string; deliveryPhotoUrl?: string; deliveredAt?: string } | null;
+  history: { fromStatus: OrderStatus | null; toStatus: OrderStatus; changedByRole: string; note?: string; changedAt: string }[];
+  couponCode?: string;
+  payment: { transactionStatus: string; checkoutUrl?: string; expiresAt?: string; paidAt?: string; isExpired: boolean } | null;
+}
+
+function detailToOrder(d: OrderDetailDto, customer: Pick<User, 'id' | 'fullName' | 'phoneNumber'>): ShippingOrder {
+  const history: OrderStatusHistory[] = d.history.map((h) => ({ from: h.fromStatus, to: h.toStatus, changedBy: h.changedByRole as OrderStatusHistory['changedBy'], note: h.note, changedAt: h.changedAt }));
+  const assignedDriver: AssignedDriver | undefined = d.driver
+    ? { id: '', name: d.driver.fullName, phone: d.driver.phoneNumber, avatar: '', rating: 0, licensePlate: d.driver.licensePlate ?? '', currentLat: 0, currentLng: 0, lastLocationAt: '' }
+    : undefined;
+  return {
+    id: String(d.id),
+    code: d.orderCode,
+    customerId: customer.id,
+    customerName: customer.fullName,
+    customerPhone: customer.phoneNumber,
+    pickup: { address: d.pickupAddress, lat: 0, lng: 0, contactName: customer.fullName, contactPhone: customer.phoneNumber },
+    dropoff: { address: d.dropoffAddress, lat: 0, lng: 0, contactName: d.receiverName, contactPhone: d.receiverPhone },
+    vehicle: emptyVehicle(d.vehicleTypeName),
+    cargo: {
+      type: d.cargo.cargoType,
+      description: d.cargo.specialNotes ?? d.cargo.cargoTypeName ?? d.cargo.cargoType,
+      quantity: d.cargo.quantity,
+      weightKg: d.cargo.weightKg,
+      largestItem: { lengthCm: d.cargo.lengthCm, widthCm: d.cargo.widthCm, heightCm: d.cargo.heightCm },
+      photos: d.cargo.photoUrls,
+      specialNotes: d.cargo.specialNotes,
+    },
+    loadingService: d.hasLoadingService,
+    couponCode: d.couponCode,
+    fare: { distanceKm: d.estimatedDistanceKm, durationMins: d.estimatedDurationMin, distanceFare: d.distanceFee, loadingFee: d.serviceFee, discount: d.discountAmount, total: d.totalFee },
+    paymentMethod: d.paymentMethod,
+    payerRole: d.payerRole,
+    paymentStatus: d.paymentStatus,
+    status: d.orderStatus,
+    assignedDriver,
+    proof: d.proof
+      ? {
+          pickupPhotos: d.proof.pickupPhotoUrls,
+          pickupSubmissionCount: d.proof.pickupSubmissionCount,
+          pickupRejectReason: d.proof.rejectionReason,
+          pickupStatus: d.proof.proofStatus,
+          deliveryPhoto: d.proof.deliveryPhotoUrl,
+          deliveredAt: d.proof.deliveredAt,
+        }
+      : undefined,
+    history,
+    createdAt: d.createdAt,
+    paidAt: d.payment?.paidAt,
+    deliveredAt: d.proof?.deliveredAt,
   };
-  const base = (
-    code: string,
-    vIdx: number,
-    from: GeoPoint,
-    to: GeoPoint,
-    extra: Partial<ShippingOrder>
-  ): ShippingOrder => {
-    const vehicle = snap(vIdx);
-    const route = mapService.estimateRouteSync(from, to);
-    const fare = calculateFare({ vehicle, ...route, loadingService: true, loadingFee: settings.loadingFee });
-    return {
-      id: `ord_${code}`,
-      code,
-      customerId: 'cust_01',
-      customerName: 'Hoàng Nguyễn Mạnh',
-      customerPhone: '0338967316',
-      pickup: { ...from, contactName: 'Hoàng Mạnh', contactPhone: '0338967316' },
-      dropoff: { ...to, contactName: 'Anh Mạnh', contactPhone: '0338967316' },
-      vehicle,
-      cargo: {
-        type: 'Furniture',
-        description: 'Tủ quần áo 2 cánh, đệm 1m6, 5 thùng carton',
-        quantity: 7,
-        weightKg: 280,
-        largestItem: { lengthCm: 180, widthCm: 60, heightCm: 120 },
-        photos: ['https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80'],
-      },
-      loadingService: true,
-      fare,
-      paymentMethod: 'PayOS',
-      paymentStatus: 'Paid',
-      status: 'Pending',
-      history: [],
-      createdAt: minutesAgo(5),
-      ...extra,
-    };
-  };
-  const P = SAMPLE_PLACES;
-  const all = (q: string) => SAMPLE_PLACES.find((p) => p.address.includes(q)) ?? SAMPLE_PLACES[0];
-  return [
-    base('MM-63211', 2, all('Keangnam'), all('Times City'), {
-      status: 'Pending',
-      paymentMethod: 'Cash',
-      payerRole: 'Sender',
-      paymentStatus: 'Unpaid',
-      createdAt: minutesAgo(2),
-    }),
-    base('MM-78219', 1, all('FPT'), all('Matrix'), {
-      status: 'PickedUp',
-      commissionRate: settings.commissionRate,
-      // Tài xế khác đang chạy đơn này, để tài xế demo (drv_88) còn rảnh nhận đơn mới (GB-09)
-      assignedDriver: { ...driver, id: 'drv_33', name: 'Phạm Quốc Bảo', phone: '0983112233', licensePlate: '30F-992.45' },
-      acceptedAt: minutesAgo(50),
-      pickedUpAt: minutesAgo(5),
-      proof: {
-        pickupPhotos: [
-          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-          'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-        ],
-        pickupSubmissionCount: 1,
-        pickupStatus: 'Pending',
-      },
-      createdAt: minutesAgo(60),
-      paidAt: minutesAgo(59),
-    }),
-    base('MM-84721', 0, P[4], P[5], {
-      status: 'Delivered',
-      commissionRate: settings.commissionRate,
-      assignedDriver: { ...driver, id: 'drv_33', name: 'Phạm Quốc Bảo', licensePlate: '30F-992.45' },
-      proof: {
-        pickupPhotos: ['https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80'],
-        pickupSubmissionCount: 1,
-        pickupStatus: 'Verified',
-        deliveryPhoto: 'https://images.unsplash.com/photo-1600518464441-9154a4dea21b?auto=format&fit=crop&w=600&q=80',
-        deliveredAt: minutesAgo(90),
-      },
-      createdAt: minutesAgo(180),
-      deliveredAt: minutesAgo(90),
-    }),
-    base('MM-90182', 1, P[2], P[1], {
-      status: 'Completed',
-      commissionRate: settings.commissionRate,
-      assignedDriver: { ...driver, id: 'drv_02', name: 'Lê Hoàng Nam', licensePlate: '29D-562.91' },
-      createdAt: minutesAgo(60 * 26),
-      deliveredAt: minutesAgo(60 * 25),
-      completedAt: minutesAgo(60 * 3),
-    }),
-    base('MM-26EG8', 0, P[8], P[7], {
-      status: 'Cancelled',
-      paymentMethod: 'Cash',
-      payerRole: 'Receiver',
-      paymentStatus: 'Unpaid',
-      cancellationReason: 'Khách đổi lịch chuyển',
-      createdAt: minutesAgo(60 * 48),
-      cancelledAt: minutesAgo(60 * 47),
-    }),
-  ];
 }
 
-const load = (): ShippingOrder[] => readStore(KEY, seedOrders);
-const save = (orders: ShippingOrder[]) => writeStore(KEY, orders);
-
-function mutate(orderId: string, fn: (o: ShippingOrder) => ShippingOrder): ShippingOrder {
-  const orders = load();
-  const idx = orders.findIndex((o) => o.id === orderId);
-  if (idx < 0) throw new ServiceError(msg('MSG38'));
-  const next = fn(orders[idx]);
-  orders[idx] = next;
-  save(orders);
-  return next;
+async function currentCustomer(): Promise<Pick<User, 'id' | 'fullName' | 'phoneNumber'>> {
+  const { authService } = await import('./auth.service');
+  const session = authService.restoreSession();
+  return session?.user ?? { id: '', fullName: '', phoneNumber: '' };
 }
-
-function transition(o: ShippingOrder, to: OrderStatus, by: ActorRole, note?: string): ShippingOrder {
-  if (!canTransition(o.status, to)) throw new ServiceError(msg('MSG38'));
-  return { ...o, status: to, history: [...o.history, { from: o.status, to, changedBy: by, note, changedAt: new Date().toISOString() }] };
-}
-
-/**
- * Mô phỏng background jobs (JOB-MATCH-01, JOB-PAY-01, JOB-ORDER-01) – chạy mỗi lần đọc.
- * Trên backend đây là scheduled job; FE chỉ đọc kết quả.
- */
-function runScheduledJobs(orders: ShippingOrder[]): { orders: ShippingOrder[]; changed: boolean } {
-  const now = Date.now();
-  let changed = false;
-  const result = orders.map((o) => {
-    const age = (iso?: string) => (iso ? (now - new Date(iso).getTime()) / 60_000 : 0);
-    // GB-13: PayOS chưa thanh toán sau 30 phút → huỷ
-    if (o.status === 'Pending' && o.paymentMethod === 'PayOS' && o.paymentStatus === 'Unpaid' && age(o.createdAt) > BUSINESS.UNPAID_ORDER_TIMEOUT_MIN) {
-      changed = true;
-      return { ...transition(o, 'Cancelled', 'System', 'Quá hạn thanh toán (GB-13)'), cancellationReason: 'Quá hạn thanh toán', cancelledAt: new Date().toISOString() };
-    }
-    // GB-24: Pending (đã hiển thị cho tài xế) quá 10 phút → huỷ
-    const matchingStart = o.paymentMethod === 'PayOS' ? o.paidAt : o.createdAt;
-    if (isVisibleToDrivers(o) && age(matchingStart) > BUSINESS.MATCHING_TIMEOUT_MIN) {
-      changed = true;
-      return { ...transition(o, 'Cancelled', 'System', msg('MSG35')), cancellationReason: 'Không có tài xế nhận đơn', cancelledAt: new Date().toISOString() };
-    }
-    // GB-23: Delivered quá 24h → tự hoàn thành
-    if (o.status === 'Delivered' && age(o.deliveredAt) > BUSINESS.AUTO_COMPLETE_HOURS * 60) {
-      changed = true;
-      return { ...transition(o, 'Completed', 'System', 'Tự động hoàn thành (GB-23)'), completedAt: new Date().toISOString() };
-    }
-    return o;
-  });
-  return { orders: result, changed };
-}
-
-function loadWithJobs(): ShippingOrder[] {
-  const { orders, changed } = runScheduledJobs(load());
-  if (changed) save(orders);
-  return orders;
-}
-
-/** Callback khi đơn bị huỷ có khoản hoàn (GB-41) – được case.service đăng ký để tránh import vòng */
-let onCancellationRefund: ((o: ShippingOrder, amount: number) => void) | null = null;
-export const registerCancellationRefundHandler = (fn: typeof onCancellationRefund) => {
-  onCancellationRefund = fn;
-};
-/** Callback khi đơn Completed để quyết toán ví tài xế (GB-14/15) */
-let onCompleted: ((o: ShippingOrder) => void) | null = null;
-export const registerCompletionHandler = (fn: typeof onCompleted) => {
-  onCompleted = fn;
-};
-
-const now = () => new Date().toISOString();
 
 export const orderService = {
-  subscribe: (cb: () => void) => subscribeStore(KEY, cb),
-
-  // ------------------------------------------------------------------ Queries
-  listAllSync: (): ShippingOrder[] => loadWithJobs(),
-
-  /** GB-50: khách chỉ xem đơn của mình */
-  listByCustomerSync: (customerId: string): ShippingOrder[] =>
-    loadWithJobs()
-      .filter((o) => o.customerId === customerId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-
-  getByCodeSync: (code: string): ShippingOrder | undefined => loadWithJobs().find((o) => o.code === code || o.id === code),
-
-  /** UC-DRV-08 / GB-31: đơn Pending đủ điều kiện hiển thị cho tài xế */
-  listAvailableJobsSync: (): ShippingOrder[] => loadWithJobs().filter(isVisibleToDrivers),
-
-  getActiveTripOfDriverSync: (driverId: string): ShippingOrder | undefined =>
-    loadWithJobs().find((o) => o.assignedDriver?.id === driverId && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.status)),
-
-  // --------------------------------------------------------------- Customer
-  /** UC-GST-13: ước tính cước cho bản nháp */
-  estimate(draft: BookingDraft) {
-    const vehicle = catalogService.getVehicleTypesSync().find((v) => v.id === draft.vehicleTypeId);
-    if (!vehicle) return null;
-    const route = mapService.estimateRouteSync(draft.pickup, draft.dropoff);
-    const { loadingFee } = catalogService.getSettingsSync();
-    const gross = calculateFare({ vehicle, ...route, loadingService: draft.loadingService, loadingFee });
-    let couponError: string | null = null;
-    let discount = 0;
-    if (draft.couponCode.trim()) {
-      const check = validateCoupon(catalogService.findCouponSync(draft.couponCode), gross.total);
-      if (check.ok) discount = check.discount;
-      else couponError = check.error;
-    }
-    return {
-      vehicle,
-      fare: calculateFare({ vehicle, ...route, loadingService: draft.loadingService, loadingFee, discount }),
-      couponError,
+  subscribe: (cb: () => void) => {
+    const a = subscribeStore(MY_ORDERS, cb);
+    const b = subscribeStore(AVAILABLE_JOBS, cb);
+    const c = subscribeStore(ALL_ORDERS, cb);
+    return () => {
+      a();
+      b();
+      c();
     };
   },
 
-  /** UC-GST-17: gửi yêu cầu vận chuyển */
-  async createOrder(draft: BookingDraft, customer: User): Promise<ShippingOrder> {
-    await latency(500);
-    // GB-28 / GB-46
-    if (customer.role !== 'Customer' || customer.status !== 'Active') throw new ServiceError(msg('MSG10'));
-    if (!draft.agreedNoProhibitedCargo || !draft.agreedWarrantyPolicy) throw new ServiceError(msg('MSG32'));
-    // GB-06
-    if (draft.cargo.photos.length < BUSINESS.MIN_CARGO_PHOTOS || draft.cargo.photos.length > BUSINESS.MAX_CARGO_PHOTOS) {
-      throw new ServiceError(msg('MSG03', { field_name: 'Ảnh hàng hoá', constraints: `${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh` }));
-    }
-    const est = this.estimate(draft);
-    if (!est || !est.vehicle.isActive) throw new ServiceError(msg('MSG30'));
-    // GB-10
-    if (!canVehicleCarry(est.vehicle, draft.cargo)) throw new ServiceError(msg('MSG30'));
-    if (est.couponError) throw new ServiceError(est.couponError);
+  // ------------------------------------------------------------------ Customer
+  listByCustomerSync: (_customerId: string): ShippingOrder[] => readStore<ShippingOrder[]>(MY_ORDERS, () => []),
 
-    const { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType } = est.vehicle;
-    const createdAt = now();
-    const order: ShippingOrder = {
-      id: `ord_${Date.now().toString(36)}`,
-      code: `MM-${Math.floor(10000 + Math.random() * 90000)}`,
-      customerId: customer.id,
-      customerName: customer.fullName,
-      customerPhone: customer.phoneNumber,
-      pickup: draft.pickup,
-      dropoff: draft.dropoff,
-      vehicle: { id, name, baseFare, pricePerKm, minimumFare, maxLoadKg, cargoBed, iconType },
-      cargo: draft.cargo,
-      loadingService: draft.loadingService,
-      couponCode: est.fare.discount > 0 ? draft.couponCode.trim().toUpperCase() : undefined,
-      fare: est.fare,
-      paymentMethod: draft.paymentMethod,
-      payerRole: draft.paymentMethod === 'Cash' ? draft.payerRole : undefined,
-      paymentStatus: 'Unpaid',
-      status: 'Pending',
-      history: [{ from: null, to: 'Pending', changedBy: 'Customer', changedAt: createdAt }],
-      createdAt,
-    };
-    if (order.couponCode) catalogService.consumeCoupon(order.couponCode); // GB-30
-    save([order, ...load()]);
+  /** UC-CUS-08/09/20: GET /customer/orders */
+  async loadMyOrders(): Promise<void> {
+    try {
+      const customer = await currentCustomer();
+      const { data } = await apiClient.get<PagedResult<OrderSummaryDto>>('/customer/Orders', { params: { page: 1, pageSize: 50, view: 'All' } });
+      writeStore(MY_ORDERS, data.items.map((d) => summaryToOrder(d, customer)));
+    } catch {
+      /* giữ cache cũ nếu lỗi mạng */
+    }
+  },
+
+  getByCodeSync: (code: string): ShippingOrder | undefined =>
+    readStore<ShippingOrder[]>(MY_ORDERS, () => []).find((o) => o.code === code || o.id === code) ??
+    readStore<ShippingOrder[]>(ALL_ORDERS, () => []).find((o) => o.code === code || o.id === code),
+
+  /** Nạp chi tiết đầy đủ 1 đơn (thay ô rút gọn trong danh sách bằng bản chi tiết) */
+  async loadOrderDetail(orderId: string): Promise<ShippingOrder> {
+    try {
+      const customer = await currentCustomer();
+      const { data } = await apiClient.get<OrderDetailDto>(`/customer/Orders/${orderId}`);
+      const order = detailToOrder(data, customer);
+      const list = readStore<ShippingOrder[]>(MY_ORDERS, () => []);
+      const idx = list.findIndex((o) => o.id === order.id);
+      if (idx >= 0) list[idx] = order;
+      else list.unshift(order);
+      writeStore(MY_ORDERS, list);
+      return order;
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-GST-13: POST /public/fareestimate */
+  async estimate(draft: BookingDraft): Promise<{ vehicle: VehicleSnapshot; fare: FareBreakdown; couponError: string | null } | null> {
+    if (!draft.vehicleTypeId || !draft.pickup.address || !draft.dropoff.address) return null;
+    try {
+      const { data } = await apiClient.post<{ distanceKm: number; durationMinutes: number; distanceFee: number; serviceFee: number; discountAmount: number; totalFee: number }>(
+        '/public/FareEstimate',
+        {
+          vehicleTypeId: Number(draft.vehicleTypeId),
+          pickupAddress: draft.pickup.address,
+          dropoffAddress: draft.dropoff.address,
+          weightKg: draft.cargo.weightKg,
+          lengthCm: draft.cargo.largestItem.lengthCm,
+          widthCm: draft.cargo.largestItem.widthCm,
+          heightCm: draft.cargo.largestItem.heightCm,
+          hasLoadingService: draft.loadingService,
+          couponCode: draft.couponCode.trim() || null,
+        }
+      );
+      const { catalogService } = await import('./catalog.service');
+      const vehicle = catalogService.getVehicleTypesSync().find((v) => v.id === draft.vehicleTypeId) ?? emptyVehicle();
+      return {
+        vehicle,
+        fare: { distanceKm: data.distanceKm, durationMins: data.durationMinutes, distanceFare: data.distanceFee, loadingFee: data.serviceFee, discount: data.discountAmount, total: data.totalFee },
+        couponError: null,
+      };
+    } catch (e) {
+      const err = toServiceError(e);
+      // Mã lỗi coupon → hiển thị cạnh ô mã giảm giá thay vì banner chung
+      const isCouponError = /COUPON_|đã hết hạn|chưa tới hạn|không tồn tại|đang tắt|hết lượt|tối thiểu/i.test(err.message) && draft.couponCode.trim();
+      if (isCouponError) return { vehicle: emptyVehicle(), fare: emptyFare(), couponError: err.message };
+      throw err;
+    }
+  },
+
+  /** UC-GST-17: POST /customer/orders */
+  async createOrder(draft: BookingDraft, _customer: User): Promise<ShippingOrder & { expectedTotalFee?: number }> {
+    try {
+      const est = await this.estimate(draft);
+      const { data } = await apiClient.post<{ orderId: number; orderCode: string; totalFee: number }>('/customer/Orders', {
+        vehicleTypeId: Number(draft.vehicleTypeId),
+        pickupAddress: draft.pickup.address,
+        dropoffAddress: draft.dropoff.address,
+        receiverName: draft.dropoff.contactName,
+        receiverPhone: draft.dropoff.contactPhone,
+        cargo: {
+          cargoType: draft.cargo.type,
+          quantity: draft.cargo.quantity,
+          weightKg: draft.cargo.weightKg,
+          lengthCm: draft.cargo.largestItem.lengthCm,
+          widthCm: draft.cargo.largestItem.widthCm,
+          heightCm: draft.cargo.largestItem.heightCm,
+          photoUrls: draft.cargo.photos,
+          specialNotes: draft.cargo.specialNotes || null,
+        },
+        hasLoadingService: draft.loadingService,
+        couponCode: draft.couponCode.trim() || null,
+        paymentMethod: draft.paymentMethod,
+        payerRole: draft.paymentMethod === 'Cash' ? draft.payerRole : null,
+        prohibitedGoodsCommitment: draft.agreedNoProhibitedCargo,
+        expectedTotalFee: est?.fare.total,
+      });
+      const order = await this.loadOrderDetail(String(data.orderId));
+      return order;
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** UC-CUS-27: POST /customer/orders/{id}/payment */
+  async createPayment(orderId: string, platform: 'Web' | 'App' = 'Web'): Promise<{ transactionId: number; checkoutUrl: string; qrCode?: string; amount: number; expiresAt: string }> {
+    try {
+      const { data } = await apiClient.post(`/customer/Orders/${orderId}/payment`, { platform });
+      return data;
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  /** Kiểm tra trạng thái thanh toán hiện tại (chỉ webhook PayOS mới chuyển đơn sang Paid) */
+  async confirmPayment(orderId: string): Promise<ShippingOrder> {
+    const order = await this.loadOrderDetail(orderId);
+    if (order.status === 'Cancelled') throw new ServiceError(msg('MSG37', { order_id: order.code }));
+    if (order.paymentStatus !== 'Paid') throw new ServiceError('Chưa nhận được thanh toán. Vui lòng thử lại sau khi chuyển khoản qua PayOS.');
     return order;
   },
 
-  /** UC-CUS-27 (mock webhook PayOS – API-PAY-01) */
-  async confirmPayment(orderId: string): Promise<ShippingOrder> {
-    await latency(800);
-    return mutate(orderId, (o) => {
-      if (o.status === 'Cancelled') {
-        // GB-41: thanh toán đến sau khi huỷ → hoàn 100%
-        onCancellationRefund?.(o, o.fare.total);
-        throw new ServiceError(msg('MSG37', { order_id: o.code }));
-      }
-      if (o.paymentStatus === 'Paid') return o;
-      return { ...o, paymentStatus: 'Paid', paidAt: now() };
-    });
-  },
-
-  /** UC-CUS-29 / GB-22 */
-  async cancelByCustomer(orderId: string, customerId: string, reason: string): Promise<ShippingOrder> {
-    await latency();
-    let refund = 0;
-    const updated = mutate(orderId, (o) => {
-      if (o.customerId !== customerId) throw new ServiceError(msg('MSG13'));
-      if (!canCustomerCancel(o)) throw new ServiceError(msg('MSG38'));
-      refund = refundOnCancel(o);
-      return { ...transition(o, 'Cancelled', 'Customer', reason), cancellationReason: reason, cancelledAt: now() };
-    });
-    if (refund > 0) onCancellationRefund?.(updated, refund);
-    return updated;
-  },
-
-  /** UC-CUS-12 / GB-26: duyệt ảnh kiểm hàng → InTransit */
-  async approvePickupEvidence(orderId: string): Promise<ShippingOrder> {
-    await latency();
-    return mutate(orderId, (o) => {
-      if (!canReviewPickupEvidence(o)) throw new ServiceError(msg('MSG38'));
-      return { ...transition(o, 'InTransit', 'Customer', 'Khách duyệt ảnh kiểm hàng'), proof: { ...o.proof!, pickupStatus: 'Verified' } };
-    });
-  },
-
-  /** UC-CUS-12 / GB-11: từ chối → tài xế chụp lại */
-  async rejectPickupEvidence(orderId: string, reason: string): Promise<ShippingOrder> {
-    await latency();
-    if (!reason.trim()) throw new ServiceError(msg('MSG01', { field_name: 'Lý do từ chối' }));
-    return mutate(orderId, (o) => {
-      if (!canReviewPickupEvidence(o)) throw new ServiceError(msg('MSG38'));
-      return { ...o, proof: { ...o.proof!, pickupStatus: 'Rejected', pickupRejectReason: reason } };
-    });
-  },
-
-  /** UC-CUS-19: xác nhận đã nhận hàng → Completed */
-  async confirmReceipt(orderId: string): Promise<ShippingOrder> {
-    await latency();
-    const updated = mutate(orderId, (o) => {
-      if (!canConfirmReceipt(o)) throw new ServiceError(msg('MSG38'));
-      return { ...transition(o, 'Completed', 'Customer'), completedAt: now() };
-    });
-    onCompleted?.(updated);
-    return updated;
-  },
-
-  /** UC-CUS-25 / GB-20 */
-  async rateOrder(orderId: string, rating: Omit<Rating, 'createdAt'>): Promise<ShippingOrder> {
-    await latency();
-    if (rating.stars < 1 || rating.stars > 5) throw new ServiceError(msg('MSG56'));
-    return mutate(orderId, (o) => {
-      const restriction = ratingRestriction(o);
-      if (restriction) throw new ServiceError(msg('MSG58', { rating_restriction_message: restriction }));
-      return { ...o, rating: { ...rating, createdAt: now() } };
-    });
-  },
-
-  canComplain,
-
-  // ----------------------------------------------------------------- Driver
-  /** UC-DRV-10 / GB-08, GB-09, GB-16 */
-  async acceptJob(orderId: string, driver: AssignedDriver, depositBalance: number): Promise<ShippingOrder> {
-    await latency();
-    if (this.getActiveTripOfDriverSync(driver.id)) throw new ServiceError('Bạn đang có một đơn đang thực hiện (GB-09).');
-    const { commissionRate } = catalogService.getSettingsSync();
-    return mutate(orderId, (o) => {
-      if (!isVisibleToDrivers(o)) throw new ServiceError(msg('MSG40'));
-      if (o.paymentMethod === 'Cash' && !hasEnoughDeposit(depositBalance, calculateCommission(o.fare.total, commissionRate))) {
-        throw new ServiceError(msg('MSG26', { required_balance: BUSINESS.MIN_COD_DEPOSIT.toLocaleString('vi-VN') + ' đ' }));
-      }
-      return { ...transition(o, 'Accepted', 'Driver'), assignedDriver: driver, commissionRate, acceptedAt: now() };
-    });
-  },
-
-  /** UC-DRV-12 */
-  async markArrived(orderId: string): Promise<ShippingOrder> {
-    await latency();
-    return mutate(orderId, (o) => transition(o, 'Arrived', 'Driver'));
-  },
-
-  /** UC-DRV-13 / GB-11: nộp 2–5 ảnh, tối đa 5 lần */
-  async submitPickupEvidence(orderId: string, photos: string[]): Promise<ShippingOrder> {
-    await latency();
-    if (photos.length < BUSINESS.MIN_PICKUP_PHOTOS || photos.length > BUSINESS.MAX_PICKUP_PHOTOS) {
-      throw new ServiceError(msg('MSG44', { evidence_type: `${BUSINESS.MIN_PICKUP_PHOTOS}–${BUSINESS.MAX_PICKUP_PHOTOS} ảnh kiểm hàng` }));
+  /** UC-CUS-29: POST /customer/orders/{id}/cancel */
+  async cancelByCustomer(orderId: string, _customerId: string, reasonCode: string, reason?: string): Promise<ShippingOrder> {
+    try {
+      await apiClient.post(`/customer/Orders/${orderId}/cancel`, { reasonCode, reason: reason || null });
+      return await this.loadOrderDetail(orderId);
+    } catch (e) {
+      throw toServiceError(e);
     }
-    return mutate(orderId, (o) => {
-      const count = (o.proof?.pickupSubmissionCount ?? 0) + 1;
-      if (count > BUSINESS.MAX_PICKUP_SUBMISSIONS) {
-        throw new ServiceError('Đã quá 5 lần nộp ảnh. Vui lòng báo cáo sự cố cho điều phối viên (GB-11).');
-      }
-      const base = o.status === 'Arrived' ? transition(o, 'PickedUp', 'Driver') : o;
-      if (base.status !== 'PickedUp') throw new ServiceError(msg('MSG38'));
-      return {
-        ...base,
-        pickedUpAt: base.pickedUpAt ?? now(),
-        proof: { pickupPhotos: photos, pickupSubmissionCount: count, pickupStatus: 'Pending' },
-      };
-    });
   },
 
-  /** UC-DRV-16 / GB-12: cần ảnh giao hàng */
-  async markDelivered(orderId: string, deliveryPhoto: string): Promise<ShippingOrder> {
-    await latency();
-    if (!deliveryPhoto) throw new ServiceError(msg('MSG44', { evidence_type: 'ảnh giao hàng (POD)' }));
-    return mutate(orderId, (o) => {
-      const t = now();
-      return { ...transition(o, 'Delivered', 'Driver'), deliveredAt: t, proof: { ...o.proof!, deliveryPhoto, deliveredAt: t } };
-    });
+  /** UC-CUS-12: POST /customer/orders/{id}/pickup-evidence */
+  async approvePickupEvidence(orderId: string): Promise<ShippingOrder> {
+    try {
+      await apiClient.post(`/customer/Orders/${orderId}/pickup-evidence`, { approve: true });
+      return await this.loadOrderDetail(orderId);
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  /** UC-DRV-17: ghi nhận thu tiền mặt */
-  async confirmCashCollected(orderId: string): Promise<ShippingOrder> {
-    await latency();
-    return mutate(orderId, (o) => {
-      if (o.paymentMethod !== 'Cash') throw new ServiceError(msg('MSG07'));
-      return { ...o, paymentStatus: 'Paid', paidAt: now() };
-    });
+  async rejectPickupEvidence(orderId: string, reason: string): Promise<ShippingOrder> {
+    try {
+      await apiClient.post(`/customer/Orders/${orderId}/pickup-evidence`, { approve: false, reason });
+      return await this.loadOrderDetail(orderId);
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  // ------------------------------------------------------------- Dispatcher
-  /** UC-DIS-07 / GB-38 */
-  async cancelByDispatcher(orderId: string, reason: string, refundable: boolean): Promise<ShippingOrder> {
-    await latency();
-    let refund = 0;
-    const updated = mutate(orderId, (o) => {
-      refund = refundable ? refundOnCancel(o) : 0;
-      return { ...transition(o, 'Cancelled', 'Dispatcher', reason), cancellationReason: reason, cancelledAt: now() };
-    });
-    if (refund > 0) onCancellationRefund?.(updated, refund);
-    return updated;
+  /** UC-CUS-19: POST /customer/orders/{id}/confirm-receipt */
+  async confirmReceipt(orderId: string): Promise<ShippingOrder> {
+    try {
+      await apiClient.post(`/customer/Orders/${orderId}/confirm-receipt`);
+      return await this.loadOrderDetail(orderId);
+    } catch (e) {
+      throw toServiceError(e);
+    }
   },
 
-  /** UC-DIS-06 / GB-37: đơn quay về Accepted, đếm lại ảnh kiểm hàng */
-  async reassignDriver(orderId: string, driver: AssignedDriver): Promise<ShippingOrder> {
-    await latency();
-    const { commissionRate } = catalogService.getSettingsSync();
-    return mutate(orderId, (o) => ({
-      ...o,
-      status: 'Accepted',
-      assignedDriver: driver,
-      commissionRate,
-      proof: undefined,
-      history: [...o.history, { from: o.status, to: 'Accepted', changedBy: 'Dispatcher', note: `Đổi tài xế: ${driver.name}`, changedAt: now() }],
-    }));
+  /** UC-CUS-25: POST /customer/ratings */
+  async rateOrder(orderId: string, rating: Omit<Rating, 'createdAt'>): Promise<ShippingOrder> {
+    try {
+      await apiClient.post('/customer/Ratings', { orderId: Number(orderId), stars: rating.stars, comment: rating.comment || null });
+      const order = await this.loadOrderDetail(orderId);
+      return { ...order, rating: { ...rating, createdAt: new Date().toISOString() } };
+    } catch (e) {
+      throw toServiceError(e);
+    }
+  },
+
+  canComplain: (o: ShippingOrder) => o.status === 'Delivered',
+
+  // ------------------------------------------------------------- Driver
+  listAvailableJobsSync: (): ShippingOrder[] => readStore<ShippingOrder[]>(AVAILABLE_JOBS, () => []),
+
+  /** UC-DRV-08: GET /driver/matching/orders */
+  async loadAvailableJobs(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<
+        {
+          orderId: number;
+          orderCode: string;
+          pickupAddress: string;
+          pickupLatitude: number;
+          pickupLongitude: number;
+          dropoffAddress: string;
+          dropoffLatitude: number;
+          dropoffLongitude: number;
+          estimatedDistanceKm: number;
+          estimatedDurationMin: number;
+          totalFee: number;
+          paymentMethod: ShippingOrder['paymentMethod'];
+          payerRole?: ShippingOrder['payerRole'];
+          hasLoadingService: boolean;
+          cargoType: string;
+          cargoTypeName?: string;
+          cargoQuantity: number;
+          cargoWeightKg: number;
+          cargoLengthCm: number;
+          cargoWidthCm: number;
+          cargoHeightCm: number;
+          cargoPhotoUrls: string[];
+          specialNotes?: string;
+          createdAt: string;
+        }[]
+      >('/driver/Matching/orders');
+      writeStore(
+        AVAILABLE_JOBS,
+        data.map(
+          (j): ShippingOrder => ({
+            id: String(j.orderId),
+            code: j.orderCode,
+            customerId: '',
+            customerName: '',
+            customerPhone: '',
+            pickup: { address: j.pickupAddress, lat: j.pickupLatitude, lng: j.pickupLongitude, contactName: '', contactPhone: '' },
+            dropoff: { address: j.dropoffAddress, lat: j.dropoffLatitude, lng: j.dropoffLongitude, contactName: '', contactPhone: '' },
+            vehicle: emptyVehicle(),
+            cargo: {
+              type: j.cargoType,
+              description: j.specialNotes ?? j.cargoTypeName ?? j.cargoType,
+              quantity: j.cargoQuantity,
+              weightKg: j.cargoWeightKg,
+              largestItem: { lengthCm: j.cargoLengthCm, widthCm: j.cargoWidthCm, heightCm: j.cargoHeightCm },
+              photos: j.cargoPhotoUrls,
+              specialNotes: j.specialNotes,
+            },
+            loadingService: j.hasLoadingService,
+            fare: { distanceKm: j.estimatedDistanceKm, durationMins: j.estimatedDurationMin, distanceFare: j.totalFee, loadingFee: 0, discount: 0, total: j.totalFee },
+            paymentMethod: j.paymentMethod,
+            payerRole: j.payerRole,
+            paymentStatus: 'Unpaid',
+            status: 'Pending',
+            history: [],
+            createdAt: j.createdAt,
+          })
+        )
+      );
+    } catch {
+      /* ignore */
+    }
+  },
+
+  getActiveTripOfDriverSync: (_driverId: string): ShippingOrder | undefined => undefined,
+
+  /** UC-DRV-10: POST /driver/matching/orders/{id}/accept */
+  async acceptJob(orderId: string, driver: AssignedDriver, _depositBalance: number): Promise<ShippingOrder> {
+    try {
+      await apiClient.post(`/driver/Matching/orders/${orderId}/accept`);
+    } catch (e) {
+      throw toServiceError(e);
+    }
+    const list = readStore<ShippingOrder[]>(AVAILABLE_JOBS, () => []);
+    const job = list.find((o) => o.id === orderId);
+    writeStore(AVAILABLE_JOBS, list.filter((o) => o.id !== orderId));
+    return job ? { ...job, status: 'Accepted', assignedDriver: driver } : ({ id: orderId, code: orderId, status: 'Accepted' } as ShippingOrder);
+  },
+
+  async markArrived(_orderId: string): Promise<ShippingOrder> {
+    throw new ServiceError('Chưa có API backend cho thao tác này trên web (dành cho app di động).');
+  },
+  async submitPickupEvidence(_orderId: string, _photos: string[]): Promise<ShippingOrder> {
+    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web (DECISIONS C11: tài xế dùng app di động).');
+  },
+  async markDelivered(_orderId: string, _deliveryPhoto: string): Promise<ShippingOrder> {
+    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web (DECISIONS C11: tài xế dùng app di động).');
+  },
+  async confirmCashCollected(_orderId: string): Promise<ShippingOrder> {
+    throw new ServiceError('Backend chưa có endpoint xác nhận thu tiền mặt riêng cho web.');
+  },
+
+  // ----------------------------------------------------------- Dispatcher
+  listAllSync: (): ShippingOrder[] => readStore<ShippingOrder[]>(ALL_ORDERS, () => []),
+
+  /** UC-DIS-01: GET /dispatcher/orders */
+  async loadAllOrders(params: { status?: OrderStatus; search?: string; page?: number; pageSize?: number } = {}): Promise<void> {
+    try {
+      const { data } = await apiClient.get<
+        PagedResult<{
+          id: number;
+          orderCode: string;
+          orderStatus: OrderStatus;
+          paymentMethod: ShippingOrder['paymentMethod'];
+          paymentStatus: ShippingOrder['paymentStatus'];
+          totalFee: number;
+          pickupAddress: string;
+          dropoffAddress: string;
+          customerName: string;
+          customerPhone: string;
+          driverProfileId: number | null;
+          driverName: string | null;
+          driverPhone: string | null;
+          licensePlate: string | null;
+          vehicleTypeName: string;
+          createdAt: string;
+        }>
+      >('/dispatcher/Orders', { params: { page: 1, pageSize: 50, ...params } });
+      writeStore(
+        ALL_ORDERS,
+        data.items.map(
+          (d): ShippingOrder => ({
+            id: String(d.id),
+            code: d.orderCode,
+            customerId: '',
+            customerName: d.customerName,
+            customerPhone: d.customerPhone,
+            pickup: { address: d.pickupAddress, lat: 0, lng: 0, contactName: d.customerName, contactPhone: d.customerPhone },
+            dropoff: { address: d.dropoffAddress, lat: 0, lng: 0, contactName: '', contactPhone: '' },
+            vehicle: emptyVehicle(d.vehicleTypeName),
+            cargo: emptyCargo(),
+            loadingService: false,
+            fare: emptyFare(d.totalFee),
+            paymentMethod: d.paymentMethod,
+            paymentStatus: d.paymentStatus,
+            status: d.orderStatus,
+            assignedDriver: d.driverName
+              ? { id: String(d.driverProfileId ?? ''), name: d.driverName, phone: d.driverPhone ?? '', avatar: '', rating: 0, licensePlate: d.licensePlate ?? '', currentLat: 0, currentLng: 0, lastLocationAt: '' }
+              : undefined,
+            history: [],
+            createdAt: d.createdAt,
+          })
+        )
+      );
+    } catch {
+      /* ignore */
+    }
+  },
+
+  /** UC-DIS-07: POST /dispatcher/incidents/{incidentId}/cancel-order – cần incidentId mở của đơn, không huỷ trực tiếp theo orderId */
+  async cancelByDispatcher(_orderId: string, _reason: string, _refundable: boolean): Promise<ShippingOrder> {
+    throw new ServiceError('Huỷ đơn từ Dispatcher thực hiện qua màn hình Sự cố (cần mở sự cố trước).');
+  },
+
+  async reassignDriver(_orderId: string, _driver: AssignedDriver): Promise<ShippingOrder> {
+    throw new ServiceError('Đổi tài xế thực hiện qua màn hình Sự cố (api/dispatcher/incidents/{id}/reassign).');
   },
 };

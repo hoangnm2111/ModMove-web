@@ -1,7 +1,8 @@
 /**
  * Incident / Refund / Wallet types – SRS Entities InTransitIncident, Refund, DriverWallet, WalletTransaction.
  */
-export type IncidentType = 'VehicleBreakdown' | 'DamagedCargo' | 'Accident' | 'Delay' | 'WrongRoute' | 'DriverMisconduct' | 'Other';
+/** Domain.Enums.IncidentType – chỉ 4 giá trị; "trễ"/"sai lộ trình" ghi là Other (DECISIONS 7.1) */
+export type IncidentType = 'VehicleBreakdown' | 'DamagedCargo' | 'Accident' | 'Other';
 export type IncidentStatus = 'Open' | 'InProgress' | 'Resolved' | 'Cancelled';
 export type IncidentDecision = 'ContinueTrip' | 'ReassignDriver' | 'CancelOrder';
 
@@ -23,14 +24,28 @@ export interface Incident {
   resolvedAt?: string;
 }
 
+/** Incident + các trường chỉ có ở chi tiết (GET /dispatcher/incidents/{id}) */
+export interface DispatcherIncidentDetail extends Incident {
+  customerName?: string;
+  customerPhone?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverProfileId?: string;
+  vehiclePlate?: string;
+  vehicleTypeName?: string;
+  paymentMethod?: 'PayOS' | 'Cash';
+}
+
 export type RefundSource = 'Cancellation' | 'Incident' | 'Complaint';
-/** Requested → (InfoRequested) → Proposed → Approved/Rejected; Approved → Processed; Requested → Withdrawn */
-export type RefundStatus = 'Requested' | 'InfoRequested' | 'Proposed' | 'Approved' | 'Rejected' | 'Processed' | 'Withdrawn';
+/** Domain.Enums.RefundStatus thật; "đang chờ bổ sung/đề xuất" là field rời (waitingForYourReply, proposedAmount), không phải status riêng */
+export type RefundStatus = 'Requested' | 'Approved' | 'Rejected' | 'Processed' | 'Failed' | 'Withdrawn';
 
 export interface Refund {
   id: string;
   orderId: string;
   orderCode: string;
+  /** Chỉ có khi source = Incident (hoàn tiền sự cố theo dõi theo id sự cố, không theo id hoàn tiền) */
+  incidentId?: string;
   customerName: string;
   source: RefundSource;
   reason: string;
@@ -39,9 +54,14 @@ export interface Refund {
   requestedAmount: number;
   proposedAmount?: number;
   approvedAmount?: number;
+  /** Lý do Admin duyệt/từ chối (CUS-23) */
+  decisionReason?: string;
+  /** Ghi chú nội bộ của Dispatcher khi đề xuất – không trả về cho khách */
   proposalNote?: string;
   infoRequest?: string;
   infoReply?: string;
+  /** Dispatcher đang chờ khách trả lời câu hỏi bổ sung (7.4) */
+  waitingForYourReply?: boolean;
   status: RefundStatus;
   bankReferenceCode?: string;
   createdAt: string;

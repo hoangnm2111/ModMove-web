@@ -16,7 +16,6 @@ import {
   Truck
 } from 'lucide-react';
 import { INCIDENT_TYPE_LABEL } from '../../constants';
-import { useAllOrders, useIncidents } from '../../hooks/useDomainData';
 import { useDriverContext } from '../../hooks/useDriverContext';
 import { formatDateTime } from '../../utils/format';
 
@@ -40,34 +39,9 @@ export const DriverIncidentsPage: React.FC = () => {
   const [selectedIncident, setSelectedIncident] = useState<IncidentRecord | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
-  const { driverId } = useDriverContext();
-  const orders = useAllOrders();
-  const rawIncidents = useIncidents();
-  /** UC-DRV-19: sự cố của các đơn tài xế đang/đã nhận, kèm quyết định của điều phối viên */
-  const myOrderIds = new Set(orders.filter((o) => o.assignedDriver?.id === driverId).map((o) => o.id));
-  const records: IncidentRecord[] = rawIncidents
-    .filter((i) => i.reportedBy === 'Driver' && (i.reporterId === driverId || (!i.reporterId && myOrderIds.has(i.orderId))))
-    .map((i) => ({
-      id: i.id,
-      orderCode: i.orderCode,
-      reportedAt: formatDateTime(i.createdAt),
-      incidentType: INCIDENT_TYPE_LABEL[i.type],
-      description: i.description,
-      evidencePhoto: i.photos[0] ?? '',
-      gpsLocation: i.gps ? `${i.gps.lat.toFixed(4)}° N, ${i.gps.lng.toFixed(4)}° E` : 'Không có',
-      status:
-        i.status === 'Open' || i.status === 'InProgress'
-          ? 'PENDING_REVIEW'
-          : i.status === 'Cancelled' || i.decision === 'CancelOrder'
-          ? 'CANCELLED'
-          : i.decision === 'ReassignDriver'
-          ? 'REASSIGNED'
-          : 'CONTINUE_TRIP',
-      dispatcherName: i.status === 'Open' ? undefined : 'Điều phối viên',
-      dispatcherDecision: i.decision === 'ContinueTrip' ? 'Tiếp tục chuyến' : i.decision === 'ReassignDriver' ? 'Bàn giao cho tài xế khác' : i.decision === 'CancelOrder' ? 'Huỷ đơn' : i.status === 'Cancelled' ? 'Huỷ sự cố' : undefined,
-      dispatcherReason: i.decisionNote,
-      resolvedAt: i.resolvedAt ? formatDateTime(i.resolvedAt) : undefined,
-    }));
+  useDriverContext();
+  // Backend chưa có API cho tài xế xem lại các sự cố mình đã báo trên web (chỉ Customer/Dispatcher có endpoint tương ứng).
+  const records: IncidentRecord[] = [];
 
   const filteredIncidents = records.filter((item) => {
     if (filterStatus === 'ALL') return true;

@@ -7,7 +7,7 @@ import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
 import { BUSINESS, IS_DEMO } from '../../config/business';
 import { msg } from '../../constants/messages';
-import { confirmPassword, email as emailRule, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
+import { confirmPassword, email as emailRule, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
 import { useCountdown } from '../../hooks/useLiveData';
 import { authService, DEMO_PASSWORD, OtpPurpose } from '../../services/auth.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -15,10 +15,10 @@ import { getRoleHomePath, useAuthStore } from '../../store/useAuthStore';
 import { UserRole } from '../../types/user.types';
 
 const DEMO_ACCOUNTS: { role: UserRole; email: string; label: string }[] = [
-  { role: 'Customer', email: 'customer@modmove.vn', label: 'Khách hàng' },
-  { role: 'Driver', email: 'driver@modmove.vn', label: 'Tài xế' },
-  { role: 'Dispatcher', email: 'dispatcher@modmove.vn', label: 'Điều phối viên' },
-  { role: 'Administrator', email: 'admin@modmove.vn', label: 'Quản trị viên' },
+  { role: 'Customer', email: 'customer@modmove.local', label: 'Khách hàng' },
+  { role: 'Driver', email: 'driver@modmove.local', label: 'Tài xế' },
+  { role: 'Dispatcher', email: 'dispatcher@modmove.local', label: 'Điều phối viên' },
+  { role: 'Administrator', email: 'admin@modmove.local', label: 'Quản trị viên' },
 ];
 
 /** Chỉ cho phép redirect nội bộ */
@@ -59,18 +59,27 @@ export const LoginPage: React.FC = () => {
   const [regPending, setRegPending] = useState(false);
 
   // ------------------------------------------------------------------ OTP
-  const [otp, setOtp] = useState<{ purpose: OtpPurpose; email: string; masked: string; devCode?: string; expiresAt: number } | null>(null);
+  const [otp, setOtp] = useState<{ purpose: OtpPurpose; email: string; masked: string; expiresAt: number } | null>(null);
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [resetPwd, setResetPwd] = useState('');
   const otpLeft = useCountdown(otp?.expiresAt ?? null);
 
-  const startOtp = async (purpose: OtpPurpose, email: string) => {
-    const res = await authService.requestOtp(email, purpose);
-    setOtp({ purpose, email, masked: res.maskedEmail, devCode: res.devCode, expiresAt: Date.now() + BUSINESS.OTP_TTL_SECONDS * 1000 });
+  const openOtp = (purpose: OtpPurpose, email: string) => {
+    setOtp({ purpose, email, masked: maskEmail(email), expiresAt: Date.now() + BUSINESS.OTP_TTL_SECONDS * 1000 });
     setOtpCode('');
     setOtpError(null);
-    toast.info(msg('MSG15', { masked_email: res.maskedEmail }));
+    toast.info(msg('MSG15', { masked_email: maskEmail(email) }));
+  };
+
+  const resendOtp = async () => {
+    if (!otp) return;
+    try {
+      await authService.resendOtp(otp.email, otp.purpose);
+      openOtp(otp.purpose, otp.email);
+    } catch (e) {
+      setOtpError(errorMessage(e));
+    }
   };
 
   const submitRegister = async (e: React.FormEvent) => {
@@ -86,8 +95,9 @@ export const LoginPage: React.FC = () => {
     if (Object.values(errs).some(Boolean)) return;
     setRegPending(true);
     try {
-      await authService.validateRegistration(reg); // GB-01 trước khi gửi OTP
-      await startOtp('register', reg.email.trim().toLowerCase());
+      const email = reg.email.trim().toLowerCase();
+      await authService.registerCustomer(reg); // GB-01: tạo tài khoản + gửi OTP email
+      openOtp('register', email);
     } catch (err) {
       setRegErr({ form: errorMessage(err) });
     } finally {
@@ -105,7 +115,9 @@ export const LoginPage: React.FC = () => {
     setForgotErr(err);
     if (err) return;
     try {
-      await startOtp('reset', forgotEmail.trim().toLowerCase());
+      const email = forgotEmail.trim().toLowerCase();
+      await authService.forgotPassword(email);
+      openOtp('reset', email);
       setForgotOpen(false);
     } catch (e) {
       setForgotErr(errorMessage(e));
@@ -117,10 +129,10 @@ export const LoginPage: React.FC = () => {
     setOtpError(null);
     try {
       if (otp.purpose === 'register') {
-        await authService.registerCustomer(reg, otpCode.trim());
+        await authService.verifyEmail(otp.email, otpCode.trim());
         toast.success(msg('MSG17'));
         setTab('login');
-        setIdentifier(reg.email);
+        setIdentifier(otp.email);
       } else {
         await authService.resetPassword(otp.email, otpCode.trim(), resetPwd);
         toast.success(msg('MSG20'));
@@ -240,7 +252,7 @@ export const LoginPage: React.FC = () => {
         {otp && (
           <div className="space-y-3">
             <p className="text-xs text-slate-600">{msg('MSG15', { masked_email: otp.masked })}</p>
-            {otp.devCode && <Banner kind="info">Chế độ demo – mã OTP: <b>{otp.devCode}</b></Banner>}
+            {IS_DEMO && <Banner kind="info">Chế độ phát triển: email chưa cấu hình SMTP – xem mã OTP trong log console của backend.</Banner>}
             <Field
               label={`Mã OTP (${BUSINESS.OTP_LENGTH} số)`}
               inputMode="numeric"
@@ -254,7 +266,7 @@ export const LoginPage: React.FC = () => {
             )}
             {otpLeft === 0 && <Banner kind="warning">{msg('MSG16')}</Banner>}
             {otpError && <Banner kind="error">{otpError}</Banner>}
-            <button type="button" className="text-xs font-bold text-blue-600" onClick={() => startOtp(otp.purpose, otp.email)}>
+            <button type="button" className="text-xs font-bold text-blue-600" onClick={resendOtp}>
               Gửi lại mã
             </button>
           </div>
