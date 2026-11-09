@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
-import { QrCode, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ExternalLink, QrCode, RefreshCw } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Banner } from '../../components/ui/feedback';
 import { Button } from '../../components/Button';
 import { BUSINESS, IS_DEMO, PAYOS_RECEIVER } from '../../config/business';
 import { msg } from '../../constants/messages';
 import { useCountdown } from '../../hooks/useLiveData';
+import { orderService } from '../../services/order.service';
 import { formatCurrency } from '../../utils/format';
 
 interface PayOsModalProps {
   open: boolean;
   amount: number;
   reference: string;
+  orderId?: string;
   title?: string;
   /** Gọi backend kiểm tra trạng thái (mock: xác nhận đã trả) */
   onPaid: () => Promise<void>;
@@ -19,16 +21,33 @@ interface PayOsModalProps {
 }
 
 /** UC-CUS-27 / UC-DRV-21 – Thanh toán VietQR qua PayOS */
-export const PayOsModal: React.FC<PayOsModalProps> = ({ open, amount, reference, title = 'Thanh toán PayOS', onPaid, onClose }) => {
+export const PayOsModal: React.FC<PayOsModalProps> = ({ open, amount, reference, orderId, title = 'Thanh toán PayOS', onPaid, onClose }) => {
   const [deadline, setDeadline] = useState(() => Date.now() + BUSINESS.PAYOS_CODE_TTL_SECONDS * 1000);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const left = useCountdown(open ? deadline : null);
   const expired = open && left === 0;
 
+  useEffect(() => {
+    if (!open || !orderId) return;
+    setCheckoutUrl(null);
+    orderService.createPayment(orderId).then((res) => {
+      setCheckoutUrl(res.checkoutUrl);
+      if (res.expiresAt) setDeadline(new Date(res.expiresAt).getTime());
+    }).catch(() => { /* fall back to static QR display */ });
+  }, [open, orderId]);
+
   const renew = () => {
     setError(null);
+    setCheckoutUrl(null);
     setDeadline(Date.now() + BUSINESS.PAYOS_CODE_TTL_SECONDS * 1000);
+    if (orderId) {
+      orderService.createPayment(orderId).then((res) => {
+        setCheckoutUrl(res.checkoutUrl);
+        if (res.expiresAt) setDeadline(new Date(res.expiresAt).getTime());
+      }).catch(() => {});
+    }
   };
 
   const check = async () => {
@@ -73,6 +92,17 @@ export const PayOsModal: React.FC<PayOsModalProps> = ({ open, amount, reference,
             <span className="text-xs text-slate-500">
               Mã hết hạn sau <b className="text-slate-900">{mm}:{ss}</b>
             </span>
+          )}
+          {checkoutUrl && !expired && (
+            <a
+              href={checkoutUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Mở trang thanh toán PayOS
+            </a>
           )}
         </div>
         <dl className="text-xs grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 bg-slate-50 rounded-xl p-3">

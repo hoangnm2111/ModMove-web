@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Truck } from 'lucide-react';
+import { Check, Truck } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
 import { msg } from '../../constants/messages';
@@ -15,9 +15,9 @@ import { RouteStep } from '../../features/booking/steps/RouteStep';
 import { CargoStep } from '../../features/booking/steps/CargoStep';
 import { VehicleStep } from '../../features/booking/steps/VehicleStep';
 import { PaymentStep } from '../../features/booking/steps/PaymentStep';
+import { MapEmbed } from '../../components/MapEmbed';
 import { FareSummary } from '../../features/booking/FareSummary';
 import { ProhibitedCargoModal, WarrantyPolicyModal } from '../../features/booking/PolicyModals';
-import { PayOsModal } from '../../features/payment/PayOsModal';
 import { StepErrors, validateCargo, validateConfirm, validateRoute, validateVehicle } from '../../features/booking/bookingValidation';
 
 const STEPS = [
@@ -41,7 +41,6 @@ export const BookingPage: React.FC = () => {
   const [errors, setErrors] = useState<StepErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [payOrder, setPayOrder] = useState<ShippingOrder | null>(null);
   const [modal, setModal] = useState<'prohibited' | 'warranty' | null>(null);
 
   const [estimate, setEstimate] = useState<Awaited<ReturnType<typeof orderService.estimate>>>(null);
@@ -106,10 +105,11 @@ export const BookingPage: React.FC = () => {
     setStep(target);
   };
 
+  /** Đặt xong → trang chi tiết đơn; đơn PayOS tự mở thanh toán (UC-CUS-27) */
   const finish = (order: ShippingOrder) => {
     reset();
     toast.success(msg('MSG33', { order_id: order.code }));
-    navigate(`/tracking?order=${order.code}`);
+    navigate(`/orders/${order.id}${order.paymentMethod === 'PayOS' ? '?pay=1' : ''}`);
   };
 
   const handleSubmit = async () => {
@@ -131,8 +131,7 @@ export const BookingPage: React.FC = () => {
     setSubmitError(null);
     try {
       const order = await orderService.createOrder(draft, user);
-      if (order.paymentMethod === 'PayOS') setPayOrder(order);
-      else finish(order);
+      finish(order);
     } catch (e) {
       setSubmitError(errorMessage(e));
     } finally {
@@ -212,11 +211,11 @@ export const BookingPage: React.FC = () => {
 
           <div className="flex items-center justify-between gap-3 pt-2">
             <Button variant="outline" onClick={() => goTo(step - 1)} disabled={step === 1}>
-              <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay lại
+              Quay lại
             </Button>
             {step < 4 ? (
               <Button onClick={() => goTo(step + 1)}>
-                Tiếp tục <ArrowRight className="w-4 h-4 ml-1.5" />
+                Tiếp tục
               </Button>
             ) : (
               <Button onClick={handleSubmit} isLoading={submitting || estimating} disabled={Boolean((estimate?.couponError && draft.couponCode) || estimateError || !estimate)}>
@@ -226,34 +225,39 @@ export const BookingPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:sticky lg:top-4 h-fit">
+        <div className="lg:sticky lg:top-4 h-fit space-y-4">
           <FareSummary fare={estimate?.fare ?? null} vehicle={selectedVehicle} couponCode={draft.couponCode} />
+          {/* Bản đồ lộ trình theo địa chỉ khách nhập; quãng đường tính giá do backend (MapVina) trả về */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+            <h3 className="text-sm font-extrabold text-slate-900">Bản đồ lộ trình</h3>
+            <MapEmbed
+              className="h-64"
+              title="Lộ trình đặt xe"
+              from={draft.pickup.lat ? { lat: draft.pickup.lat, lng: draft.pickup.lng } : null}
+              to={draft.dropoff.lat ? { lat: draft.dropoff.lat, lng: draft.dropoff.lng } : null}
+              fromText={draft.pickup.address}
+              toText={draft.dropoff.address}
+            />
+            <div className="text-[11px] text-slate-500 space-y-1">
+              <p className="flex gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-600 mt-1 flex-shrink-0" /> {draft.pickup.address || 'Chưa nhập điểm lấy'}
+              </p>
+              <p className="flex gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 mt-1 flex-shrink-0" /> {draft.dropoff.address || 'Chưa nhập điểm giao'}
+              </p>
+              {estimate?.fare && (
+                <p className="font-semibold text-slate-700">
+                  Quãng đường tính giá: {estimate.fare.distanceKm} km • ~{estimate.fare.durationMins} phút
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
 
       <ProhibitedCargoModal open={modal === 'prohibited'} onClose={() => setModal(null)} />
       <WarrantyPolicyModal open={modal === 'warranty'} onClose={() => setModal(null)} />
 
-      {payOrder && (
-        <PayOsModal
-          open
-          amount={payOrder.fare.total}
-          reference={`MODMOVE ${payOrder.code}`}
-          onPaid={async () => {
-            const paid = await orderService.confirmPayment(payOrder.id);
-            toast.success(msg('MSG48', { amount: formatCurrency(paid.fare.total), order_id: paid.code }));
-            setPayOrder(null);
-            finish(paid);
-          }}
-          onClose={() => {
-            // MSG51: đóng trang thanh toán → đơn vẫn chưa thanh toán, có thể thanh toán lại ở Lịch sử đơn
-            toast.warning(msg('MSG51'));
-            setPayOrder(null);
-            reset();
-            navigate('/orders');
-          }}
-        />
-      )}
     </div>
   );
 };

@@ -8,7 +8,8 @@ export type StepErrors = Record<string, string>;
 
 function validatePoint(p: LocationPoint, prefix: 'pickup' | 'dropoff', label: string): StepErrors {
   const e: StepErrors = {};
-  if (!p.address.trim() || !p.lat || !p.lng) e[`${prefix}.address`] = msg('MSG28', { location_type: label });
+  // Toạ độ không bắt buộc: backend tự tìm toạ độ bằng MapVina từ chuỗi địa chỉ khi báo giá/tạo đơn
+  if (p.address.trim().length < 5) e[`${prefix}.address`] = msg('MSG28', { location_type: label });
   const n = validate(p.contactName, required(prefix === 'pickup' ? 'Tên người gửi' : 'Tên người nhận'));
   if (n) e[`${prefix}.contactName`] = n;
   const ph = phone(prefix === 'pickup' ? 'Số điện thoại người gửi' : 'Số điện thoại người nhận')(p.contactPhone);

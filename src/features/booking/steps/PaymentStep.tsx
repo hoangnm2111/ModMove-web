@@ -1,5 +1,8 @@
 import React from 'react';
-import { Banknote, QrCode } from 'lucide-react';
+import { Banknote, QrCode, Ticket } from 'lucide-react';
+import { customerApi } from '../../../api/endpoints';
+import { useQuery } from '../../../api/useQuery';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { Field } from '../../../components/ui/Field';
 import { Banner } from '../../../components/ui/feedback';
 import { BookingDraft } from '../../../types/order.types';
@@ -30,6 +33,36 @@ const OptionCard: React.FC<{ active: boolean; onClick: () => void; title: string
   </button>
 );
 
+/** GET /customer/Coupons – mã đang dùng được (chỉ khi đã đăng nhập Customer) */
+const AvailableCoupons: React.FC<{ selected: string; onPick: (code: string) => void }> = ({ selected, onPick }) => {
+  const isCustomer = useAuthStore((s) => s.activeRole === 'Customer');
+  const q = useQuery(() => customerApi.coupons(1, 20), [], { enabled: isCustomer });
+  const items = q.data?.items ?? [];
+  if (!isCustomer) return <p className="mt-2 text-[11px] text-slate-400">Đăng nhập để xem các mã giảm giá đang có.</p>;
+  if (items.length === 0) return q.loading ? null : <p className="mt-2 text-[11px] text-slate-400">Hiện chưa có mã giảm giá khả dụng.</p>;
+  return (
+    <div className="mt-3 grid sm:grid-cols-2 gap-2">
+      {items.map((c) => (
+        <button
+          key={c.discountCode}
+          type="button"
+          onClick={() => onPick(selected === c.discountCode ? '' : c.discountCode)}
+          className={`text-left p-2.5 rounded-xl border text-xs transition ${selected === c.discountCode ? 'border-blue-600 bg-blue-50' : 'border-dashed border-slate-300 hover:border-slate-500'}`}
+        >
+          <div className="flex items-center gap-1.5 font-black text-slate-900">
+            <Ticket className="w-3.5 h-3.5 text-blue-600" /> {c.discountCode}
+            <span className="ml-auto text-emerald-700">-{formatCurrency(c.discountValue)}</span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Đơn từ {formatCurrency(c.minimumOrderValue)} • HSD {new Date(c.expiresAt).toLocaleDateString('vi-VN')}
+            {c.remainingUses !== null && ` • còn ${c.remainingUses} lượt`}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 /** Bước 4 – Dịch vụ, coupon, thanh toán, chính sách (UC-GST-12/14/15/16) */
 export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, discount, errors, onChange, onShowWarranty }) => (
   <div className="space-y-4">
@@ -57,6 +90,7 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
         error={draft.couponCode ? couponError : null}
         hint={draft.couponCode && !couponError ? `Đã áp dụng: -${formatCurrency(discount)}` : undefined}
       />
+      <AvailableCoupons selected={draft.couponCode} onPick={(code) => onChange({ couponCode: code })} />
     </section>
 
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
