@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Mail, Phone, Truck, User as UserIcon } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
@@ -28,10 +28,13 @@ const safeRedirect = (v: string | null) => (v && v.startsWith('/') && !v.startsW
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { pathname } = useLocation();
   const redirect = safeRedirect(params.get('redirect'));
   const signIn = useAuthStore((s) => s.signIn);
 
-  const [tab, setTab] = useState<'login' | 'register'>(params.get('tab') === 'register' ? 'register' : 'login');
+  const [tab, setTab] = useState<'login' | 'register'>(
+    pathname === '/register' || params.get('tab') === 'register' ? 'register' : 'login'
+  );
 
   // ------------------------------------------------------------ Đăng nhập
   const [identifier, setIdentifier] = useState('');
@@ -129,7 +132,8 @@ export const LoginPage: React.FC = () => {
     setOtpError(null);
     try {
       if (otp.purpose === 'register') {
-        await authService.verifyEmail(otp.email, otpCode.trim());
+        // A-02: BE kiểm tra mật khẩu đã đăng ký khi xác minh email.
+        await authService.verifyEmail(otp.email, otpCode.trim(), reg.password);
         toast.success(msg('MSG17'));
         setTab('login');
         setIdentifier(otp.email);
