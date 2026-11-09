@@ -16,22 +16,25 @@ const LoginPage = page(() => import('../pages/auth/LoginPage'), 'LoginPage');
 const ProfilePage = page(() => import('../pages/account/ProfilePage'), 'ProfilePage');
 const BookingPage = page(() => import('../pages/customer/BookingPage'), 'BookingPage');
 const OrdersPage = page(() => import('../pages/customer/OrdersPage'), 'OrdersPage');
+const OrderDetailPage = page(() => import('../pages/customer/OrderDetailPage'), 'OrderDetailPage');
+const MyRatingsPage = page(() => import('../pages/customer/MyRatingsPage'), 'MyRatingsPage');
 const LiveTrackingPage = page(() => import('../pages/customer/LiveTrackingPage'), 'LiveTrackingPage');
 const DriverJobListPage = page(() => import('../pages/driver/DriverJobListPage'), 'DriverJobListPage');
 const DriverHomePage = page(() => import('../pages/driver/DriverHomePage'), 'DriverHomePage');
-const DriverTripHistoryPage = page(() => import('../pages/driver/DriverTripHistoryPage'), 'DriverTripHistoryPage');
-const DriverIncidentsPage = page(() => import('../pages/driver/DriverIncidentsPage'), 'DriverIncidentsPage');
 const DriverEarningsPage = page(() => import('../pages/driver/DriverEarningsPage'), 'DriverEarningsPage');
 const DriverProfilePage = page(() => import('../pages/driver/DriverProfilePage'), 'DriverProfilePage');
 const LiveMapPage = page(() => import('../pages/dispatcher/LiveMapPage'), 'LiveMapPage');
 const IncidentsPage = page(() => import('../pages/dispatcher/IncidentsPage'), 'IncidentsPage');
 const DispatcherComplaintsPage = page(() => import('../pages/dispatcher/DispatcherComplaintsPage'), 'DispatcherComplaintsPage');
+const DispatcherHandledCasesPage = page(() => import('../pages/dispatcher/DispatcherHandledCasesPage'), 'DispatcherHandledCasesPage');
 const DashboardPage = page(() => import('../pages/admin/DashboardPage'), 'DashboardPage');
 const DriverApprovalPage = page(() => import('../pages/admin/DriverApprovalPage'), 'DriverApprovalPage');
 const AdminUsersPage = page(() => import('../pages/admin/AdminUsersPage'), 'AdminUsersPage');
 const AdminWithdrawalsPage = page(() => import('../pages/admin/AdminWithdrawalsPage'), 'AdminWithdrawalsPage');
 const AdminPricingPage = page(() => import('../pages/admin/AdminPricingPage'), 'AdminPricingPage');
 const AdminMasterDataPage = page(() => import('../pages/admin/AdminMasterDataPage'), 'AdminMasterDataPage');
+const AdminRefundsPage = page(() => import('../pages/admin/AdminRefundsPage'), 'AdminRefundsPage');
+const AdminCouponsPage = page(() => import('../pages/admin/AdminCouponsPage'), 'AdminCouponsPage');
 
 const PageFallback = () => <div className="flex-1 flex items-center justify-center text-sm text-slate-400 p-10">Đang tải…</div>;
 
@@ -69,6 +72,7 @@ export const AppRoutes: React.FC = () => (
       <Route path="/" element={<LandingPage />} />
       <Route element={<GuestOnly />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<LoginPage />} />
       </Route>
 
       {/* Customer */}
@@ -80,6 +84,8 @@ export const AppRoutes: React.FC = () => (
       <Route element={<RequireRole roles={['Customer']} />}>
         <Route element={<CustomerLayout />}>
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/ratings" element={<MyRatingsPage />} />
           <Route path="/tracking" element={<LiveTrackingPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
@@ -90,8 +96,8 @@ export const AppRoutes: React.FC = () => (
         <Route path="/driver" element={<DriverLayout />}>
           <Route index element={<DriverJobListPage />} />
           <Route path="trip" element={<DriverHomePage />} />
-          <Route path="history" element={<DriverTripHistoryPage />} />
-          <Route path="incidents" element={<DriverIncidentsPage />} />
+          <Route path="history" element={<Navigate to="/driver/trip" replace />} />
+          <Route path="incidents" element={<Navigate to="/driver/trip" replace />} />
           <Route path="earnings" element={<DriverEarningsPage />} />
           <Route path="profile" element={<DriverProfilePage />} />
         </Route>
@@ -104,6 +110,7 @@ export const AppRoutes: React.FC = () => (
           <Route path="live-map" element={<LiveMapPage />} />
           <Route path="incidents" element={<IncidentsPage />} />
           <Route path="complaints" element={<DispatcherComplaintsPage />} />
+          <Route path="handled-cases" element={<DispatcherHandledCasesPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Route>
@@ -116,6 +123,8 @@ export const AppRoutes: React.FC = () => (
           <Route path="drivers" element={<DriverApprovalPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="withdrawals" element={<AdminWithdrawalsPage />} />
+          <Route path="refunds" element={<AdminRefundsPage />} />
+          <Route path="coupons" element={<AdminCouponsPage />} />
           <Route path="pricing" element={<AdminPricingPage />} />
           <Route path="master-data" element={<AdminMasterDataPage />} />
           <Route path="profile" element={<ProfilePage />} />
