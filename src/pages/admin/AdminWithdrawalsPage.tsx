@@ -1,363 +1,175 @@
 import React, { useState } from 'react';
-import {
-  CreditCard,
-  Check,
-  X,
-  Search,
-  Filter,
-  DollarSign,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Building,
-  User,
-  Calendar,
-  ArrowUpRight,
-  ShieldAlert,
-} from 'lucide-react';
-import { formatCurrency } from '../../utils/format';
-
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
-import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
-import { REFUND_SOURCE_LABEL } from '../../constants';
-import { msg } from '../../constants/messages';
-import { useAdminRefunds, useWithdrawals } from '../../hooks/useDomainData';
-import { caseService } from '../../services/case.service';
-import { walletService } from '../../services/wallet.service';
+import { Field, TextArea } from '../../components/ui/Field';
+import { Card, DataState, Drawer, KV, PageShell, Pager, Pill, SearchBox, Table, Tabs } from '../../components/ui/kit';
+import { adminApi } from '../../api/endpoints';
+import { useQuery } from '../../api/useQuery';
+import { WITHDRAWAL_STATUS } from '../../api/labels';
+import type { AdminWithdrawalDetailResponse, WalletTransactionStatus } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
-import { formatDateTime } from '../../utils/format';
+import { formatCurrency, formatDateTime } from '../../utils/format';
 
-type PayoutAction = { kind: 'withdrawal' | 'refund'; id: string; approve: boolean; title: string } | null;
+type Tab = WalletTransactionStatus | 'ALL';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'Pending', label: 'Chờ xử lý' },
+  { key: 'Completed', label: 'Đã chuyển' },
+  { key: 'Rejected', label: 'Từ chối' },
+  { key: 'ALL', label: 'Tất cả' },
+];
 
-/** SCR-45 – Duyệt hoàn tiền & rút tiền (UC-ADM-18, UC-ADM-24, GB-19, GB-27) */
+/** UC-ADM-24 – Xử lý yêu cầu rút thu nhập của tài xế */
 export const AdminWithdrawalsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'WITHDRAWALS' | 'REFUNDS'>('WITHDRAWALS');
-  const rawWithdrawals = useWithdrawals();
-  const rawRefunds = useAdminRefunds();
+  const [tab, setTab] = useState<Tab>('Pending');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const filters = { status: tab === 'ALL' ? undefined : tab, search: search.trim() };
+  const q = useQuery(() => adminApi.withdrawals({ ...filters, page, pageSize: 15 }), [JSON.stringify(filters), page]);
+  return (
+    <PageShell
+      title="Duyệt rút tiền tài xế"
+      subtitle="Chuyển khoản thủ công tới tài khoản tài xế rồi ghi mã tham chiếu (GB-27)"
+      toolbar={
+        <div className="w-full flex flex-wrap items-center gap-2">
+          <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
+          <SearchBox className="ml-auto" value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Tên, SĐT tài xế…" />
+        </div>
+      }
+    >
+      <div className="max-w-6xl mx-auto">
+        <Banner kind="info" className="mb-4">
+          Yêu cầu rút tiền do tài xế tạo trên app. Tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu; từ chối thì hoàn số đã xin rút vào thu nhập (5.1).
+        </Banner>
+        <Card>
+          <DataState q={q} empty={(d) => d.items.length === 0}>
+            {(d) => (
+              <>
+                <Table
+                  rows={d.items}
+                  rowKey={(w) => w.transactionId}
+                  onRow={(w) => setOpenId(w.transactionId)}
+                  cols={[
+                    { head: 'Mã GD', cell: (w) => <b>#{w.transactionId}</b> },
+                    { head: 'Tài xế', cell: (w) => <div>{w.driverName}<div className="text-[11px] text-slate-400">{w.driverPhone}</div></div> },
+                    { head: 'Số tiền', className: 'text-right', cell: (w) => <b>{formatCurrency(w.amount)}</b> },
+                    { head: 'Ngân hàng', cell: (w) => (w.bankName ? `${w.bankName} • ${w.bankAccountNumber}` : '—') },
+                    { head: 'Trạng thái', cell: (w) => <Pill tone={WITHDRAWAL_STATUS[w.transactionStatus]} /> },
+                    { head: 'Tạo lúc', cell: (w) => formatDateTime(w.createdAt) },
+                  ]}
+                />
+                <Pager page={d.pageNumber} pageSize={d.pageSize} total={d.totalCount} onChange={setPage} />
+              </>
+            )}
+          </DataState>
+        </Card>
+      </div>
+      {openId && <WithdrawalDrawer id={openId} onClose={() => setOpenId(null)} onChanged={() => q.reload()} />}
+    </PageShell>
+  );
+};
 
-  // View model cho phần hiển thị
-  const withdrawals = rawWithdrawals.map((w) => ({
-    id: w.id,
-    driverName: w.driverName,
-    driverPhone: '',
-    bankName: w.bankName,
-    accountNumber: w.bankAccount,
-    accountHolder: w.driverName.toUpperCase(),
-    amount: w.amount,
-    requestedAt: formatDateTime(w.createdAt),
-    status: (w.status === 'Pending' ? 'PENDING' : w.status === 'Paid' ? 'COMPLETED' : 'REJECTED') as 'PENDING' | 'COMPLETED' | 'REJECTED',
-    transferCode: w.bankReferenceCode,
-    rejectReason: w.rejectReason,
-  }));
-  // GB-19: hoàn do huỷ đơn đi thẳng Admin (Requested); hoàn sự cố/khiếu nại cần Dispatcher đề xuất trước (proposedAmount)
-  const refunds = rawRefunds.map((r) => ({
-    id: r.id,
-    orderCode: r.orderCode,
-    customerName: r.customerName,
-    customerPhone: REFUND_SOURCE_LABEL[r.source],
-    proposedAmount: r.proposedAmount ?? r.requestedAmount,
-    reason: `${r.reason}${r.proposalNote ? ` — Đề xuất: ${r.proposalNote}` : ''}`,
-    dispatcherName: r.source === 'Cancellation' ? 'Tự động (GB-41)' : 'Điều phối viên',
-    status: (r.status === 'Requested' ? 'PENDING' : r.status === 'Approved' || r.status === 'Processed' ? 'APPROVED' : 'REJECTED') as 'PENDING' | 'APPROVED' | 'REJECTED',
-    submittedAt: formatDateTime(r.updatedAt),
-  }));
+const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () => void }> = ({ id, onClose, onChanged }) => {
+  const q = useQuery(() => adminApi.withdrawal(id), [id]);
+  const [act, setAct] = useState<'approve' | 'reject' | null>(null);
+  const w = q.data;
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title={w ? <>Rút tiền #{w.transactionId} <Pill tone={WITHDRAWAL_STATUS[w.transactionStatus]} /></> : 'Rút tiền'}
+      footer={
+        w?.transactionStatus === 'Pending' && (
+          <>
+            <Button size="sm" variant="danger" onClick={() => setAct('reject')}>
+              <XCircle className="w-4 h-4 mr-1" /> Từ chối
+            </Button>
+            <Button size="sm" onClick={() => setAct('approve')}>
+              <CheckCircle2 className="w-4 h-4 mr-1" /> Đã chuyển khoản
+            </Button>
+          </>
+        )
+      }
+    >
+      <DataState q={q}>
+        {(w) => (
+          <>
+            <div className="rounded-2xl border border-slate-200 p-4 text-center">
+              <div className="text-[11px] font-bold text-slate-500">Số tiền rút</div>
+              <div className="text-3xl font-black">{formatCurrency(w.amount)}</div>
+            </div>
+            <Card title="Tài xế">
+              <KV label="Họ tên">{w.driverName}</KV>
+              <KV label="SĐT / Email">
+                {w.driverPhone} • {w.driverEmail}
+              </KV>
+              <KV label="Ví">{w.walletStatus === 'Active' ? 'Hoạt động' : 'Đang khoá'}</KV>
+              <KV label="Thu nhập hiện tại">{formatCurrency(w.currentEarningsBalance)}</KV>
+              <KV label="Ví cọc hiện tại">{formatCurrency(w.currentDepositBalance)}</KV>
+              <KV label="Số dư sau yêu cầu">{formatCurrency(w.balanceAfter)}</KV>
+            </Card>
+            <Card title="Tài khoản nhận">
+              <KV label="Ngân hàng">{w.bankName ?? '—'}</KV>
+              <KV label="Số tài khoản">
+                <span className="font-mono">{w.bankAccountNumber ?? '—'}</span>
+              </KV>
+              <KV label="Chủ tài khoản">{w.bankAccountHolder ?? '—'}</KV>
+            </Card>
+            {w.processedAt && (
+              <Card title="Kết quả">
+                <KV label="Xử lý bởi">{w.processedByName ?? '—'}</KV>
+                <KV label="Lúc">{formatDateTime(w.processedAt)}</KV>
+                {w.referenceCode && <KV label="Mã tham chiếu">{w.referenceCode}</KV>}
+              </Card>
+            )}
+            {act && <ActModal act={act} w={w} onClose={() => setAct(null)} onDone={() => (setAct(null), q.reload(), onChanged())} />}
+          </>
+        )}
+      </DataState>
+    </Drawer>
+  );
+};
 
-  const [action, setAction] = useState<PayoutAction>(null);
-  const [inputValue, setInputValue] = useState('');
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  const zeroRefund = action?.kind === 'refund' && action.approve && (rawRefunds.find((r) => r.id === action.id)?.proposedAmount ?? 0) === 0;
-
-  const open = (a: NonNullable<PayoutAction>) => {
-    setAction(a);
-    setInputValue('');
-    setActionError(null);
-  };
-
-  const handleApproveWithdrawal = (id: string) => open({ kind: 'withdrawal', id, approve: true, title: 'Xác nhận đã chuyển khoản rút tiền' });
-  const handleRejectWithdrawal = (id: string) => open({ kind: 'withdrawal', id, approve: false, title: 'Từ chối yêu cầu rút tiền' });
-  const handleApproveRefund = (id: string) => open({ kind: 'refund', id, approve: true, title: 'Duyệt & xác nhận đã hoàn tiền' });
-  const handleRejectRefund = (id: string) => open({ kind: 'refund', id, approve: false, title: 'Từ chối đề xuất hoàn tiền' });
-
-  const submitAction = async () => {
-    if (!action) return;
-    setPending(true);
-    setActionError(null);
+const ActModal: React.FC<{ act: 'approve' | 'reject'; w: AdminWithdrawalDetailResponse; onClose: () => void; onDone: () => void }> = ({ act, w, onClose, onDone }) => {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (act === 'approve' && !text.trim()) return toast.error('Nhập mã giao dịch ngân hàng.');
+    setBusy(true);
     try {
-      if (action.kind === 'withdrawal') {
-        if (action.approve) await walletService.markWithdrawalPaid(action.id, inputValue);
-        else await walletService.rejectWithdrawal(action.id, inputValue);
-      } else if (action.approve) {
-        // Backend tách quyết định (approve) và xác nhận chuyển khoản (payout) làm 2 bước (GB-19, GB-27)
-        await caseService.approveRefund(action.id);
-        if (!zeroRefund) await caseService.payoutRefund(action.id, inputValue);
-      } else await caseService.rejectRefund(action.id, inputValue);
-      toast.success(msg('MSG04', { record_name: 'quyết định' }));
-      setAction(null);
+      if (act === 'approve') await adminApi.approveWithdrawal(w.transactionId, text.trim());
+      else await adminApi.rejectWithdrawal(w.transactionId, text.trim());
+      toast.success(act === 'approve' ? 'Đã ghi nhận chuyển khoản. Tài xế đã được thông báo.' : 'Đã từ chối, tiền được hoàn vào thu nhập tài xế.');
+      onDone();
     } catch (e) {
-      setActionError(errorMessage(e));
+      toast.error(errorMessage(e));
     } finally {
-      setPending(false);
+      setBusy(false);
     }
   };
-
   return (
-    <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50 select-none">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-amber-500" />
-              <span>Duyệt chi trả rút tiền & Khiếu nại bồi thường</span>
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Xác thực lệnh chuyển khoản ngân hàng tới tài xế và phê duyệt hoàn tiền khách hàng
-            </p>
-          </div>
-
-          {/* Switch Tab */}
-          <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl shadow-xs text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => setActiveTab('WITHDRAWALS')}
-              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 ${
-                activeTab === 'WITHDRAWALS'
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Rút tiền ví tài xế ({withdrawals.filter((w) => w.status === 'PENDING').length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('REFUNDS')}
-              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-2 ${
-                activeTab === 'REFUNDS'
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Bồi thường & Khiếu nại ({refunds.filter((r) => r.status === 'PENDING').length})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tab 1: Driver Withdrawals */}
-        {activeTab === 'WITHDRAWALS' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Yêu cầu chờ chuyển tiền</span>
-                <span className="text-2xl font-black text-amber-600 mt-1 block">
-                  {withdrawals.filter((w) => w.status === 'PENDING').length} lệnh
-                </span>
-                <span className="text-[11px] text-slate-400">Cần thực hiện ủy nhiệm chi</span>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Tổng tiền chờ giải ngân</span>
-                <span className="text-2xl font-black text-slate-900 mt-1 block">
-                  {formatCurrency(
-                    withdrawals.filter((w) => w.status === 'PENDING').reduce((acc, curr) => acc + curr.amount, 0)
-                  )}
-                </span>
-                <span className="text-[11px] text-emerald-600 font-semibold">Tài khoản đối tác</span>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Đã thanh toán thành công</span>
-                <span className="text-2xl font-black text-emerald-600 mt-1 block">
-                  {withdrawals.filter((w) => w.status === 'COMPLETED').length} lệnh
-                </span>
-                <span className="text-[11px] text-slate-400">Đã khớp lệnh ngân hàng</span>
-              </div>
-            </div>
-
-            {/* Withdrawals List Table */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Hàng đợi yêu cầu rút tiền ví tài xế
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">
-                    <tr>
-                      <th className="p-3.5 pl-5">Tài xế yêu cầu</th>
-                      <th className="p-3.5">Ngân hàng thụ hưởng</th>
-                      <th className="p-3.5">Số tài khoản</th>
-                      <th className="p-3.5">Số tiền rút</th>
-                      <th className="p-3.5">Thời gian gửi</th>
-                      <th className="p-3.5">Trạng thái</th>
-                      <th className="p-3.5 pr-5 text-right">Xử lý</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {withdrawals.map((w) => (
-                      <tr key={w.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-3.5 pl-5">
-                          <div className="font-black text-slate-900">{w.driverName}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{w.driverPhone}</div>
-                        </td>
-                        <td className="p-3.5 font-bold text-slate-700">{w.bankName}</td>
-                        <td className="p-3.5">
-                          <div className="font-mono font-bold text-slate-900">{w.accountNumber}</div>
-                          <div className="text-[10px] text-slate-400 uppercase font-semibold">{w.accountHolder}</div>
-                        </td>
-                        <td className="p-3.5 font-black text-sm text-emerald-600">
-                          {formatCurrency(w.amount)}
-                        </td>
-                        <td className="p-3.5 text-slate-500 font-medium">{w.requestedAt}</td>
-                        <td className="p-3.5">
-                          <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                              w.status === 'PENDING'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : w.status === 'COMPLETED'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
-                          >
-                            <span>
-                              {w.status === 'PENDING'
-                                ? 'Chờ chi trả'
-                                : w.status === 'COMPLETED'
-                                ? 'Đã chuyển tiền'
-                                : 'Đã từ chối'}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="p-3.5 pr-5 text-right">
-                          {w.status === 'PENDING' ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleRejectWithdrawal(w.id)}
-                                className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
-                              >
-                                Từ chối
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApproveWithdrawal(w.id)}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
-                              >
-                                Đã chuyển khoản
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] font-mono text-slate-400">
-                              {w.transferCode || '---'}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Refunds & Compensation */}
-        {activeTab === 'REFUNDS' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Đề xuất hoàn tiền & Đền bù khiếu nại từ Điều phối viên
-                </span>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {refunds.map((r) => (
-                  <div key={r.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-xs text-brand-600 bg-orange-50 px-2 py-0.5 rounded-md font-mono">
-                          Mã đơn: {r.orderCode}
-                        </span>
-                        <span className="font-extrabold text-xs text-slate-900">{r.customerName}</span>
-                        <span className="text-slate-400 text-xs">({r.customerPhone})</span>
-                      </div>
-                      <p className="text-xs text-slate-600">
-                        <strong>Lý do bồi hoàn:</strong> {r.reason}
-                      </p>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                        <span>Đề xuất bởi: <strong>{r.dispatcherName}</strong></span>
-                        <span>Thời gian: {r.submittedAt}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Số tiền đề xuất</span>
-                        <span className="text-base font-black text-rose-600">
-                          {formatCurrency(r.proposedAmount)}
-                        </span>
-                      </div>
-
-                      {r.status === 'PENDING' ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleRejectRefund(r.id)}
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs transition cursor-pointer"
-                          >
-                            Bác bỏ
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApproveRefund(r.id)}
-                            className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition cursor-pointer shadow-xs"
-                          >
-                            Duyệt hoàn tiền
-                          </button>
-                        </div>
-                      ) : (
-                        <span
-                          className={`text-xs font-bold px-3 py-1 rounded-xl border ${
-                            r.status === 'APPROVED'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}
-                        >
-                          {r.status === 'APPROVED' ? 'Đã duyệt hoàn' : 'Đã từ chối'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {action && (
-        <Modal
-          open
-          title={action.title}
-          size="sm"
-          onClose={() => setAction(null)}
-          footer={
-            <Button size="sm" variant={action.approve ? 'primary' : 'danger'} isLoading={pending} onClick={submitAction} disabled={!zeroRefund && !inputValue.trim()}>
-              Xác nhận
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            {zeroRefund && <Banner kind="info">Đề xuất không hoàn tiền – chỉ cần xác nhận, không có chuyển khoản.</Banner>}
-            {action.approve && !zeroRefund && <Banner kind="info">Chuyển khoản thủ công trong 3 ngày làm việc và ghi lại mã giao dịch ngân hàng (GB-27).</Banner>}
-            <Field label={action.approve ? 'Mã giao dịch ngân hàng' : 'Lý do từ chối'} required value={inputValue} error={actionError} onChange={(e) => setInputValue(e.target.value)} />
-          </div>
-        </Modal>
+    <Modal
+      open
+      title={act === 'approve' ? 'Xác nhận đã chuyển khoản' : 'Từ chối yêu cầu rút tiền'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button size="sm" variant={act === 'reject' ? 'danger' : 'primary'} onClick={submit} isLoading={busy}>
+            Xác nhận
+          </Button>
+        </>
+      }
+    >
+      {act === 'approve' ? (
+        <Field label="Mã giao dịch ngân hàng" required value={text} onChange={(e) => setText(e.target.value)} maxLength={50} />
+      ) : (
+        <TextArea label="Lý do (gửi cho tài xế)" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
       )}
-    </div>
+    </Modal>
   );
 };

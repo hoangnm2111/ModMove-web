@@ -1,117 +1,171 @@
 import React, { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Pencil, Save } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, confirm, toast } from '../../components/ui/feedback';
+import { Banner, toast } from '../../components/ui/feedback';
+import { Modal } from '../../components/ui/Modal';
 import { Field } from '../../components/ui/Field';
-import { msg } from '../../constants/messages';
-import { calculateFare } from '../../domain/pricing';
-import { useAdminVehicleTypes, usePlatformSettings } from '../../hooks/useDomainData';
-import { catalogService } from '../../services/catalog.service';
+import { Card, DataState, PageShell, Pill, Table } from '../../components/ui/kit';
+import { adminApi } from '../../api/endpoints';
+import { useQuery } from '../../api/useQuery';
+import type { PlatformSettingsResponse, VehicleTypePricingResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
-import { VehicleType } from '../../types/order.types';
 import { formatCurrency } from '../../utils/format';
 
-type FareRow = Pick<VehicleType, 'id' | 'name' | 'baseFare' | 'pricePerKm' | 'minimumFare' | 'isActive'>;
+const ON = { label: 'Đang dùng', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+const OFF = { label: 'Đã tắt', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
 
-/** SCR-35 – Cấu hình giá cước & hoa hồng (GB-29, GB-33) */
+/** UC-ADM-10..13 – Bảng cước, phí dịch vụ, hoa hồng (GB-29, GB-33, C8) */
 export const AdminPricingPage: React.FC = () => {
-  const vehicles = useAdminVehicleTypes();
-  const settings = usePlatformSettings();
-  const [rows, setRows] = useState<FareRow[]>([]);
-  const [commissionPct, setCommissionPct] = useState(settings.commissionRate * 100);
-  const [loadingFee, setLoadingFee] = useState(settings.loadingFee);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => setRows(vehicles.map(({ id, name, baseFare, pricePerKm, minimumFare, isActive }) => ({ id, name, baseFare, pricePerKm, minimumFare, isActive }))), [vehicles]);
-  useEffect(() => {
-    setCommissionPct(Math.round(settings.commissionRate * 1000) / 10);
-    setLoadingFee(settings.loadingFee);
-  }, [settings]);
-
-  const edit = (id: string, key: 'baseFare' | 'pricePerKm' | 'minimumFare', value: number) =>
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
-
-  const save = async () => {
-    if (!(await confirm({ title: 'Lưu cấu hình giá', message: `${msg('MSG62', { action_name: 'cập nhật bảng giá và hoa hồng' })} Giá mới áp dụng cho đơn gửi sau thời điểm này; hoa hồng mới áp dụng cho đơn được nhận sau thời điểm này (GB-33).` }))) return;
-    setSaving(true);
-    setError(null);
+  const q = useQuery(() => adminApi.pricing(), []);
+  const [edit, setEdit] = useState<VehicleTypePricingResponse | null>(null);
+  const toggle = async (v: VehicleTypePricingResponse) => {
     try {
-      for (const r of rows) {
-        await catalogService.updateVehicleTypeFares(r.id, { baseFare: r.baseFare, pricePerKm: r.pricePerKm, minimumFare: r.minimumFare });
-      }
-      await catalogService.saveSettings({ commissionRate: commissionPct / 100, loadingFee });
-      toast.success(msg('MSG04', { record_name: 'bảng giá' }));
+      await adminApi.setVehicleTypeActive(v.id, !v.isActive);
+      toast.success(`${v.isActive ? 'Đã tắt' : 'Đã bật'} loại xe ${v.name}.`);
+      await q.reload();
     } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
+      toast.error(errorMessage(e));
     }
   };
-
   return (
-    <div className="flex-1 h-full overflow-y-auto bg-slate-50 min-w-0">
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
-        <header className="flex items-center gap-3">
-          <div className="mr-auto">
-            <h1 className="text-lg font-black text-slate-900">Cấu hình giá cước & hoa hồng</h1>
-            <p className="text-xs text-slate-500">Cước = max(Tối thiểu, Mở cửa + Giá/km × km) + Bốc xếp − Giảm giá. Không phụ phí giờ cao điểm (GB-29).</p>
-          </div>
-          <Button size="sm" onClick={save} isLoading={saving}>
-            <Save className="w-4 h-4 mr-1.5" /> Lưu cấu hình
-          </Button>
-        </header>
-
-        {error && <Banner kind="error">{error}</Banner>}
-
-        <section className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500 text-left">
-              <tr>
-                <th className="p-3">Loại xe</th>
-                <th className="p-3">Giá mở cửa</th>
-                <th className="p-3">Giá / km</th>
-                <th className="p-3">Cước tối thiểu</th>
-                <th className="p-3">Ví dụ 10 km</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
-                  <td className="p-3 font-bold text-slate-800">
-                    {r.name} {!r.isActive && <span className="text-[10px] text-slate-400">(ngừng hoạt động)</span>}
-                  </td>
-                  {(['baseFare', 'pricePerKm', 'minimumFare'] as const).map((k) => (
-                    <td key={k} className="p-2">
-                      <input
-                        type="number"
-                        min={0}
-                        step={1000}
-                        aria-label={`${r.name} ${k}`}
-                        value={r[k]}
-                        onChange={(e) => edit(r.id, k, Number(e.target.value))}
-                        className="w-28 px-2 py-1.5 rounded-lg border border-slate-200 font-semibold"
-                      />
-                    </td>
-                  ))}
-                  <td className="p-3 font-black text-slate-900">{formatCurrency(calculateFare({ vehicle: r, distanceKm: 10, durationMins: 25, loadingService: false, loadingFee }).total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="grid sm:grid-cols-2 gap-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
-            <Field label="Tỷ lệ hoa hồng nền tảng (%) – UC-ADM-13" type="number" min={0} max={50} step={0.5} value={commissionPct} onChange={(e) => setCommissionPct(Number(e.target.value))} />
-            <p className="text-[11px] text-slate-500">Hoa hồng = tỷ lệ × cước sau giảm giá, chốt khi tài xế nhận đơn (GB-14). Mặc định 10%.</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
-            <Field label="Phí dịch vụ bốc xếp (đ) – UC-ADM-12" type="number" min={0} step={5000} value={loadingFee} onChange={(e) => setLoadingFee(Number(e.target.value))} />
-            <p className="text-[11px] text-slate-500">Áp dụng khi khách chọn bốc xếp 2 đầu.</p>
-          </div>
-        </section>
+    <PageShell title="Bảng cước & hoa hồng" subtitle="Giá mới áp dụng cho đơn đặt sau thời điểm thay đổi; đơn đã đặt giữ nguyên giá">
+      <div className="max-w-6xl mx-auto space-y-4">
+        <Banner kind="info">
+          Công thức (GB-29): <b>Tổng cước = max(Giá tối thiểu, Giá mở cửa + Giá/km × km) + Phí bốc xếp (nếu chọn) − Giảm giá</b>. Không có phụ phí giờ cao điểm hay hàng cồng kềnh (B2).
+        </Banner>
+        <DataState q={q}>
+          {(p) => (
+            <>
+              <Card title="Giá theo loại xe (UC-ADM-11)">
+                <Table
+                  rows={p.vehicleTypes}
+                  rowKey={(v) => v.id}
+                  cols={[
+                    { head: 'Loại xe', cell: (v) => <b>{v.name}</b> },
+                    { head: 'Tải trọng', cell: (v) => `${v.maxLoadWeightKg.toLocaleString('vi-VN')} kg` },
+                    { head: 'Giá mở cửa', className: 'text-right', cell: (v) => formatCurrency(v.baseFare) },
+                    { head: 'Giá / km', className: 'text-right', cell: (v) => formatCurrency(v.pricePerKm) },
+                    { head: 'Tối thiểu', className: 'text-right', cell: (v) => formatCurrency(v.minimumFare) },
+                    { head: 'Ví dụ 10 km', className: 'text-right', cell: (v) => <span className="text-slate-500">{formatCurrency(Math.max(v.minimumFare, v.baseFare + v.pricePerKm * 10))}</span> },
+                    { head: 'Trạng thái', cell: (v) => <Pill tone={v.isActive ? ON : OFF} /> },
+                    {
+                      head: '',
+                      className: 'text-right',
+                      cell: (v) => (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEdit(v)}>
+                            <Pencil className="w-3.5 h-3.5 mr-1" /> Sửa giá
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => toggle(v)}>
+                            {v.isActive ? 'Tắt' : 'Bật'}
+                          </Button>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+              <SettingsCard s={p.settings} onSaved={q.reload} />
+            </>
+          )}
+        </DataState>
       </div>
-    </div>
+      {edit && <FareModal v={edit} onClose={() => setEdit(null)} onDone={() => (setEdit(null), q.reload())} />}
+    </PageShell>
+  );
+};
+
+const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promise<void> }> = ({ s, onSaved }) => {
+  const [f, setF] = useState({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.minCodDeposit, radius: s.matchingRadiusKm });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setF({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.minCodDeposit, radius: s.matchingRadiusKm }), [s]);
+  const save = async () => {
+    const patch: Partial<PlatformSettingsResponse> = {};
+    const rate = Math.round(f.commission * 100) / 10000;
+    if (rate !== s.commissionRate) patch.commissionRate = rate;
+    if (f.loadingFee !== s.loadingFee) patch.loadingFee = f.loadingFee;
+    if (f.minCod !== s.minCodDeposit) patch.minCodDeposit = f.minCod;
+    if (f.radius !== s.matchingRadiusKm) patch.matchingRadiusKm = f.radius;
+    if (Object.keys(patch).length === 0) return toast.info('Chưa có thay đổi.');
+    if (rate < 0 || rate >= 1) return toast.error('Tỷ lệ hoa hồng phải từ 0% đến dưới 100%.');
+    setBusy(true);
+    try {
+      await adminApi.updateSettings(patch);
+      toast.success('Đã lưu tham số nền tảng.');
+      await onSaved();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Tham số nền tảng (UC-ADM-12/13)"
+      actions={
+        <Button size="sm" onClick={save} isLoading={busy}>
+          <Save className="w-4 h-4 mr-1" /> Lưu thay đổi
+        </Button>
+      }
+    >
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Field label="Hoa hồng nền tảng (%)" type="number" step="0.1" value={f.commission} onChange={(e) => setF({ ...f, commission: Number(e.target.value) })} hint="Trừ trên cước sau giảm giá; chốt khi tài xế nhận đơn" />
+        <Field label="Phí bốc xếp (VND)" type="number" value={f.loadingFee} onChange={(e) => setF({ ...f, loadingFee: Number(e.target.value) })} hint="Cộng vào cước khi khách chọn bốc xếp" />
+        <Field label="Ký quỹ COD tối thiểu (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận đơn tiền mặt (GB-16)" />
+        <Field label="Bán kính ghép đơn (km)" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} hint="Tài xế thấy đơn trong bán kính này (GB-08)" />
+      </div>
+      <p className="text-[11px] text-amber-700 mt-3">
+        Không đổi được hoa hồng khi còn đơn đang chạy (từ “Tài xế đã nhận” tới trước “Đã giao”) – hệ thống sẽ báo lỗi COMMISSION_RATE_LOCKED (C8).
+      </p>
+    </Card>
+  );
+};
+
+const FareModal: React.FC<{ v: VehicleTypePricingResponse; onClose: () => void; onDone: () => void }> = ({ v, onClose, onDone }) => {
+  const [f, setF] = useState({ baseFare: v.baseFare, pricePerKm: v.pricePerKm, minimumFare: v.minimumFare });
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (f.baseFare < 0 || f.pricePerKm < 0 || f.minimumFare < 0) return toast.error('Giá không được âm.');
+    setBusy(true);
+    try {
+      await adminApi.updateFares(v.id, f.baseFare, f.pricePerKm, f.minimumFare);
+      toast.success(`Đã cập nhật giá ${v.name}.`);
+      onDone();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      title={`Sửa giá – ${v.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button size="sm" onClick={submit} isLoading={busy}>
+            Lưu
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Giá mở cửa (VND)" type="number" value={f.baseFare} onChange={(e) => setF({ ...f, baseFare: Number(e.target.value) })} />
+        <Field label="Giá mỗi km (VND)" type="number" value={f.pricePerKm} onChange={(e) => setF({ ...f, pricePerKm: Number(e.target.value) })} />
+        <Field label="Giá tối thiểu (VND)" type="number" value={f.minimumFare} onChange={(e) => setF({ ...f, minimumFare: Number(e.target.value) })} />
+        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs space-y-0.5">
+          {[3, 10, 25].map((km) => (
+            <div key={km} className="flex justify-between">
+              <span>{km} km</span>
+              <b>{formatCurrency(Math.max(f.minimumFare, f.baseFare + f.pricePerKm * km))}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 };
