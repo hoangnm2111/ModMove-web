@@ -1,7 +1,8 @@
+import { useSidebarStore } from '../store/useSidebarStore';
 import React, { createContext, useContext, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SuspenseOutlet } from '../components/SuspenseOutlet';
-import { Clock, LogIn, LogOut, Menu, Radio, Truck, User as UserIcon, X } from 'lucide-react';
+import { Clock, LogOut, Menu, Radio, Star, Truck, User as UserIcon, X } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { toast } from '../components/ui/feedback';
 import { msg } from '../constants/messages';
@@ -31,7 +32,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { path: '/booking', label: 'Đặt xe vận chuyển', Icon: Truck, guest: true },
   { path: '/tracking', label: 'Theo dõi trực tiếp', Icon: Radio, guest: false },
-  { path: '/orders', label: 'Lịch sử đơn hàng', Icon: Clock, guest: false },
+  { path: '/orders', label: 'Đơn hàng của tôi', Icon: Clock, guest: false },
+  { path: '/ratings', label: 'Đánh giá của tôi', Icon: Star, guest: false },
   { path: '/profile', label: 'Hồ sơ & bảo mật', Icon: UserIcon, guest: false },
 ];
 
@@ -39,13 +41,12 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { user, isAuthenticated, logout } = useAuthStore();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const toggleSidebar = () => setIsSidebarOpen((v) => !v);
+  const { isSidebarOpen, setIsSidebarOpen, toggleSidebar: toggleShared } = useSidebarStore();
+  const toggleSidebar = toggleShared;
 
   const items = NAV_ITEMS.filter((i) => isAuthenticated || i.guest);
 
   const go = (path: string) => {
-    if (window.innerWidth < 768) setIsSidebarOpen(false);
     navigate(path);
   };
 
@@ -77,7 +78,7 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-2 text-sm">
         {items.map(({ path, label, Icon }) => {
           const active = pathname.startsWith(path);
           return (
@@ -86,7 +87,7 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
               type="button"
               onClick={() => go(path)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition ${
-                active ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300' : 'hover:bg-slate-50 text-slate-700 font-semibold'
+                active ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300 shadow-sm' : 'bg-white border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-semibold'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -103,7 +104,7 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
           </button>
         ) : (
           <button type="button" onClick={() => navigate('/login?redirect=/booking')} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs">
-            <LogIn className="w-4 h-4" /> Đăng nhập / Đăng ký
+            Đăng nhập / Đăng ký
           </button>
         )}
       </div>
@@ -139,7 +140,7 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
 
         {isSidebarOpen && (
           <div className="md:hidden fixed inset-0 z-50 flex">
-            <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-slate-900/40" />
+            <div className="fixed inset-0 bg-slate-900/40" />
             <div className="relative w-72 h-full shadow-2xl z-50">{sidebar}</div>
           </div>
         )}
