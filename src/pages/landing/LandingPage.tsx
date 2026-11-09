@@ -8,22 +8,23 @@ import {
   ShieldCheck,
   Clock,
   MapPin,
-  ArrowRight,
   Home,
   User,
-  LogIn,
   LogOut,
   Package,
   Layers,
   CheckCircle2,
   X,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
+import { publicApi } from '../../api/endpoints';
+import { errorMessage } from '../../services/mock/storage';
 import { useAuthStore, getRoleHomePath } from '../../store/useAuthStore';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
 import { AddressInput } from '../../features/booking/AddressInput';
-import { GeoPoint, mapService } from '../../services/map.service';
-import { calculateFare } from '../../domain/pricing';
+import { GeoPoint } from '../../services/map.service';
 import { toast } from '../../components/ui/feedback';
 import { formatCurrency } from '../../utils/format';
 
@@ -109,18 +110,44 @@ export const LandingPage: React.FC = () => {
   };
 
   const selectedVehicle = vehicleTypes.find((v) => v.id === selectedVehicleId) ?? vehicleTypes[0];
-  /** GB-29: khi đã chọn đủ 2 điểm thì tính theo quãng đường, ngược lại hiển thị cước tối thiểu */
-  const getEstimatedPrice = () => {
-    if (!selectedVehicle) return 0;
-    if (!pickup.lat || !dropoff.lat) return selectedVehicle.minimumFare;
-    const route = mapService.estimateRouteSync(pickup, dropoff);
-    return calculateFare({ vehicle: selectedVehicle, ...route, loadingService: false, loadingFee }).total;
-  };
+  /** GB-29: đủ 2 địa chỉ → giá thật từ backend (POST /public/FareEstimate, MapVina); chưa đủ → cước tối thiểu */
+  const [quote, setQuote] = useState<{ total: number; km: number } | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  useEffect(() => {
+    setQuote(null);
+    if (!selectedVehicle || pickup.address.trim().length < 5 || dropoff.address.trim().length < 5) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setQuoting(true);
+      try {
+        const r = await publicApi.fareEstimate({
+          vehicleTypeId: Number(selectedVehicle.id),
+          pickupAddress: pickup.address.trim(),
+          dropoffAddress: dropoff.address.trim(),
+          weightKg: 1,
+          lengthCm: 1,
+          widthCm: 1,
+          heightCm: 1,
+          hasLoadingService: false,
+        });
+        if (!cancelled) setQuote({ total: r.totalFee, km: r.distanceKm });
+      } catch {
+        if (!cancelled) setQuote(null);
+      } finally {
+        if (!cancelled) setQuoting(false);
+      }
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [selectedVehicle?.id, pickup.address, dropoff.address]);
+  const getEstimatedPrice = () => quote?.total ?? selectedVehicle?.minimumFare ?? 0;
 
   // Navigate to Shipment Creation (/booking) with pre-filled inputs (SRS 1.1.1)
   const handleBookNow = () => {
-    if (pickup.lat) setPickup(pickup);
-    if (dropoff.lat) setDropoff(dropoff);
+    if (pickup.address.trim()) setPickup(pickup);
+    if (dropoff.address.trim()) setDropoff(dropoff);
     if (selectedVehicleId) update({ vehicleTypeId: selectedVehicleId });
     navigate('/booking');
   };
@@ -157,7 +184,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Center: Navigation Menu with Dropdowns (SRS 1.1.1) */}
-          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-xs sm:text-sm font-bold text-slate-700">
+          <nav className="hidden lg:flex items-center gap-3 text-xs sm:text-sm font-bold text-slate-700">
             {/* Drivers menu – SRS III.1.1.1: chỉ mở đăng ký tài xế trên Driver App */}
             <div
               className="relative"
@@ -167,7 +194,7 @@ export const LandingPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleDriverRegister()}
-                className="flex items-center gap-1 py-2 hover:text-blue-600 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
               >
                 <span>Tài xế</span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -206,14 +233,20 @@ export const LandingPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              /* Sign In Button (Đăng nhập) with arrow icon as in image6 */
-              <button
-                onClick={() => navigate('/login')}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-slate-700 hover:text-blue-600 transition cursor-pointer"
-              >
-                <LogIn className="w-4 h-4 text-slate-500" />
-                <span>Đăng nhập</span>
-              </button>
+              <>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <span>Đăng ký</span>
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <span>Đăng nhập</span>
+                </button>
+              </>
             )}
 
             {/* Deliver Now Button (Giao hàng ngay) - Blue rounded button */}
@@ -223,7 +256,6 @@ export const LandingPage: React.FC = () => {
               className="bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Giao hàng ngay</span>
-              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -306,7 +338,6 @@ export const LandingPage: React.FC = () => {
                 className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs sm:text-sm px-6 py-3 rounded-xl shadow-lg shadow-orange-500/30 flex items-center gap-2 transition hover:scale-102 cursor-pointer"
               >
                 <span>Đặt xe tải ngay</span>
-                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
 
@@ -380,9 +411,9 @@ export const LandingPage: React.FC = () => {
 
             {/* Box 3: Ước tính từ (Read-only price) */}
             <div className="md:col-span-2 bg-blue-50/60 border border-blue-100 rounded-xl h-12 px-3 flex flex-col justify-center text-center">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">ƯỚC TÍNH TỪ</div>
+              <div className="text-[10px] font-bold text-slate-500 uppercase">{quote ? `ƯỚC TÍNH • ${quote.km} KM` : 'ƯỚC TÍNH TỪ'}</div>
               <div className="text-base sm:text-lg font-black text-blue-600 leading-tight">
-                {formatCurrency(getEstimatedPrice())}
+                {quoting ? 'Đang tính…' : formatCurrency(getEstimatedPrice())}
               </div>
             </div>
 
@@ -399,6 +430,55 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      <section className="relative px-3 sm:px-8 pb-10 max-w-[1440px] mx-auto w-full">
+        <SupportRequestForm />
+      </section>
     </div>
+  );
+};
+
+/** UC-GST-05 – Gửi yêu cầu hỗ trợ: POST /public/SupportRequests { fullName, contact, content } */
+const SupportRequestForm: React.FC = () => {
+  const { user } = useAuthStore();
+  const [fullName, setFullName] = useState(user?.fullName ?? '');
+  const [contact, setContact] = useState(user?.email ?? '');
+  const [content, setContent] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim() || !contact.trim() || !content.trim()) return toast.error('Vui lòng nhập đủ họ tên, liên hệ và nội dung.');
+    setBusy(true);
+    try {
+      await publicApi.supportRequest({ fullName: fullName.trim(), contact: contact.trim(), content: content.trim() });
+      toast.success('Đã gửi yêu cầu hỗ trợ. Đội ngũ ModMove sẽ liên hệ lại với bạn.');
+      setContent('');
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
+  return (
+    <form onSubmit={submit} className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm grid md:grid-cols-3 gap-5">
+      <div>
+        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
+          <MessageCircle className="w-5 h-5" />
+        </div>
+        <h2 className="text-lg font-black text-slate-900">Cần tư vấn trước khi đặt?</h2>
+        <p className="text-xs text-slate-500 mt-1">Gửi câu hỏi về giá, loại xe, khu vực phục vụ… chúng tôi sẽ phản hồi qua email hoặc số điện thoại bạn để lại.</p>
+      </div>
+      <div className="md:col-span-2 grid sm:grid-cols-2 gap-3">
+        <input className={inp} placeholder="Họ và tên *" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={100} />
+        <input className={inp} placeholder="Email hoặc số điện thoại *" value={contact} onChange={(e) => setContact(e.target.value)} maxLength={150} />
+        <textarea className={`${inp} sm:col-span-2`} rows={3} placeholder="Nội dung cần hỗ trợ *" value={content} onChange={(e) => setContent(e.target.value)} maxLength={2000} />
+        <div className="sm:col-span-2 flex justify-end">
+          <button disabled={busy} className="h-11 px-5 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white font-extrabold text-sm disabled:opacity-60 flex items-center gap-1.5">
+            <Send className="w-4 h-4" /> {busy ? 'Đang gửi…' : 'Gửi yêu cầu hỗ trợ'}
+          </button>
+        </div>
+      </div>
+    </form>
   );
 };
