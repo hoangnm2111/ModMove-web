@@ -1,344 +1,302 @@
 import React, { useState } from 'react';
-import {
-  FileCheck2,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Eye,
-  Star,
-  Search,
-  Filter,
-  DollarSign,
-  User,
-  Phone,
-  Calendar,
-  Send,
-  MessageSquare,
-  Package,
-} from 'lucide-react';
-import { formatCurrency } from '../../utils/format';
-
-import { toast } from '../../components/ui/feedback';
-import { REFUND_SOURCE_LABEL, REFUND_STATUS_LABEL } from '../../constants';
-import { msg } from '../../constants/messages';
-import { useDispatcherComplaints } from '../../hooks/useDomainData';
-import { caseService } from '../../services/case.service';
+import { HelpCircle, Phone, Send, Star } from 'lucide-react';
+import { Button } from '../../components/Button';
+import { Banner, toast } from '../../components/ui/feedback';
+import { Modal } from '../../components/ui/Modal';
+import { TextArea } from '../../components/ui/Field';
+import { Card, DataState, Drawer, KV, PageShell, Pager, PhotoGrid, Pill, SearchBox, SectionTitle, StatusPill, StatusTimeline, Table, Tabs, cx } from '../../components/ui/kit';
+import { dispatcherApi } from '../../api/endpoints';
+import { useQuery } from '../../api/useQuery';
+import { COMPLAINT_STAGE, INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PROOF_STATUS, REFUND_STATUS } from '../../api/labels';
+import type { ComplaintStage } from '../../api/types';
+import { ProposeModal } from '../../features/dispatcher/IncidentDrawer';
+import { DispatcherOrderDrawer } from '../../features/dispatcher/DispatcherOrderDrawer';
 import { errorMessage } from '../../services/mock/storage';
-import { Refund } from '../../types/case.types';
-import { formatDateTime } from '../../utils/format';
+import { formatCurrency, formatDateTime } from '../../utils/format';
 
-type ViewStatus = 'PENDING_PROPOSAL' | 'PROPOSED_TO_ADMIN' | 'REJECTED';
-const toView = (r: Refund & { stage?: string }): ViewStatus =>
-  r.stage === 'ProposedToAdmin' ? 'PROPOSED_TO_ADMIN' : r.status === 'Rejected' || r.status === 'Withdrawn' ? 'REJECTED' : 'PENDING_PROPOSAL';
+type StageTab = ComplaintStage | 'ALL';
+const TABS: { key: StageTab; label: string }[] = [
+  { key: 'NeedsReview', label: 'Cần xem xét' },
+  { key: 'CustomerReplied', label: 'Khách đã trả lời' },
+  { key: 'WaitingForCustomer', label: 'Chờ khách' },
+  { key: 'ProposedToAdmin', label: 'Đã đề xuất Admin' },
+  { key: 'Closed', label: 'Đã đóng' },
+  { key: 'ALL', label: 'Tất cả' },
+];
 
-/** SCR-42 – Xử lý khiếu nại (UC-DIS-08/09/11–15/17). Hoàn tiền do sự cố xem trong màn Sự cố; hoàn do huỷ đơn đi thẳng Admin. */
+/** UC-DIS-11..15 – Khiếu nại: GET /dispatcher/Complaints */
 export const DispatcherComplaintsPage: React.FC = () => {
-  const refunds = useDispatcherComplaints();
-
-  const complaints = refunds.map((r) => {
-    return {
-      id: r.id,
-      raw: r,
-      orderCode: r.orderCode,
-      customerName: r.customerName,
-      customerPhone: '',
-      driverName: '—',
-      driverPhone: '',
-      ratingScore: 0,
-      complaintType: `${REFUND_SOURCE_LABEL[r.source]} • ${REFUND_STATUS_LABEL[r.status]}`,
-      complaintContent: `${r.reason}${r.infoReply ? `\n— Khách bổ sung: ${r.infoReply}` : ''}`,
-      damageEvidenceUrl: r.evidence[0] ?? '',
-      podEvidenceUrl: '',
-      orderTotalFee: r.requestedAmount,
-      status: toView(r),
-      proposedRefundAmount: r.proposedAmount,
-      proposalNote: r.proposalNote,
-      submittedAt: formatDateTime(r.createdAt),
-    };
-  });
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedComplaint = complaints.find((c) => c.id === selectedId) ?? complaints[0];
-  const setSelectedComplaint = (c: { id: string }) => setSelectedId(c.id);
-
-  const [proposedAmount, setProposedAmount] = useState<number>(0);
-  const [proposalNote, setProposalNote] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
-    setIsSubmitting(true);
-    try {
-      await fn();
-      toast.success(ok);
-      setProposalNote('');
-      setProposedAmount(0);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  /** UC-DIS-09/15/17 – GB-42: đề xuất ≤ số tiền khách yêu cầu */
-  const handleSubmitProposal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedComplaint) return;
-    run(() => caseService.proposeRefund(selectedComplaint.id, proposedAmount, proposalNote), msg('MSG59', { case_type: 'Yêu cầu', case_id: selectedComplaint.id, status: 'Chờ Admin duyệt', additional_information: '' }));
-  };
-
-  /** Đề xuất không hoàn tiền (vẫn cần Admin chốt – GB-19) */
-  const handleRejectComplaint = () => {
-    if (!selectedComplaint) return;
-    run(() => caseService.proposeRefund(selectedComplaint.id, 0, proposalNote || 'Không đủ căn cứ hoàn tiền sau khi đối chiếu ảnh kiểm hàng và POD.'), 'Đã gửi đề xuất không hoàn tiền tới Admin.');
-  };
-
-  /** UC-DIS-14 */
-  const handleRequestInfo = () => {
-    if (!selectedComplaint) return;
-    const question = window.prompt('Nội dung cần khách bổ sung:') ?? '';
-    if (!question.trim()) return;
-    run(() => caseService.requestMoreInfo(selectedComplaint.id, question), msg('MSG60', { case_type: 'Yêu cầu', case_id: selectedComplaint.id, requested_information: question }));
-  };
-
-  if (!selectedComplaint) {
-    return <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Không có khiếu nại / yêu cầu hoàn tiền nào.</div>;
-  }
-
-  const awaitingInfo = selectedComplaint.raw.stage === 'WaitingForCustomer';
+  const [tab, setTab] = useState<StageTab>('NeedsReview');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const filters = { stage: tab === 'ALL' ? undefined : tab, search: search.trim() };
+  const q = useQuery(() => dispatcherApi.complaints({ ...filters, page, pageSize: 15 }), [JSON.stringify(filters), page], { refreshMs: 30_000 });
 
   return (
-    <div className="flex h-full w-full bg-slate-100 overflow-hidden select-none">
-      {/* ========================================================================= */}
-      {/* LEFT COLUMN: COMPLAINTS LIST */}
-      {/* ========================================================================= */}
-      <div className="w-80 sm:w-96 bg-white border-r border-slate-200 flex flex-col h-full flex-shrink-0 shadow-sm z-10">
-        <div className="p-4 border-b border-slate-200 bg-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
-                <FileCheck2 className="w-4 h-4" />
-              </div>
-              <div>
-                <h1 className="font-black text-sm text-slate-900">Thẩm định khiếu nại</h1>
-                <p className="text-[11px] text-slate-400">Đề xuất hoàn tiền chuyển Admin duyệt</p>
-              </div>
-            </div>
-            <span className="text-xs bg-amber-100 text-amber-700 font-extrabold px-2 py-0.5 rounded-full">
-              {complaints.filter((c) => c.status === 'PENDING_PROPOSAL').length} chờ xử lý
-            </span>
-          </div>
+    <PageShell
+      title="Khiếu nại của khách"
+      subtitle="Đối chiếu bằng chứng, xin thêm thông tin và đề xuất số tiền hoàn lên Admin"
+      toolbar={
+        <div className="w-full flex flex-wrap items-center gap-2">
+          <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
+          <SearchBox className="ml-auto" value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Mã đơn, tên khách…" />
         </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {complaints.map((c) => {
-            const isSelected = selectedComplaint.id === c.id;
-            return (
-              <div
-                key={c.id}
-                onClick={() => {
-                  setSelectedComplaint(c);
-                  if (c.proposedRefundAmount) setProposedAmount(c.proposedRefundAmount);
-                  if (c.proposalNote) setProposalNote(c.proposalNote);
-                }}
-                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition relative group ${
-                  isSelected
-                    ? 'border-sky-500 bg-sky-50/50 shadow-sm'
-                    : 'border-slate-200/90 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-mono font-bold text-xs text-sky-700 bg-sky-100/80 px-1.5 py-0.5 rounded">
-                    {c.orderCode}
-                  </span>
-                  <span
-                    className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                      c.status === 'PENDING_PROPOSAL'
-                        ? 'bg-amber-100 text-amber-700'
-                        : c.status === 'PROPOSED_TO_ADMIN'
-                        ? 'bg-sky-100 text-sky-700'
-                        : 'bg-rose-100 text-rose-700'
-                    }`}
-                  >
-                    {c.status === 'PENDING_PROPOSAL'
-                      ? 'Chưa đề xuất'
-                      : c.status === 'PROPOSED_TO_ADMIN'
-                      ? 'Đã chuyển Admin'
-                      : 'Đã bác bỏ'}
-                  </span>
-                </div>
-
-                <div className="font-black text-xs text-slate-900 mb-0.5">{c.customerName}</div>
-                <div className="text-xs text-slate-600 font-semibold line-clamp-1">{c.complaintType}</div>
-
-                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1 text-amber-600 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                    <span>{c.ratingScore} sao</span>
-                  </span>
-                  <span>{c.submittedAt}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      }
+    >
+      <div className="max-w-7xl mx-auto">
+        <Card>
+          <DataState q={q} empty={(d) => d.items.length === 0}>
+            {(d) => (
+              <>
+                <Table
+                  rows={d.items}
+                  rowKey={(r) => r.id}
+                  onRow={(r) => setOpenId(r.id)}
+                  cols={[
+                    { head: 'Mã', cell: (r) => <b>#{r.id}</b> },
+                    { head: 'Đơn', cell: (r) => <span className="font-bold">{r.orderCode}</span> },
+                    { head: 'Khách', cell: (r) => r.customerName },
+                    {
+                      head: 'Lý do',
+                      cell: (r) => (
+                        <div className="max-w-xs">
+                          <div className="font-bold">{r.reasonCodeName ?? r.reasonCode}</div>
+                          <div className="text-slate-500 truncate">{r.reason}</div>
+                        </div>
+                      ),
+                    },
+                    {
+                      head: 'Số tiền',
+                      className: 'text-right',
+                      cell: (r) => (
+                        <div>
+                          <div className="font-black">{formatCurrency(r.requestedAmount)}</div>
+                          {r.proposedAmount !== null && <div className="text-[11px] text-blue-700">Đề xuất {formatCurrency(r.proposedAmount)}</div>}
+                        </div>
+                      ),
+                    },
+                    { head: 'Giai đoạn', cell: (r) => <Pill tone={COMPLAINT_STAGE[r.stage]} /> },
+                    { head: 'Gửi lúc', cell: (r) => formatDateTime(r.createdAt) },
+                  ]}
+                />
+                <Pager page={d.pageNumber} pageSize={d.pageSize} total={d.totalCount} onChange={setPage} />
+              </>
+            )}
+          </DataState>
+        </Card>
       </div>
+      {openId && <ComplaintDrawer id={openId} onClose={() => setOpenId(null)} onChanged={() => q.reload()} />}
+    </PageShell>
+  );
+};
 
-      {/* ========================================================================= */}
-      {/* RIGHT COLUMN: CROSS-VERIFICATION & PROPOSAL CONSOLE */}
-      {/* ========================================================================= */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="bg-orange-50 text-brand-600 border border-orange-200 text-xs font-black px-2 py-0.5 rounded">
-                    MÃ ĐƠN: #{selectedComplaint.orderCode}
-                  </span>
-                  <span className="text-xs text-slate-500">Khách yêu cầu: <strong>{formatCurrency(selectedComplaint.orderTotalFee)}</strong></span>
-                </div>
-                <h2 className="text-lg font-black text-slate-900">{selectedComplaint.complaintType}</h2>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
-                  <Phone className="w-4 h-4 text-sky-600" />
-                  <span>Khách: {selectedComplaint.customerPhone}</span>
-                </span>
-                <span className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 select-text">
-                  <Phone className="w-4 h-4 text-emerald-600" />
-                  <span>Tài xế: {selectedComplaint.driverPhone}</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Complaint Text & Evidence Photo Comparison */}
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  NỘI DUNG PHẢN ÁNH CỦA KHÁCH HÀNG:
-                </span>
-                <p className="text-xs text-slate-800 leading-relaxed font-medium">
-                  "{selectedComplaint.complaintContent}"
-                </p>
-              </div>
-
-              {/* Side-by-side Evidence Check */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span>Ảnh khách hàng cung cấp (Bằng chứng hư hại):</span>
-                  </span>
-                  <div className="h-64 rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
-                    <img
-                      src={selectedComplaint.damageEvidenceUrl}
-                      alt="Ảnh hư hại"
-                      className="max-h-full max-w-full object-contain"
-                    />
+const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () => void }> = ({ id, onClose, onChanged }) => {
+  const q = useQuery(() => dispatcherApi.complaint(id), [id]);
+  const [action, setAction] = useState<'info' | 'propose' | null>(null);
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const c = q.data;
+  const editable = c && c.refundStatus === 'Requested' && ['NeedsReview', 'CustomerReplied', 'WaitingForCustomer'].includes(c.stage);
+  const after = async (msg: string) => {
+    toast.success(msg);
+    setAction(null);
+    await q.reload();
+    onChanged();
+  };
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      width="max-w-3xl"
+      title={
+        c ? (
+          <>
+            Khiếu nại #{c.id} – {c.orderCode} <Pill tone={COMPLAINT_STAGE[c.stage]} />
+          </>
+        ) : (
+          'Khiếu nại'
+        )
+      }
+      footer={
+        editable && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => setAction('info')}>
+              <HelpCircle className="w-4 h-4 mr-1" /> Xin thêm thông tin
+            </Button>
+            <Button size="sm" onClick={() => setAction('propose')}>
+              <Send className="w-4 h-4 mr-1" /> Đề xuất lên Admin
+            </Button>
+          </>
+        )
+      }
+    >
+      <DataState q={q}>
+        {(c) => (
+          <>
+            {c.stage === 'WaitingForCustomer' && <Banner kind="warning">Đang chờ khách trả lời câu hỏi bổ sung.</Banner>}
+            <Card title="Nội dung khiếu nại" actions={<Pill tone={REFUND_STATUS[c.refundStatus]} />}>
+              <KV label="Lý do">{c.reasonCodeName ?? c.reasonCode ?? '—'}</KV>
+              <KV label="Khách yêu cầu" strong>
+                {formatCurrency(c.requestedAmount)}
+              </KV>
+              {c.proposedAmount !== null && (
+                <KV label="Đã đề xuất">
+                  {formatCurrency(c.proposedAmount)} {c.proposedByName ? `(${c.proposedByName})` : ''}
+                </KV>
+              )}
+              <p className="text-sm text-slate-800 my-2">{c.reason}</p>
+              <PhotoGrid urls={c.evidenceUrls} emptyText="Khách không gửi ảnh" />
+              {c.infoRequestNote && (
+                <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs">
+                  <b>Câu hỏi đã gửi:</b> {c.infoRequestNote}
+                  <div className="mt-1">
+                    <b>Khách trả lời:</b> {c.customerReply ?? <i className="text-slate-500">chưa trả lời</i>}
                   </div>
                 </div>
+              )}
+              {c.proposalReason && <p className="text-[11px] text-slate-500 mt-2">Ghi chú đề xuất (nội bộ): {c.proposalReason}</p>}
+            </Card>
 
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Ảnh giao hàng của tài xế (Biên bản POD):</span>
-                  </span>
-                  <div className="h-64 rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
-                    <img
-                      src={selectedComplaint.podEvidenceUrl}
-                      alt="Ảnh POD"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Proposal Decision Form (UC-DIS-09 & UC-DIS-17) */}
-            <form onSubmit={handleSubmitProposal} className="p-5 rounded-3xl bg-slate-900 text-white space-y-4 shadow-md">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-black text-white">Đề xuất phương án bồi hoàn lên Quản trị viên (Admin)</h3>
-                  <p className="text-xs text-slate-400">
-                    Quyết định bồi thường sẽ được chuyển vào hàng đợi duyệt chi trả của Quản trị viên
-                  </p>
-                </div>
-                {selectedComplaint.status === 'PROPOSED_TO_ADMIN' && (
-                  <span className="px-3 py-1 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40 text-xs font-black">
-                    ĐÃ GỬI LÊN ADMIN
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    Số tiền đề xuất hoàn (VNĐ):
-                  </label>
-                  <input
-                    type="number"
-                    step={10000}
-                    max={selectedComplaint.orderTotalFee}
-                    value={proposedAmount}
-                    onChange={(e) => setProposedAmount(Number(e.target.value))}
-                    disabled={selectedComplaint.status !== 'PENDING_PROPOSAL' || awaitingInfo}
-                    className="w-full text-xs font-bold p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
-                    Tối đa bằng số tiền khách yêu cầu (GB-42): {formatCurrency(selectedComplaint.orderTotalFee)}
-                  </span>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    Căn cứ giải trình & ghi chú nghiệp vụ:
-                  </label>
-                  <input
-                    type="text"
-                    value={proposalNote}
-                    onChange={(e) => setProposalNote(e.target.value)}
-                    disabled={selectedComplaint.status !== 'PENDING_PROPOSAL' || awaitingInfo}
-                    placeholder="Nhập lý do bồi thường hoặc kết quả thương lượng..."
-                    className="w-full text-xs p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                {awaitingInfo && <span className="mr-auto text-[11px] text-amber-300">Đang chờ khách bổ sung thông tin…</span>}
-                {selectedComplaint.status === 'PENDING_PROPOSAL' && !awaitingInfo && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Card
+                title="Đơn hàng"
+                actions={
+                  <button className="text-xs font-bold text-blue-600" onClick={() => setOrderId(c.orderId)}>
+                    Xem đơn
+                  </button>
+                }
+              >
+                <KV label="Trạng thái">
+                  <StatusPill status={c.order.orderStatus} />
+                </KV>
+                <KV label="Tổng cước">{formatCurrency(c.order.totalFee)}</KV>
+                <KV label="Thanh toán">{c.order.paymentMethod === 'PayOS' ? 'PayOS' : 'Tiền mặt'}</KV>
+                <KV label="Giao lúc">{c.order.deliveredAt ? formatDateTime(c.order.deliveredAt) : '—'}</KV>
+                <KV label="Điểm giao">{c.order.dropoffAddress}</KV>
+              </Card>
+              <Card title="Các bên">
+                <KV label={`Khách: ${c.customer.fullName}`}>
+                  <a className="text-blue-600 inline-flex items-center gap-1" href={`tel:${c.customer.phoneNumber}`}>
+                    <Phone className="w-3 h-3" /> {c.customer.phoneNumber}
+                  </a>
+                </KV>
+                {c.driver && (
                   <>
-                    <button
-                      type="button"
-                      onClick={handleRequestInfo}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-amber-300 hover:bg-amber-500/10 transition cursor-pointer"
-                    >
-                      Yêu cầu bổ sung thông tin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRejectComplaint}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                    >
-                      Đề xuất không hoàn tiền
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-slate-950 font-black text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-sky-500/20"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>{isSubmitting ? 'Đang gửi đề xuất...' : 'Gửi đề xuất sang Quản trị viên duyệt'}</span>
-                    </button>
+                    <KV label={`Tài xế: ${c.driver.fullName}`}>
+                      <a className="text-blue-600 inline-flex items-center gap-1" href={`tel:${c.driver.phoneNumber}`}>
+                        <Phone className="w-3 h-3" /> {c.driver.phoneNumber}
+                      </a>
+                    </KV>
+                    <KV label="Xe">
+                      <span className="font-mono">{c.driver.licensePlate}</span> • {c.driver.vehicleTypeName}
+                    </KV>
                   </>
                 )}
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
+                {c.rating && (
+                  <div className="mt-2 pt-2 border-t border-slate-100">
+                    <SectionTitle>Đánh giá của khách</SectionTitle>
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star key={n} className={cx('w-3.5 h-3.5', n <= c.rating!.ratingStars ? 'fill-amber-400 text-amber-400' : 'text-slate-300')} />
+                      ))}
+                    </div>
+                    {c.rating.reviewComment && <p className="text-xs text-slate-600 mt-1">“{c.rating.reviewComment}”</p>}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            <Card title="Đối chiếu bằng chứng (UC-DIS-13)">
+              {c.order.cargo && (
+                <div className="mb-3">
+                  <SectionTitle>
+                    Hàng khách khai báo – {c.order.cargo.cargoTypeName ?? c.order.cargo.cargoType} ({c.order.cargo.quantity} kiện, {c.order.cargo.weightKg} kg)
+                  </SectionTitle>
+                  <PhotoGrid urls={c.order.cargo.photoUrls} size="sm" />
+                </div>
+              )}
+              {c.verificationEvidence ? (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <SectionTitle right={<Pill tone={PROOF_STATUS[c.verificationEvidence.proofStatus]} />}>Ảnh lấy hàng</SectionTitle>
+                    <PhotoGrid urls={c.verificationEvidence.pickupPhotoUrls} size="sm" />
+                  </div>
+                  <div>
+                    <SectionTitle>POD</SectionTitle>
+                    <PhotoGrid urls={[c.verificationEvidence.deliveryPhotoUrl]} size="sm" />
+                    {c.verificationEvidence.deliveryCompletionTime && <p className="text-[11px] text-slate-500 mt-1">{formatDateTime(c.verificationEvidence.deliveryCompletionTime)}</p>}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Không có bằng chứng lấy/giao hàng.</p>
+              )}
+              {c.incidents.length > 0 && (
+                <div className="mt-3">
+                  <SectionTitle>Sự cố trước đó của đơn</SectionTitle>
+                  <ul className="space-y-1 text-xs">
+                    {c.incidents.map((i) => (
+                      <li key={i.id} className="flex flex-wrap gap-2 items-center">
+                        <b>#{i.id}</b> {INCIDENT_TYPE[i.incidentType]} <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} />
+                        {i.resolutionDecision && <span className="text-slate-500">{INCIDENT_DECISION[i.resolutionDecision]}</span>}
+                        <span className="text-slate-400">{formatDateTime(i.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
+
+            <Card title="Lịch sử trạng thái đơn">
+              <StatusTimeline items={c.statusHistories.map((h) => ({ ...h, at: h.createdAt }))} />
+            </Card>
+
+            {action === 'info' && <InfoModal onClose={() => setAction(null)} onSubmit={(note) => dispatcherApi.complaintRequestInfo(c.id, note).then(() => after('Đã gửi câu hỏi cho khách.'))} />}
+            {action === 'propose' && (
+              <ProposeModal max={c.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.complaintProposal(c.id, a, r).then(() => after('Đã gửi đề xuất lên Admin.'))} />
+            )}
+          </>
+        )}
+      </DataState>
+      {orderId && <DispatcherOrderDrawer orderId={orderId} onClose={() => setOrderId(null)} />}
+    </Drawer>
+  );
+};
+
+const InfoModal: React.FC<{ onClose: () => void; onSubmit: (note: string) => Promise<void> }> = ({ onClose, onSubmit }) => {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal
+      open
+      title="Xin khách bổ sung thông tin (UC-DIS-14)"
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button
+            size="sm"
+            isLoading={busy}
+            onClick={async () => {
+              if (!note.trim()) return toast.error('Nhập câu hỏi cho khách.');
+              setBusy(true);
+              try {
+                await onSubmit(note.trim());
+              } catch (e) {
+                toast.error(errorMessage(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Gửi
+          </Button>
+        </>
+      }
+    >
+      <TextArea label="Câu hỏi / thông tin cần bổ sung *" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
+      <p className="text-[11px] text-slate-400 mt-2">Khách trả lời bằng một đoạn chữ và có thể thêm ảnh (tổng tối đa 5 ảnh – GB-43).</p>
+    </Modal>
   );
 };
