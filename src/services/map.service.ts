@@ -1,9 +1,11 @@
 import { haversineKm } from '../domain/geo';
-import { latency } from './mock/storage';
 
 /**
- * Adapter bản đồ. Khi tích hợp Google Maps (API-MAP-01/02) chỉ cần thay thân hàm,
- * giữ nguyên chữ ký.
+ * Gợi ý địa chỉ (API-MAP-01) cho ô nhập địa chỉ.
+ *
+ * Backend chưa có endpoint gợi ý địa chỉ (IMapService chỉ có Geocode + Route, dùng MapVina khi báo giá/tạo đơn).
+ * Gọi MapVina trực tiếp từ trình duyệt sẽ lộ key có hạn mức của BE, nên FE dùng Photon (OpenStreetMap, miễn phí,
+ * không cần key, cho phép CORS) chỉ để GỢI Ý. Toạ độ/quãng đường tính giá vẫn do backend (MapVina) quyết định.
  */
 export interface GeoPoint {
   address: string;
@@ -11,43 +13,61 @@ export interface GeoPoint {
   lng: number;
 }
 
-/** Danh sách địa điểm mẫu trong Hà Nội (LI-01) dùng cho gợi ý địa chỉ khi chưa có Places API */
-export const SAMPLE_PLACES: GeoPoint[] = [
-  { address: 'Số 19 Lê Thanh Nghị, Hai Bà Trưng, Hà Nội', lat: 21.0041, lng: 105.8455 },
-  { address: 'Vinhomes Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội', lat: 20.9998, lng: 105.7346 },
-  { address: 'Keangnam Landmark 72, Phạm Hùng, Nam Từ Liêm, Hà Nội', lat: 21.0168, lng: 105.7838 },
-  { address: 'Đại học FPT, Khu CNC Hòa Lạc, Thạch Thất, Hà Nội', lat: 21.0131, lng: 105.5268 },
-  { address: 'Times City, 458 Minh Khai, Hai Bà Trưng, Hà Nội', lat: 20.9947, lng: 105.8681 },
-  { address: 'Ngõ 165 Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội', lat: 21.0333, lng: 105.795 },
-  { address: 'Số 88 Nguyễn Trãi, Thanh Xuân, Hà Nội', lat: 21.0025, lng: 105.8155 },
-  { address: 'The Matrix One, Lê Quang Đạo, Nam Từ Liêm, Hà Nội', lat: 21.0102, lng: 105.7725 },
-  { address: '131 Trần Phú, Hà Đông, Hà Nội', lat: 20.9781, lng: 105.7865 },
-  { address: 'Royal City, 72 Nguyễn Trãi, Thanh Xuân, Hà Nội', lat: 21.0024, lng: 105.8152 },
-  { address: 'Hồ Hoàn Kiếm, Hàng Trống, Hoàn Kiếm, Hà Nội', lat: 21.0287, lng: 105.8523 },
-  { address: 'Ecopark, Văn Giang, Hưng Yên (giáp Hà Nội)', lat: 20.9634, lng: 105.9328 },
-];
+const PHOTON_URL = 'https://photon.komoot.io/api/';
+/** Khung lãnh thổ Việt Nam: minLon,minLat,maxLon,maxLat */
+const VN_BBOX = '102.1,8.2,109.5,23.4';
 
-/** Hệ số quy đổi đường chim bay → đường bộ trong đô thị */
-const ROAD_FACTOR = 1.35;
-const AVG_SPEED_KMH = 25;
+interface PhotonFeature {
+  geometry: { coordinates: [number, number] };
+  properties: Record<string, string | undefined>;
+}
+
+/**
+ * Ghép nhãn địa chỉ kiểu Việt Nam: tên địa điểm, số nhà + đường, phường, quận/thành phố, tỉnh.
+ * Không đưa `locality` (VD "Khu công nghệ cao …") vì backend geocode lại chuỗi này bằng MapVina và cụm đó
+ * làm MapVina khớp nhầm điểm khác (đã đo: lệch TB 0,62 km → 0,26 km khi bỏ).
+ */
+const labelOf = (p: PhotonFeature['properties']) => {
+  const street = p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street;
+  const parts = [p.name && p.name !== p.street ? p.name : undefined, street, p.district, p.city ?? p.county, p.state];
+  return [...new Set(parts.filter(Boolean) as string[])].join(', ');
+};
+
+let bias: { lat: number; lng: number } | null = null;
+/** Ưu tiên gợi ý gần vị trí người dùng (nếu trình duyệt cho phép) – gọi một lần, không chặn UI */
+export const primeLocationBias = () => {
+  if (bias || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => (bias = { lat: p.coords.latitude, lng: p.coords.longitude }),
+    () => undefined,
+    { timeout: 4000, maximumAge: 600_000 }
+  );
+};
 
 export const mapService = {
-  /** API-MAP-01 (mock): gợi ý địa chỉ */
-  searchPlaces(query: string): GeoPoint[] {
-    const q = query.trim().toLowerCase();
-    if (!q) return SAMPLE_PLACES.slice(0, 6);
-    return SAMPLE_PLACES.filter((p) => p.address.toLowerCase().includes(q)).slice(0, 6);
+  /** Gợi ý địa chỉ thật (Photon/OSM) trong lãnh thổ Việt Nam */
+  async searchPlaces(query: string, signal?: AbortSignal): Promise<GeoPoint[]> {
+    const q = query.trim();
+    if (q.length < 3) return [];
+    // lang=default: trả tên gốc tiếng Việt (nếu không, trình duyệt gửi Accept-Language en-US → tên tiếng Anh)
+    const params = new URLSearchParams({ q, limit: '6', bbox: VN_BBOX, lang: 'default' });
+    if (bias) {
+      params.set('lat', String(bias.lat));
+      params.set('lon', String(bias.lng));
+    }
+    const res = await fetch(`${PHOTON_URL}?${params}`, { signal });
+    if (!res.ok) throw new Error(`Photon ${res.status}`);
+    const data = (await res.json()) as { features: PhotonFeature[] };
+    const seen = new Set<string>();
+    return data.features
+      .map((f) => ({ address: labelOf(f.properties), lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }))
+      .filter((p) => p.address && !seen.has(p.address) && seen.add(p.address));
   },
 
-  /** API-MAP-02 (mock): quãng đường và thời gian ước tính */
-  async estimateRoute(from: GeoPoint, to: GeoPoint): Promise<{ distanceKm: number; durationMins: number }> {
-    await latency(150);
-    return this.estimateRouteSync(from, to);
-  },
-
+  /** Ước lượng nhanh (chim bay × hệ số đô thị) – chỉ dùng hiển thị tham khảo, không dùng tính giá */
   estimateRouteSync(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
-    const distanceKm = Math.max(1, Math.round(haversineKm(from, to) * ROAD_FACTOR * 10) / 10);
-    const durationMins = Math.max(5, Math.round((distanceKm / AVG_SPEED_KMH) * 60));
+    const distanceKm = Math.max(1, Math.round(haversineKm(from, to) * 1.35 * 10) / 10);
+    const durationMins = Math.max(5, Math.round((distanceKm / 25) * 60));
     return { distanceKm, durationMins };
   },
 };

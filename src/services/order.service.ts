@@ -24,6 +24,9 @@ import { PagedResult } from './pagination';
 const MY_ORDERS = 'orders';
 const AVAILABLE_JOBS = 'availableJobs';
 const ALL_ORDERS = 'dispatcherOrders';
+const ONLINE_DRIVERS = 'onlineDrivers';
+const DISPATCHER_SUMMARY = 'dispatcherSummary';
+const HANDLED_CASES = 'handledCases';
 
 const emptyVehicle = (name = ''): VehicleSnapshot => ({
   id: '',
@@ -48,6 +51,73 @@ const emptyCargo = (): CargoDetail => ({
 const emptyFare = (total = 0): FareBreakdown => ({ distanceKm: 0, durationMins: 0, distanceFare: total, loadingFee: 0, discount: 0, total });
 
 // ---------------------------------------------------------------- DTO -> FE
+interface OnlineDriverDto {
+  driverProfileId: number;
+  userId: number;
+  fullName: string;
+  phoneNumber: string;
+  licensePlate: string;
+  vehicleTypeId: number;
+  vehicleTypeName: string;
+  latitude: number;
+  longitude: number;
+  lastLocationAt: string;
+  activeOrderId?: number | null;
+  activeOrderCode?: string | null;
+  activeOrderStatus?: string | null;
+}
+
+export interface OnlineDriverItem {
+  id: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleType: string;
+  licensePlate: string;
+  lat: number;
+  lng: number;
+  lastLocationAt: string;
+  activeOrderId?: string;
+  activeOrderCode?: string;
+  activeOrderStatus?: string;
+}
+
+export interface DispatcherSummary {
+  total: number;
+  pending: number;
+  accepted: number;
+  arrived: number;
+  pickedUp: number;
+  inTransit: number;
+  delivered: number;
+  completed: number;
+  cancelled: number;
+}
+
+export interface HandledCaseItem {
+  caseKind: string;
+  caseId: number;
+  orderId: number;
+  orderCode: string;
+  subType: string;
+  status: string;
+  decision?: string;
+  note?: string;
+  requestedAmount?: number;
+  proposedAmount?: number;
+  handledAt: string;
+}
+
+export interface OrderTracking {
+  orderId: number;
+  orderStatus: string;
+  driverLat?: number;
+  driverLng?: number;
+  driverAt?: string;
+  driverIsStale?: boolean;
+  etaMinutes?: number;
+  etaTarget?: string;
+}
+
 interface OrderSummaryDto {
   id: number;
   orderCode: string;
@@ -514,5 +584,80 @@ export const orderService = {
 
   async reassignDriver(_orderId: string, _driver: AssignedDriver): Promise<ShippingOrder> {
     throw new ServiceError('Đổi tài xế thực hiện qua màn hình Sự cố (api/dispatcher/incidents/{id}/reassign).');
+  },
+
+  // ------------------------------------------------ Online Drivers (Dispatcher)
+  listOnlineDriversSync: (): OnlineDriverItem[] => readStore<OnlineDriverItem[]>(ONLINE_DRIVERS, () => []),
+  subscribeOnlineDrivers: (cb: () => void) => subscribeStore(ONLINE_DRIVERS, cb),
+
+  async loadOnlineDrivers(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<OnlineDriverDto[]>('/dispatcher/Drivers/online');
+      writeStore(ONLINE_DRIVERS, data.map((d): OnlineDriverItem => ({
+        id: String(d.driverProfileId),
+        driverName: d.fullName,
+        driverPhone: d.phoneNumber,
+        vehicleType: d.vehicleTypeName,
+        licensePlate: d.licensePlate,
+        lat: d.latitude,
+        lng: d.longitude,
+        lastLocationAt: d.lastLocationAt,
+        activeOrderId: d.activeOrderId != null ? String(d.activeOrderId) : undefined,
+        activeOrderCode: d.activeOrderCode ?? undefined,
+        activeOrderStatus: d.activeOrderStatus ?? undefined,
+      })));
+    } catch {
+      /* ignore */
+    }
+  },
+
+  // ---------------------------------------- Dispatcher Orders Summary
+  getDispatcherSummarySync: (): DispatcherSummary | null => readStore<DispatcherSummary | null>(DISPATCHER_SUMMARY, () => null),
+  subscribeDispatcherSummary: (cb: () => void) => subscribeStore(DISPATCHER_SUMMARY, cb),
+
+  async loadDispatcherSummary(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<DispatcherSummary>('/dispatcher/Orders/summary');
+      writeStore(DISPATCHER_SUMMARY, data);
+    } catch {
+      /* ignore */
+    }
+  },
+
+  // --------------------------------------------- Handled Cases (Dispatcher)
+  listHandledCasesSync: (): HandledCaseItem[] => readStore<HandledCaseItem[]>(HANDLED_CASES, () => []),
+  subscribeHandledCases: (cb: () => void) => subscribeStore(HANDLED_CASES, cb),
+
+  async loadHandledCases(params: { type?: string; page?: number; pageSize?: number } = {}): Promise<void> {
+    try {
+      const { data } = await apiClient.get<{ items: HandledCaseItem[]; totalCount: number }>('/dispatcher/handled-cases', { params: { page: 1, pageSize: 50, ...params } });
+      writeStore(HANDLED_CASES, data.items);
+    } catch {
+      /* ignore */
+    }
+  },
+
+  // --------------------------------------------- Order Tracking (Customer)
+  async loadOrderTracking(orderId: string): Promise<OrderTracking | null> {
+    try {
+      const { data } = await apiClient.get<{
+        orderId: number;
+        orderStatus: string;
+        driver?: { latitude: number; longitude: number; at: string; isStale: boolean } | null;
+        eta?: { target: string; durationMinutes: number } | null;
+      }>(`/customer/Orders/${orderId}/tracking`);
+      return {
+        orderId: data.orderId,
+        orderStatus: data.orderStatus,
+        driverLat: data.driver?.latitude,
+        driverLng: data.driver?.longitude,
+        driverAt: data.driver?.at,
+        driverIsStale: data.driver?.isStale,
+        etaMinutes: data.eta?.durationMinutes,
+        etaTarget: data.eta?.target,
+      };
+    } catch {
+      return null;
+    }
   },
 };

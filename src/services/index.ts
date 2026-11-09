@@ -10,4 +10,5 @@ export { orderService } from './order.service';
 export { caseService } from './case.service';
 export { walletService } from './wallet.service';
 export { driverService } from './driver.service';
+export { reportService } from './report.service';
 export { errorMessage, ServiceError } from './mock/storage';

@@ -45,9 +45,14 @@ export const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}${Ma
 
 /** Lỗi nghiệp vụ trả về từ service (tương ứng HTTP 4xx của API) */
 export class ServiceError extends Error {
-  constructor(message: string) {
+  /** `code` ổn định của ProblemDetails backend (nếu lỗi đến từ API) */
+  code?: string;
+  status?: number;
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = 'ServiceError';
+    this.code = code;
+    this.status = status;
   }
 }
 

@@ -1,5 +1,6 @@
+import { useAuthStore } from '../store/useAuthStore';
 import { caseService } from '../services/case.service';
-import { catalogService, CATALOG_KEYS } from '../services/catalog.service';
+import { catalogService, CATALOG_KEYS, CUSTOMER_COUPONS_KEY } from '../services/catalog.service';
 import { subscribeStore } from '../services/mock/storage';
 import { orderService } from '../services/order.service';
 import { driverService } from '../services/driver.service';
@@ -26,7 +27,11 @@ export const useAvailableJobs = () => useLiveData(orderService.listAvailableJobs
 // ---------------------------------------------------------------- Catalog
 export const useVehicleTypes = () => useLiveData(catalogService.getVehicleTypesSync, subscribeCatalog, [], () => catalogService.loadVehicleTypes())[0];
 export const useAdminVehicleTypes = () => useLiveData(catalogService.getAdminVehicleTypesSync, subscribeCatalog, [], () => catalogService.loadPricing())[0];
-export const usePlatformSettings = () => useLiveData(catalogService.getSettingsSync, subscribeCatalog, [], () => catalogService.loadPricing())[0];
+/** GET /admin/Pricing chỉ dành cho Administrator; role khác dùng giá trị cache/mặc định (phí thật lấy từ FareEstimate.serviceFee) */
+export const usePlatformSettings = () =>
+  useLiveData(catalogService.getSettingsSync, subscribeCatalog, [], () =>
+    useAuthStore.getState().activeRole === 'Administrator' ? catalogService.loadPricing() : Promise.resolve()
+  )[0];
 export const useCoupons = () => useLiveData(catalogService.listCouponsSync, subscribeCatalog, [], () => catalogService.loadCoupons())[0];
 export const usePolicies = () => useLiveData(catalogService.listPoliciesSync, subscribeCatalog, [], () => catalogService.loadPolicies())[0];
 export const useServiceInfo = () => useLiveData(catalogService.listServiceInfoSync, subscribeCatalog, [], () => catalogService.loadServiceInfo())[0];
@@ -54,3 +59,19 @@ export const useMyDriverStatus = () => useLiveData(driverService.getMyStatusSync
 
 // --------------------------------------------------------------------- Users
 export const useUsers = () => useLiveData(authService.listUsersSync, authService.subscribeUsers, [], () => authService.loadUsers())[0];
+
+// ---------------------------------------------------------------- Customer Coupons
+export const useCustomerCoupons = () =>
+  useLiveData(catalogService.listCustomerCouponsSync, (cb) => subscribeStore(CUSTOMER_COUPONS_KEY, cb), [], () => catalogService.loadCustomerCoupons())[0];
+
+// ---------------------------------------------------------------- Online Drivers
+export const useOnlineDrivers = () =>
+  useLiveData(orderService.listOnlineDriversSync, orderService.subscribeOnlineDrivers, [], () => orderService.loadOnlineDrivers())[0];
+
+// ------------------------------------------------------------- Dispatcher Summary
+export const useDispatcherSummary = () =>
+  useLiveData(orderService.getDispatcherSummarySync, orderService.subscribeDispatcherSummary, [], () => orderService.loadDispatcherSummary())[0];
+
+// --------------------------------------------------------------- Handled Cases
+export const useHandledCases = () =>
+  useLiveData(orderService.listHandledCasesSync, orderService.subscribeHandledCases, [], () => orderService.loadHandledCases())[0];

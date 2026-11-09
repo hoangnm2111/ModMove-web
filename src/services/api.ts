@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { ServiceError } from './mock/storage';
+import { ERROR_MESSAGES } from '../api/errors';
 
 /** HTTP client cho backend ASP.NET Core (ModMove.WebApi). */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5133/api';
@@ -60,13 +61,21 @@ apiClient.interceptors.response.use(
 /** Chuẩn hoá lỗi axios (ProblemDetails của backend) thành ServiceError để UI hiển thị. */
 export function toServiceError(e: unknown): ServiceError {
   if (axios.isAxiosError(e)) {
-    const data = e.response?.data as { detail?: string; title?: string; errors?: Record<string, string[]> } | undefined;
+    const status = e.response?.status;
+    const data = e.response?.data as { detail?: string; title?: string; code?: string; errors?: Record<string, string[]> } | undefined;
+    const code = data?.code;
     const firstFieldError = data?.errors ? Object.values(data.errors).flat()[0] : undefined;
-    if (firstFieldError) return new ServiceError(firstFieldError);
-    if (data?.detail) return new ServiceError(data.detail);
-    if (data?.title) return new ServiceError(data.title);
+    // 400 VALIDATION: hiển thị lỗi theo trường; mã khác: câu tiếng Việt theo `code` (DECISIONS 9.4)
+    if (firstFieldError) return new ServiceError(firstFieldError, code ?? 'VALIDATION', status);
+    if (code && ERROR_MESSAGES[code]) {
+      // Các mã có số liệu trong `detail` (giá mới, số tiền còn hoàn được) → nối thêm chi tiết
+      const withDetail = ['FARE_CHANGED', 'REFUND_TOTAL_EXCEEDED'].includes(code) && data?.detail;
+      return new ServiceError(withDetail ? `${ERROR_MESSAGES[code]} (${data!.detail})` : ERROR_MESSAGES[code], code, status);
+    }
+    if (data?.detail) return new ServiceError(data.detail, code, status);
+    if (data?.title) return new ServiceError(data.title, code, status);
     if (e.code === 'ECONNABORTED' || e.message === 'Network Error') {
-      return new ServiceError('Không kết nối được tới máy chủ. Vui lòng kiểm tra mạng và thử lại.');
+      return new ServiceError('Không kết nối được tới máy chủ. Vui lòng kiểm tra mạng và thử lại.', 'NETWORK');
     }
   }
   return e instanceof ServiceError ? e : new ServiceError('Đã có lỗi xảy ra. Vui lòng thử lại.');

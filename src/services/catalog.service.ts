@@ -29,7 +29,9 @@ export const CATALOG_KEYS = {
   cancellationReasons: 'cancellationReasons',
 } as const;
 
-const DEFAULT_SETTINGS: PlatformSettings = { commissionRate: 0.1, loadingFee: 50_000, minCodDeposit: 200_000, matchingRadiusKm: 5 };
+export const CUSTOMER_COUPONS_KEY = 'customerCoupons';
+
+const DEFAULT_SETTINGS: PlatformSettings = { commissionRate: 0.1, loadingFee: 100_000, minCodDeposit: 200_000, matchingRadiusKm: 5 };
 
 const iconFor = (maxLoadKg: number): VehicleType['iconType'] => (maxLoadKg <= 600 ? 'pickup' : maxLoadKg <= 1200 ? 'truck' : 'heavy_truck');
 
@@ -81,6 +83,18 @@ const toCoupon = (c: CouponDto): Coupon => ({
   usedCount: c.usedCount,
   isActive: c.isActive,
 });
+
+export interface CustomerCoupon {
+  code: string;
+  discountValue: number;
+  minimumOrderValue: number;
+  expiresAt: string;
+  remainingUses: number | null;
+}
+
+function toCustomerCoupon(c: { discountCode: string; discountValue: number; minimumOrderValue: number; expiresAt: string; remainingUses?: number | null }): CustomerCoupon {
+  return { code: c.discountCode, discountValue: c.discountValue, minimumOrderValue: c.minimumOrderValue, expiresAt: c.expiresAt, remainingUses: c.remainingUses ?? null };
+}
 
 export const catalogService = {
   // ------------------------------------------------------- Khách (public)
@@ -222,6 +236,19 @@ export const catalogService = {
       await catalogService.loadCoupons();
     } catch (e) {
       throw toServiceError(e);
+    }
+  },
+
+  // -------------------------------------------------- Customer Coupons
+  listCustomerCouponsSync: (): CustomerCoupon[] => readStore(CUSTOMER_COUPONS_KEY, () => []),
+
+  /** UC-GST-14: GET /customer/Coupons – mã giảm giá khả dụng cho đơn mới */
+  async loadCustomerCoupons(): Promise<void> {
+    try {
+      const { data } = await apiClient.get<{ items: { discountCode: string; discountValue: number; minimumOrderValue: number; expiresAt: string; remainingUses?: number | null }[]; totalCount: number }>('/customer/Coupons', { params: { page: 1, pageSize: 20 } });
+      writeStore(CUSTOMER_COUPONS_KEY, data.items.map(toCustomerCoupon));
+    } catch {
+      /* ignore – customer coupons là tính năng gợi ý, không block UI */
     }
   },
 };

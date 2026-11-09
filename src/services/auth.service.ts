@@ -121,10 +121,10 @@ export const authService = {
     }
   },
 
-  /** UC-GST-01 bước 2: xác thực OTP email vừa nhận. */
-  async verifyEmail(email: string, code: string): Promise<void> {
+  /** UC-GST-01 bước 2: xác thực OTP email vừa nhận. `password` là mật khẩu đã đăng ký; sai → 422 VERIFY_PASSWORD_MISMATCH (A-02). */
+  async verifyEmail(email: string, code: string, password: string): Promise<void> {
     try {
-      await apiClient.post('/public/Auth/verify-email', { email: email.trim().toLowerCase(), code });
+      await apiClient.post('/public/Auth/verify-email', { email: email.trim().toLowerCase(), code, password });
     } catch (e) {
       throw toServiceError(e);
     }

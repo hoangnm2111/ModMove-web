@@ -384,8 +384,13 @@ export const caseService = {
     }
   },
 
-  /** UC-DIS-05/06/07: quyết định xử lý sự cố */
-  async resolveIncident(incidentId: string, decision: IncidentDecision, note: string, opts?: { newDriver?: AssignedDriver; refundable?: boolean }): Promise<void> {
+  /** UC-DIS-05/06/07: quyết định xử lý sự cố. `cargoDisposition` bắt buộc khi đơn PickedUp/InTransit (CARGO_DISPOSITION_REQUIRED, 2.6). */
+  async resolveIncident(
+    incidentId: string,
+    decision: IncidentDecision,
+    note: string,
+    opts?: { newDriver?: AssignedDriver; refundable?: boolean; cargoDisposition?: 'ReturnToPickup' | 'Keep' }
+  ): Promise<void> {
     try {
       if (decision === 'ContinueTrip') {
         await apiClient.post(`/dispatcher/Incidents/${incidentId}/resolve`, { reason: note });
@@ -393,7 +398,11 @@ export const caseService = {
         if (!opts?.newDriver) throw new ServiceError('Vui lòng chọn tài xế thay thế.');
         await apiClient.post(`/dispatcher/Incidents/${incidentId}/reassign`, { newDriverProfileId: Number(opts.newDriver.id), reason: note });
       } else {
-        await apiClient.post(`/dispatcher/Incidents/${incidentId}/cancel-order`, { reason: note, refund: opts?.refundable ?? false });
+        await apiClient.post(`/dispatcher/Incidents/${incidentId}/cancel-order`, {
+          reason: note,
+          refund: opts?.refundable ?? false,
+          cargoDisposition: opts?.cargoDisposition,
+        });
       }
       await caseService.loadDispatcherIncidents();
     } catch (e) {
