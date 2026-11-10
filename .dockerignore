@@ -1,0 +1,12 @@
+# .env and .env.local hold developer values; Vite would load them into the production build.
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+.git/
+.github/
+.vscode/
+.claude/
+docs/
+screens_png/
