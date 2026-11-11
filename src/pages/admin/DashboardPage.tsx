@@ -77,7 +77,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <PageShell
       title="Bảng điều khiển & doanh thu"
-      subtitle={`Doanh thu nền tảng = tổng hoa hồng của đơn Hoàn thành (8.1) • Kỳ từ ${from} đến ${to} (giờ Việt Nam)`}
+      subtitle={`Doanh thu nền tảng = tổng hoa hồng của đơn Hoàn thành • Kỳ từ ${from} đến ${to} (giờ Việt Nam)`}
       actions={
         <Button size="sm" variant="outline" onClick={exportXlsx} isLoading={exporting}>
           <Download className="w-4 h-4 mr-1" /> Xuất Excel

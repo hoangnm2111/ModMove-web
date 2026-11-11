@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDistance } from '../../utils/format';
 import { useDriverContext } from '../../hooks/useDriverContext';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 interface CompletedTrip {
   id: string;
@@ -282,7 +283,7 @@ export const DriverTripHistoryPage: React.FC = () => {
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 font-bold block uppercase">Khách hàng:</span>
                   <span className="font-black text-slate-800 text-sm block">{selectedTrip.customerName}</span>
-                  <span className="text-slate-500 text-[11px]">{selectedTrip.customerPhone}</span>
+                  <span className="text-slate-500 text-[11px] block"><PhoneLink phone={selectedTrip.customerPhone} /></span>
                 </div>
               </div>
 

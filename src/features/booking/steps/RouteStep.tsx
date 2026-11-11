@@ -23,7 +23,7 @@ const PointCard: React.FC<{
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
       <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${isPickup ? 'bg-blue-600' : 'bg-emerald-600'}`} />
-        {isPickup ? 'Điểm lấy hàng (UC-GST-07)' : 'Điểm giao hàng (UC-GST-08)'}
+        {isPickup ? 'Điểm lấy hàng' : 'Điểm giao hàng'}
       </h3>
       <AddressInput
         id={`${kind}-address`}
@@ -42,7 +42,7 @@ const PointCard: React.FC<{
           onChange={(e) => onChange({ contactName: e.target.value })}
         />
         <Field
-          label={isPickup ? 'SĐT người gửi' : 'SĐT người nhận (UC-GST-09)'}
+          label={isPickup ? 'Số điện thoại người gửi' : 'Số điện thoại người nhận'}
           required
           inputMode="tel"
           placeholder="09xxxxxxxx"

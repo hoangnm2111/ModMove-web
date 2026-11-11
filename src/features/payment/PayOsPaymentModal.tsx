@@ -92,9 +92,9 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
         )}
         <ul className="text-[11px] text-slate-500 space-y-1">
           <li className="flex gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Đơn chỉ hiện cho tài xế sau khi PayOS xác nhận thanh toán (GB-31).
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Đơn chỉ hiện cho tài xế sau khi PayOS xác nhận thanh toán.
           </li>
-          <li>• Mỗi mã sống 10 phút; đơn chưa thanh toán sau 30 phút kể từ lúc tạo sẽ tự huỷ (GB-13).</li>
+          <li>• Mỗi mã sống 10 phút; đơn chưa thanh toán sau 30 phút kể từ lúc tạo sẽ tự huỷ.</li>
         </ul>
         <div className="flex flex-wrap justify-end gap-2 pt-1">
           <Button variant="outline" size="sm" onClick={create} isLoading={creating}>

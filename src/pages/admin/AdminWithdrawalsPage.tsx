@@ -11,6 +11,7 @@ import { WITHDRAWAL_STATUS } from '../../api/labels';
 import type { AdminWithdrawalDetailResponse, WalletTransactionStatus } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 type Tab = WalletTransactionStatus | 'ALL';
 const TABS: { key: Tab; label: string }[] = [
@@ -31,17 +32,17 @@ export const AdminWithdrawalsPage: React.FC = () => {
   return (
     <PageShell
       title="Duyệt rút tiền tài xế"
-      subtitle="Chuyển khoản thủ công tới tài khoản tài xế rồi ghi mã tham chiếu (GB-27)"
+      subtitle="Chuyển khoản thủ công tới tài khoản tài xế rồi ghi mã tham chiếu "
       toolbar={
         <div className="w-full flex flex-wrap items-center gap-2">
           <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
-          <SearchBox className="ml-auto" value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Tên, SĐT tài xế…" />
+          <SearchBox className="ml-auto" value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Tên, số điện thoại tài xế…" />
         </div>
       }
     >
       <div className="max-w-6xl mx-auto">
         <Banner kind="info" className="mb-4">
-          Yêu cầu rút tiền do tài xế tạo trên app. Tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu; từ chối thì hoàn số đã xin rút vào thu nhập (5.1).
+          Yêu cầu rút tiền do tài xế tạo trên app. Số tiền rút được trừ từ ví thu nhập trước, thiếu thì trừ tiếp từ ví ký quỹ; từ chối thì hoàn đúng từng phần về hai ví. Mỗi tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu.
         </Banner>
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
@@ -52,9 +53,11 @@ export const AdminWithdrawalsPage: React.FC = () => {
                   rowKey={(w) => w.transactionId}
                   onRow={(w) => setOpenId(w.transactionId)}
                   cols={[
-                    { head: 'Mã GD', cell: (w) => <b>#{w.transactionId}</b> },
-                    { head: 'Tài xế', cell: (w) => <div>{w.driverName}<div className="text-[11px] text-slate-400">{w.driverPhone}</div></div> },
+                    { head: 'Mã giao dịch', cell: (w) => <b>#{w.transactionId}</b> },
+                    { head: 'Tài xế', cell: (w) => <div>{w.driverName}<div className="text-[11px] text-slate-400"><PhoneLink phone={w.driverPhone} /></div></div> },
                     { head: 'Số tiền', className: 'text-right', cell: (w) => <b>{formatCurrency(w.amount)}</b> },
+                    { head: 'Trừ từ thu nhập', className: 'text-right', cell: (w) => formatCurrency(w.earningsAmount) },
+                    { head: 'Trừ từ ký quỹ', className: 'text-right', cell: (w) => formatCurrency(w.depositAmount) },
                     { head: 'Ngân hàng', cell: (w) => (w.bankName ? `${w.bankName} • ${w.bankAccountNumber}` : '—') },
                     { head: 'Trạng thái', cell: (w) => <Pill tone={WITHDRAWAL_STATUS[w.transactionStatus]} /> },
                     { head: 'Tạo lúc', cell: (w) => formatDateTime(w.createdAt) },
@@ -99,11 +102,14 @@ const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: (
             <div className="rounded-2xl border border-slate-200 p-4 text-center">
               <div className="text-[11px] font-bold text-slate-500">Số tiền rút</div>
               <div className="text-3xl font-black">{formatCurrency(w.amount)}</div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                Từ thu nhập {formatCurrency(w.earningsAmount)} • Từ ký quỹ {formatCurrency(w.depositAmount)}
+              </div>
             </div>
             <Card title="Tài xế">
               <KV label="Họ tên">{w.driverName}</KV>
-              <KV label="SĐT / Email">
-                {w.driverPhone} • {w.driverEmail}
+              <KV label="Số điện thoại / Email">
+                <PhoneLink phone={w.driverPhone} /> • {w.driverEmail}
               </KV>
               <KV label="Ví">{w.walletStatus === 'Active' ? 'Hoạt động' : 'Đang khoá'}</KV>
               <KV label="Thu nhập hiện tại">{formatCurrency(w.currentEarningsBalance)}</KV>

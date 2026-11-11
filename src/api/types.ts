@@ -33,7 +33,7 @@ export type OrderView = 'All' | 'Active' | 'History' | 'Completed' | 'Cancelled'
 export type HandledCaseType = 'Incident' | 'Complaint' | 'IncidentRefund' | 'Refund';
 export type OtpPurpose = 'Register' | 'ResetPassword';
 export type PaymentPlatform = 'Web' | 'App';
-export type MasterDataCategory = 'POLICY' | 'SERVICE_INFO' | 'CARGO_TYPE' | 'CANCELLATION_REASON' | 'COMPLAINT_REASON' | 'INCIDENT_CATEGORY';
+export type MasterDataCategory = 'POLICY' | 'SERVICE_INFO' | 'CARGO_TYPE' | 'CANCELLATION_REASON' | 'COMPLAINT_REASON' | 'INCIDENT_CATEGORY' | 'BANK';
 
 /* ============================================================ Auth / Account */
 export interface LoginResponse {
@@ -198,6 +198,8 @@ export interface PaymentResponse {
 }
 export interface OrderDetailResponse {
   id: number;
+  /** Sự cố do tài xế báo còn Open/InProgress: chuyến tạm dừng, khách chưa duyệt được ảnh lấy hàng (null/không có = không chặn) */
+  pendingDriverIncidentId?: number | null;
   orderCode: string;
   orderStatus: OrderStatus;
   pickupAddress: string;
@@ -274,6 +276,30 @@ export interface MyIncidentResponse {
   createdAt: string;
   resolvedAt: string | null;
 }
+/** GET /driver/incidents: sự cố tài xế đã báo hoặc nằm trên đơn đang giao cho mình. reportedByYou=false thì mô tả là câu chung, không có ảnh */
+export interface DriverIncidentResponse {
+  id: number;
+  orderId: number;
+  orderCode: string;
+  orderStatus: OrderStatus;
+  incidentType: IncidentType;
+  description: string;
+  photoUrls: string[];
+  latitude: number | null;
+  longitude: number | null;
+  reportedByYou: boolean;
+  resolutionStatus: IncidentResolutionStatus;
+  resolutionDecision: IncidentDecision | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+export interface DriverIncidentsQuery {
+  orderId?: number;
+  status?: IncidentResolutionStatus;
+  page?: number;
+  pageSize?: number;
+}
 export interface ReportIncidentRequest {
   orderId: number;
   incidentType: IncidentType;
@@ -282,18 +308,34 @@ export interface ReportIncidentRequest {
   latitude?: number | null;
   longitude?: number | null;
 }
+/** Tài khoản nhận tiền hoàn: nhập tay (bankCode từ lookups/banks) hoặc dùng tài khoản đã trả qua PayOS */
+export interface PayoutAccountInput {
+  useSuggested: boolean;
+  bankCode?: string | null;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+}
+/** Tài khoản nhận hoàn tiền như khách nhìn thấy: số tài khoản luôn bị che */
+export interface PayoutAccountView {
+  bankCode: string;
+  bankName: string;
+  maskedAccountNumber: string;
+  accountHolder: string;
+}
 export interface SubmitComplaintRequest {
   orderId: number;
   reasonCode: string;
   reason?: string | null;
   evidenceUrls?: string[];
   requestedAmount: number;
+  payoutAccount: PayoutAccountInput;
 }
 export interface RequestIncidentRefundRequest {
   incidentId: number;
   reason: string;
   evidenceUrls?: string[];
   requestedAmount: number;
+  payoutAccount: PayoutAccountInput;
 }
 export interface MyRefundSummaryResponse {
   id: number;
@@ -305,6 +347,8 @@ export interface MyRefundSummaryResponse {
   approvedAmount: number | null;
   decisionReason: string | null;
   waitingForYourReply: boolean;
+  /** Chưa có tài khoản nhận tiền và khoản hoàn còn Requested/Approved/Failed */
+  needsPayoutAccount: boolean;
   createdAt: string;
 }
 export interface MyRefundDetailResponse extends MyRefundSummaryResponse {
@@ -316,6 +360,12 @@ export interface MyRefundDetailResponse extends MyRefundSummaryResponse {
   customerReply: string | null;
   decidedAt: string | null;
   processedAt: string | null;
+  payoutAccount: PayoutAccountView | null;
+  /** Lý do Admin báo chuyển khoản lỗi */
+  payoutFailureReason: string | null;
+  bankReferenceCode: string | null;
+  /** Tài khoản đã trả qua PayOS để khách xác nhận (hiện luôn null) */
+  suggestedPayoutAccount: PayoutAccountView | null;
 }
 
 /* ============================================================ Driver */
@@ -334,6 +384,36 @@ export interface DriverStatusResponse {
   lastLocationAt: string | null;
   isGpsStale: boolean;
   canReceiveOrders: boolean;
+}
+/** GET /driver/wallet – hai ví: ký quỹ + thu nhập; rút được cả hai khi không có đơn đang chạy */
+export interface DriverWalletResponse {
+  walletId: number;
+  walletStatus: string;
+  depositBalance: number;
+  earningsBalance: number;
+  walletTotal: number;
+  /** Phần ký quỹ còn thiếu so với mức tối thiểu (0 nếu đủ) */
+  missingDepositAmount: number;
+  maxWithdrawableAmount: number;
+  requiredDeposit: number;
+  canReceiveOrders: boolean;
+  hasActiveOrder: boolean;
+  hasPendingWithdrawal: boolean;
+  pendingWithdrawalAmount: number;
+  bankAccount: { bankName: string | null; bankAccountNumber: string | null; bankAccountHolder: string | null } | null;
+}
+export interface DriverWalletTransactionDto {
+  id: number;
+  transactionType: string;
+  amount: number;
+  earningsAmount: number;
+  depositAmount: number;
+  balanceAfter: number;
+  transactionStatus: WalletTransactionStatus;
+  orderId: number | null;
+  orderCode: string | null;
+  referenceCode: string | null;
+  createdAt: string;
 }
 export interface DriverOnboardingStatusResponse {
   hasApplication: boolean;
@@ -804,7 +884,8 @@ export interface VehicleTypePricingResponse {
 export interface PlatformSettingsResponse {
   commissionRate: number;
   loadingFee: number;
-  minCodDeposit: number;
+  /** Ký quỹ tối thiểu để nhận đơn (BE đổi tên từ minCodDeposit) */
+  requiredDeposit: number;
   matchingRadiusKm: number;
 }
 export interface PricingConfigurationResponse {
@@ -919,6 +1000,9 @@ export interface AdminWithdrawalSummary {
   driverName: string;
   driverPhone: string;
   amount: number;
+  /** Phần trừ từ ví thu nhập / ví ký quỹ khi rút (ưu tiên thu nhập trước) */
+  earningsAmount: number;
+  depositAmount: number;
   balanceAfter: number;
   transactionStatus: WalletTransactionStatus;
   bankName: string | null;

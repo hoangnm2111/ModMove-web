@@ -151,7 +151,7 @@ const CreateModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ on
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Giảm giá không vượt cước của đơn. Mã chỉ áp dụng trong thời hạn, khi đơn đạt giá trị tối thiểu và chưa hết tổng lượt (GB-21).</Banner>
+        <Banner kind="info">Giảm giá không vượt cước của đơn. Mã chỉ áp dụng trong thời hạn, khi đơn đạt giá trị tối thiểu và chưa hết tổng lượt.</Banner>
         <Field label="Mã" required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VD: MODMOVE30" />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Số tiền giảm (VND)" type="number" required value={f.value} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />

@@ -1,7 +1,7 @@
 import { useSidebarStore } from '../store/useSidebarStore';
 import React, { createContext, useContext, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, LogOut, Menu, Navigation, Package, Power, Truck, UserCog, Wallet, X } from 'lucide-react';
+import { Lock, LogOut, Menu, Navigation, Package, Power, ShieldAlert, Truck, UserCog, Wallet, X } from 'lucide-react';
 import { SuspenseOutlet } from '../components/SuspenseOutlet';
 import { useAuthStore } from '../store/useAuthStore';
 import { DriverProvider, useDriver } from '../features/driver/DriverContext';
@@ -23,6 +23,7 @@ export const DriverLayout: React.FC<{ children?: React.ReactNode }> = ({ childre
 const NAV = [
   { path: '/driver', label: 'Nhận đơn gần tôi', Icon: Package, exact: true },
   { path: '/driver/trip', label: 'Chuyến hiện tại', Icon: Navigation },
+  { path: '/driver/incidents', label: 'Sự cố của tôi', Icon: ShieldAlert },
   { path: '/driver/earnings', label: 'Ví & thu nhập', Icon: Wallet },
   { path: '/driver/profile', label: 'Hồ sơ & phương tiện', Icon: UserCog },
 ];

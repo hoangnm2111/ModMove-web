@@ -12,6 +12,7 @@ import { INCIDENT_TYPE } from '../../api/labels';
 import type { IncidentType, MyIncidentResponse, MyRefundDetailResponse, OrderDetailResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency } from '../../utils/format';
+import { PayoutAccountForm, emptyPayoutAccount, toPayoutInput, validatePayoutAccount, type PayoutAccountValue } from './PayoutAccountForm';
 
 interface BaseProps {
   onClose: () => void;
@@ -77,7 +78,7 @@ export const CancelOrderModal: React.FC<BaseProps & { order: OrderDetailResponse
     >
       <div className="space-y-3">
         <Banner kind="info">
-          Huỷ miễn phí khi đơn đang <b>Đang tìm tài xế</b> hoặc <b>Tài xế đã nhận</b> (GB-22).{' '}
+          Huỷ miễn phí khi đơn đang <b>Đang tìm tài xế</b> hoặc <b>Tài xế đã nhận</b>.{' '}
           {paid ? `Đơn đã thanh toán PayOS sẽ được hoàn 100% (${formatCurrency(order.totalFee)}) sau khi Admin duyệt.` : ''} Lượt dùng mã giảm giá không được hoàn.
         </Banner>
         <ReasonPicker load={publicApi.cancellationReasons} value={code} onChange={setCode} />
@@ -123,7 +124,7 @@ export const RejectPickupModal: React.FC<BaseProps & { order: OrderDetailRespons
     >
       <div className="space-y-3">
         <Banner kind="warning">
-          Đây là lần gửi ảnh thứ {count}/5. Sau lần từ chối thứ 5, tài xế phải báo sự cố để Dispatcher xử lý (GB-11).
+          Đây là lần gửi ảnh thứ {count}/5. Sau lần từ chối thứ 5, tài xế phải báo sự cố để Dispatcher xử lý.
         </Banner>
         <TextArea label="Lý do từ chối *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="VD: Ảnh mờ, thiếu thùng hàng số 2, hàng có vết móp chưa ghi nhận…" />
       </div>
@@ -137,15 +138,18 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
   const [reason, setReason] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [payout, setPayout] = useState<PayoutAccountValue>(emptyPayoutAccount);
   const [busy, setBusy] = useState(false);
   const isCash = order.paymentMethod === 'Cash';
   const submit = async () => {
     if (!code) return toast.error('Vui lòng chọn lý do khiếu nại.');
     if (code === 'OTHER' && !reason.trim()) return toast.error('Vui lòng mô tả lý do khi chọn "Khác".');
     if (!(amount > 0) || amount > order.totalFee) return toast.error(`Số tiền yêu cầu phải từ 1đ tới ${formatCurrency(order.totalFee)}.`);
+    const payoutError = validatePayoutAccount(payout);
+    if (payoutError) return toast.error(payoutError);
     setBusy(true);
     try {
-      await customerApi.submitComplaint({ orderId: order.id, reasonCode: code, reason: reason.trim() || null, evidenceUrls: photos, requestedAmount: Math.round(amount) });
+      await customerApi.submitComplaint({ orderId: order.id, reasonCode: code, reason: reason.trim() || null, evidenceUrls: photos, requestedAmount: Math.round(amount), payoutAccount: toPayoutInput(payout) });
       toast.success('Đã gửi khiếu nại. Điều phối viên sẽ xem xét và có thể liên hệ bổ sung thông tin.');
       onDone();
     } catch (e) {
@@ -173,7 +177,7 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
     >
       <div className="space-y-3">
         <Banner kind="info">
-          Khiếu nại trong vòng 24 giờ sau khi giao (GB-18). Khi khiếu nại đang mở, đơn chưa hoàn tất và tài xế chưa được tất toán.
+          Khiếu nại trong vòng 24 giờ sau khi giao. Khi khiếu nại đang mở, đơn chưa hoàn tất và tài xế chưa được tất toán.
           {isCash && ' Đơn tiền mặt: tranh chấp tiền được xử lý ngoài hệ thống, nhưng bạn vẫn có thể gửi khiếu nại để ghi nhận.'}
         </Banner>
         <ReasonPicker load={publicApi.complaintReasons} value={code} onChange={setCode} />
@@ -185,18 +189,33 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
           <input type="number" min={1} max={order.totalFee} value={amount || ''} onChange={(e) => setAmount(Number(e.target.value))} className={inputClass()} />
         </div>
         <PhotoUploader label="Ảnh bằng chứng" value={photos} onChange={setPhotos} max={5} upload={customerApi.upload} />
+        <PayoutAccountForm value={payout} onChange={setPayout} />
       </div>
     </Modal>
   );
 };
 
 /* ------------------------------------------------------------ Báo sự cố (UC-CUS-15) */
-const INCIDENT_TYPES: IncidentType[] = ['DamagedCargo', 'VehicleBreakdown', 'Accident', 'Other'];
+/** Lý do nhanh: bấm vào thì điền loại sự cố và câu mở đầu cho mô tả (trễ, sai tuyến, vắng mặt đều ghi là Other) */
+const QUICK_REASONS: { label: string; type: IncidentType; starter: string }[] = [
+  { label: 'Hàng hư hỏng', type: 'DamagedCargo', starter: 'Hàng bị hư hỏng: ' },
+  { label: 'Tài xế đến trễ', type: 'Other', starter: 'Tài xế đến trễ: ' },
+  { label: 'Đi sai tuyến', type: 'Other', starter: 'Tài xế đi sai tuyến: ' },
+  { label: 'Không liên lạc được tài xế / tài xế vắng mặt', type: 'Other', starter: 'Không liên lạc được với tài xế: ' },
+  { label: 'Tai nạn', type: 'Accident', starter: 'Tai nạn trên đường: ' },
+  { label: 'Khác', type: 'Other', starter: '' },
+];
 export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailResponse }> = ({ order, onClose, onDone }) => {
-  const [type, setType] = useState<IncidentType>('Other');
+  const [reason, setReason] = useState(QUICK_REASONS[QUICK_REASONS.length - 1]);
+  const type = reason.type;
   const [desc, setDesc] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [useGps, setUseGps] = useState(true);
+  const pick = (r: (typeof QUICK_REASONS)[number]) => {
+    // Chỉ thay câu mở đầu khi khách chưa tự viết gì thêm
+    if (!desc.trim() || QUICK_REASONS.some((x) => x.starter && desc.trim() === x.starter.trim())) setDesc(r.starter);
+    setReason(r);
+  };
   const [busy, setBusy] = useState(false);
   const getPos = () =>
     new Promise<{ latitude: number; longitude: number } | null>((res) => {
@@ -239,18 +258,20 @@ export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailRespo
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Từ khi tài xế đến điểm lấy, bạn không tự huỷ được đơn. Hãy báo sự cố để Điều phối viên quyết định (tiếp tục, đổi tài xế hoặc huỷ).</Banner>
+        <Banner kind="info">
+          Điều phối viên sẽ kiểm tra và có thể cho tiếp tục, đổi tài xế hoặc huỷ đơn. Tài xế chỉ nhận thông báo chung, không thấy nội dung bạn viết. Chuyến vẫn tiếp tục trong lúc chờ xử lý.
+        </Banner>
         <div>
-          <span className="block text-xs font-bold text-slate-700 mb-1">Loại sự cố *</span>
-          <div className="grid grid-cols-2 gap-2">
-            {INCIDENT_TYPES.map((t) => (
+          <span className="block text-xs font-bold text-slate-700 mb-1">Lý do nhanh *</span>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {QUICK_REASONS.map((r) => (
               <button
-                key={t}
+                key={r.label}
                 type="button"
-                onClick={() => setType(t)}
-                className={`px-3 py-2 rounded-xl border text-xs font-bold text-left ${type === t ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                onClick={() => pick(r)}
+                className={`px-3 py-2 rounded-xl border text-xs font-bold text-left ${reason.label === r.label ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
               >
-                {INCIDENT_TYPE[t]}
+                {r.label}
               </button>
             ))}
           </div>
@@ -270,13 +291,16 @@ export const IncidentRefundModal: React.FC<BaseProps & { order: OrderDetailRespo
   const [reason, setReason] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [payout, setPayout] = useState<PayoutAccountValue>(emptyPayoutAccount);
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!reason.trim()) return toast.error('Vui lòng nêu lý do yêu cầu hoàn tiền.');
     if (!(amount > 0) || amount > order.totalFee) return toast.error(`Số tiền phải từ 1đ tới ${formatCurrency(order.totalFee)}.`);
+    const payoutError = validatePayoutAccount(payout);
+    if (payoutError) return toast.error(payoutError);
     setBusy(true);
     try {
-      await customerApi.requestIncidentRefund({ incidentId: incident.id, reason: reason.trim(), evidenceUrls: photos, requestedAmount: Math.round(amount) });
+      await customerApi.requestIncidentRefund({ incidentId: incident.id, reason: reason.trim(), evidenceUrls: photos, requestedAmount: Math.round(amount), payoutAccount: toPayoutInput(payout) });
       toast.success('Đã gửi yêu cầu hoàn tiền. Điều phối viên sẽ đề xuất, Admin duyệt và chuyển khoản.');
       onDone();
     } catch (e) {
@@ -303,13 +327,14 @@ export const IncidentRefundModal: React.FC<BaseProps & { order: OrderDetailRespo
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Chỉ áp dụng cho đơn PayOS đã thanh toán. Số tiền được Điều phối viên đề xuất và Admin duyệt không vượt số bạn yêu cầu (GB-42).</Banner>
+        <Banner kind="info">Chỉ áp dụng cho đơn PayOS đã thanh toán. Số tiền được Điều phối viên đề xuất và Admin duyệt không vượt số bạn yêu cầu.</Banner>
         <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Số tiền yêu cầu (tối đa {formatCurrency(order.totalFee)}) *</label>
           <input type="number" min={1} max={order.totalFee} value={amount || ''} onChange={(e) => setAmount(Number(e.target.value))} className={inputClass()} />
         </div>
         <PhotoUploader label="Ảnh bằng chứng" value={photos} onChange={setPhotos} max={5} upload={customerApi.upload} />
+        <PayoutAccountForm value={payout} onChange={setPayout} />
       </div>
     </Modal>
   );
@@ -413,7 +438,7 @@ export const RatingModal: React.FC<BaseProps & { orderId: number; orderCode: str
         <div className="text-left">
           <TextArea label="Nhận xét" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} />
         </div>
-        <p className="text-[11px] text-slate-400">Mỗi đơn đánh giá một lần, không sửa được, trong vòng 1 ngày sau khi hoàn thành (GB-20).</p>
+        <p className="text-[11px] text-slate-400">Mỗi đơn đánh giá một lần, không sửa được, trong vòng 1 ngày sau khi hoàn thành.</p>
       </div>
     </Modal>
   );

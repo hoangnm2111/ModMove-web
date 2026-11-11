@@ -1,47 +1,96 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Info, PiggyBank, ShieldCheck, Wallet } from 'lucide-react';
 import { Banner } from '../../components/ui/feedback';
-import { Card, Loading, PageShell, StatCard } from '../../components/ui/kit';
-import { useDriver } from '../../features/driver/DriverContext';
-import { formatCurrency } from '../../utils/format';
+import { Card, DataState, KV, PageShell, Pager, StatCard, Table } from '../../components/ui/kit';
+import { driverApi } from '../../api/endpoints';
+import { useQuery } from '../../api/useQuery';
+import { WALLET_TX_TYPE } from '../../api/labels';
+import { formatCurrency, formatDateTime } from '../../utils/format';
 
-/** UC-DRV-20 – Số dư ví (GET /driver/status). Nạp cọc / rút tiền / báo cáo thu nhập chưa có API backend. */
+/** Ví tài xế (GET /driver/wallet): ví thu nhập + ví ký quỹ, lịch sử biến động. Nạp tiền và rút tiền thực hiện trên app tài xế. */
 export const DriverEarningsPage: React.FC = () => {
-  const { status: s } = useDriver();
-  if (!s)
-    return (
-      <PageShell title="Ví & thu nhập">
-        <Loading />
-      </PageShell>
-    );
-  const debt = Math.min(0, s.depositBalance);
-  const withdrawable = Math.max(0, s.earningsBalance + debt);
+  const wallet = useQuery(() => driverApi.wallet(), []);
+  const [page, setPage] = useState(1);
+  const history = useQuery(() => driverApi.walletTransactions(page, 10), [page]);
+
   return (
-    <PageShell title="Ví & thu nhập" subtitle="Hai số dư tách biệt: ví cọc (đảm bảo hoa hồng đơn tiền mặt) và thu nhập (rút được)">
+    <PageShell title="Ví & thu nhập" subtitle="Ví thu nhập và ví ký quỹ cộng lại thành tổng số dư; rút được cả hai khi không có đơn đang chạy">
       <div className="max-w-5xl mx-auto space-y-4">
-        <div className="grid sm:grid-cols-3 gap-3">
-          <StatCard label="Thu nhập (EarningsBalance)" value={formatCurrency(s.earningsBalance)} hint="Thu nhập đơn PayOS, rút được" icon={<Wallet className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
-          <StatCard
-            label="Ví cọc (DepositBalance)"
-            value={<span className={s.depositBalance < 0 ? 'text-rose-600' : ''}>{formatCurrency(s.depositBalance)}</span>}
-            hint="Bị trừ hoa hồng đơn tiền mặt, không rút được"
-            icon={<PiggyBank className="w-5 h-5" />}
-          />
-          <StatCard label="Có thể rút tối đa" value={formatCurrency(withdrawable)} hint={debt < 0 ? `Đã trừ nợ ví cọc ${formatCurrency(-debt)}` : 'Không có nợ ví cọc'} icon={<ShieldCheck className="w-5 h-5" />} accent="bg-indigo-50 text-indigo-600" />
-        </div>
-        {s.walletStatus && s.walletStatus !== 'Active' && <Banner kind="warning">Ví đang bị khoá ({s.walletStatus}). Liên hệ quản trị viên.</Banner>}
-        {s.depositBalance < 0 && <Banner kind="error">Ví cọc đang âm – bạn không nhận được đơn tiền mặt cho tới khi nạp thêm (GB-15, GB-16).</Banner>}
-        <Card title="Quy định ví (GB-32, 5.1, 5.2)">
-          <ul className="text-xs text-slate-700 space-y-1.5 list-disc ml-4">
-            <li>Nạp cọc qua PayOS, tối thiểu 50.000đ mỗi lần. Nhận đơn tiền mặt cần ví cọc ≥ mức ký quỹ tối thiểu và ≥ hoa hồng của đơn.</li>
-            <li>Đơn tiền mặt: hoa hồng trừ vào ví cọc khi hoàn tất (ví được phép âm). Đơn PayOS: thu nhập (cước − hoa hồng) cộng vào ví thu nhập.</li>
-            <li>Rút thu nhập không có mức tối thiểu, một yêu cầu chờ tại một thời điểm; nợ ví cọc được trừ trước. Admin chuyển khoản thủ công trong 3 ngày làm việc.</li>
-          </ul>
+        <DataState q={wallet}>
+          {(w) => (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard label="Ví thu nhập" value={formatCurrency(w.earningsBalance)} hint="Cước trừ hoa hồng của đơn thanh toán qua PayOS" icon={<Wallet className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
+                <StatCard
+                  label="Ví ký quỹ"
+                  value={<span className={w.depositBalance < 0 ? 'text-rose-600' : ''}>{formatCurrency(w.depositBalance)}</span>}
+                  hint="Bị trừ hoa hồng của đơn tiền mặt"
+                  icon={<PiggyBank className="w-5 h-5" />}
+                />
+                <StatCard label="Tổng số dư" value={formatCurrency(w.walletTotal)} hint="Ví thu nhập + ví ký quỹ" icon={<Wallet className="w-5 h-5" />} />
+                <StatCard
+                  label="Có thể rút tối đa"
+                  value={formatCurrency(w.maxWithdrawableAmount)}
+                  hint={w.hasActiveOrder ? 'Đang có đơn chạy: chỉ rút được phần thu nhập' : 'Không có đơn chạy: rút được cả hai ví'}
+                  icon={<ShieldCheck className="w-5 h-5" />}
+                  accent="bg-indigo-50 text-indigo-600"
+                />
+              </div>
+
+              {w.walletStatus !== 'Active' && <Banner kind="warning">Ví đang bị khoá ({w.walletStatus}). Liên hệ quản trị viên.</Banner>}
+              {w.missingDepositAmount > 0 && (
+                <Banner kind="error">
+                  Ví ký quỹ thiếu {formatCurrency(w.missingDepositAmount)} so với mức tối thiểu {formatCurrency(w.requiredDeposit)} – bạn chưa nhận được đơn mới cho tới khi nạp đủ. Nạp ít nhất phần thiếu.
+                </Banner>
+              )}
+              {w.hasPendingWithdrawal && <Banner kind="info">Đang có yêu cầu rút {formatCurrency(w.pendingWithdrawalAmount)} chờ quản trị viên chuyển khoản.</Banner>}
+
+              <Card title="Quy định ví">
+                <ul className="text-xs text-slate-700 space-y-1.5 list-disc ml-4">
+                  <li>Nhận mọi đơn cần ví ký quỹ từ {formatCurrency(w.requiredDeposit)} trở lên; đơn tiền mặt cần thêm ví ký quỹ không nhỏ hơn hoa hồng của đơn.</li>
+                  <li>Đơn tiền mặt: hoa hồng trừ vào ví ký quỹ khi hoàn tất. Đơn PayOS: cước trừ hoa hồng cộng vào ví thu nhập.</li>
+                  <li>Khi ví ký quỹ thấp hơn mức tối thiểu, thu nhập mới được tự động bù vào ký quỹ cho tới khi đủ.</li>
+                  <li>Rút tiền không có mức tối thiểu và chỉ có một yêu cầu chờ tại một thời điểm; trừ ví thu nhập trước, thiếu thì trừ ví ký quỹ. Quản trị viên chuyển khoản thủ công.</li>
+                </ul>
+              </Card>
+
+              <Card title="Tài khoản nhận tiền">
+                <KV label="Ngân hàng">{w.bankAccount?.bankName ?? '—'}</KV>
+                <KV label="Số tài khoản">
+                  <span className="font-mono">{w.bankAccount?.bankAccountNumber ?? '—'}</span>
+                </KV>
+                <KV label="Chủ tài khoản">{w.bankAccount?.bankAccountHolder ?? '—'}</KV>
+              </Card>
+            </>
+          )}
+        </DataState>
+
+        <Card title="Lịch sử biến động ví">
+          <DataState q={history} empty={(d) => d.items.length === 0}>
+            {(d) => (
+              <>
+                <Table
+                  rows={d.items}
+                  rowKey={(t) => t.id}
+                  cols={[
+                    { head: 'Thời gian', cell: (t) => formatDateTime(t.createdAt) },
+                    { head: 'Loại', cell: (t) => WALLET_TX_TYPE[t.transactionType] ?? t.transactionType },
+                    { head: 'Đơn hàng', cell: (t) => t.orderCode ?? '—' },
+                    { head: 'Số tiền', className: 'text-right', cell: (t) => <b>{formatCurrency(t.amount)}</b> },
+                    { head: 'Ví thu nhập', className: 'text-right', cell: (t) => formatCurrency(t.earningsAmount) },
+                    { head: 'Ví ký quỹ', className: 'text-right', cell: (t) => formatCurrency(t.depositAmount) },
+                    { head: 'Số dư sau', className: 'text-right', cell: (t) => formatCurrency(t.balanceAfter) },
+                  ]}
+                />
+                <Pager page={d.pageNumber} pageSize={d.pageSize} total={d.totalCount} onChange={setPage} />
+              </>
+            )}
+          </DataState>
         </Card>
+
         <Banner kind="info">
           <span className="inline-flex gap-1.5">
-            <Info className="w-4 h-4 flex-shrink-0" /> Nạp cọc (UC-DRV-21), yêu cầu rút tiền (UC-DRV-22), lịch sử giao dịch và báo cáo thu nhập theo ngày/tuần/tháng (UC-DRV-23) thực hiện trên app
-            tài xế – backend hiện chưa có API cho web.
+            <Info className="w-4 h-4 flex-shrink-0" /> Nạp ký quỹ, yêu cầu rút tiền và báo cáo thu nhập theo ngày, tuần, tháng thực hiện trên app tài xế.
           </span>
         </Banner>
       </div>

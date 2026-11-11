@@ -6,7 +6,7 @@ import { PagedResult } from './pagination';
 /**
  * Driver wallet – đọc từ api/driver/status (số dư); api/admin/withdrawals để Admin xử lý yêu cầu rút tiền.
  * Backend hiện CHƯA có endpoint cho tài xế tự tạo yêu cầu rút tiền / nạp ký quỹ trên web
- * (DECISIONS C11: nghiệp vụ tài xế thuộc app di động) – 2 hàm đó báo lỗi rõ ràng, không giả lập.
+ * (nghiệp vụ tài xế thuộc app di động) – 2 hàm đó báo lỗi rõ ràng, không giả lập.
  */
 export interface DriverWallet {
   driverId: string;
@@ -77,10 +77,10 @@ export const walletService = {
 
   // -------------------------------------------------------------- Driver
   async topUpDeposit(_driverId: string, _amount: number): Promise<DriverWallet> {
-    throw new ServiceError('Backend chưa có API nạp ký quỹ cho tài xế trên web (DECISIONS C11: dành cho app di động).');
+    throw new ServiceError('Backend chưa có API nạp ký quỹ cho tài xế trên web. Hãy dùng app tài xế.');
   },
 
   async requestWithdrawal(_driverId: string, _driverName: string, _amount: number): Promise<WithdrawalRequest> {
-    throw new ServiceError('Backend chưa có API tạo yêu cầu rút tiền cho tài xế trên web (DECISIONS C11: dành cho app di động).');
+    throw new ServiceError('Backend chưa có API tạo yêu cầu rút tiền cho tài xế trên web. Hãy dùng app tài xế.');
   },
 };

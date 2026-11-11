@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppRoutes } from './routes/AppRoutes';
 import { ConfirmHost, ToastViewport } from './components/ui/feedback';
 import { useAuthStore } from './store/useAuthStore';
+import { useRealtimeConnection } from './hooks/useRealtime';
 import './services'; // đăng ký handler nghiệp vụ (hoàn tiền, quyết toán ví)
 
 export const App: React.FC = () => {
@@ -10,6 +11,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     void useAuthStore.getState().bootstrap();
   }, []);
+
+  // Thông báo thời gian thực (SignalR): kết nối khi đã đăng nhập, ngắt khi đăng xuất
+  useRealtimeConnection();
 
   return (
     <BrowserRouter>

@@ -18,7 +18,9 @@ const TABS: { key: StatusTab; label: string }[] = [
 ];
 const TYPE_OPTS = [{ value: '', label: 'Mọi loại sự cố' }, ...(Object.keys(INCIDENT_TYPE) as IncidentType[]).map((t) => ({ value: t, label: INCIDENT_TYPE[t] }))];
 
-/** UC-DIS-03/04 – Danh sách sự cố: GET /dispatcher/Incidents */
+const blocks = (r: { reporterRole: string; resolutionStatus: string }) => r.reporterRole === 'Driver' && (r.resolutionStatus === 'Open' || r.resolutionStatus === 'InProgress');
+
+/** Danh sách sự cố: GET /dispatcher/Incidents */
 export const IncidentsPage: React.FC = () => {
   const [tab, setTab] = useState<StatusTab>('Open');
   const [type, setType] = useState<IncidentType | ''>('');
@@ -50,7 +52,8 @@ export const IncidentsPage: React.FC = () => {
             {(d) => (
               <>
                 <Table
-                  rows={d.items}
+                  // Sự cố do tài xế báo còn mở (đang chặn chuyến) lên đầu danh sách
+                  rows={[...d.items].sort((a, b) => Number(blocks(b)) - Number(blocks(a)))}
                   rowKey={(r) => r.id}
                   onRow={(r) => setOpenId(r.id)}
                   cols={[
@@ -83,6 +86,11 @@ export const IncidentsPage: React.FC = () => {
                         <div>
                           <div className="font-semibold">{r.reporterName}</div>
                           <div className="text-[11px] text-slate-400">{r.reporterRole === 'Driver' ? 'Tài xế' : 'Khách hàng'}</div>
+                          {(r.resolutionStatus === 'Open' || r.resolutionStatus === 'InProgress') && (
+                            <div className={`text-[10px] font-bold ${r.reporterRole === 'Driver' ? 'text-rose-600' : 'text-slate-400'}`}>
+                              {r.reporterRole === 'Driver' ? 'Chặn chuyến' : 'Không chặn chuyến'}
+                            </div>
+                          )}
                         </div>
                       ),
                     },

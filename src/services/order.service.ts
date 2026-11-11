@@ -511,10 +511,10 @@ export const orderService = {
     throw new ServiceError('Chưa có API backend cho thao tác này trên web (dành cho app di động).');
   },
   async submitPickupEvidence(_orderId: string, _photos: string[]): Promise<ShippingOrder> {
-    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web (DECISIONS C11: tài xế dùng app di động).');
+    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web. Tài xế hãy dùng app di động.');
   },
   async markDelivered(_orderId: string, _deliveryPhoto: string): Promise<ShippingOrder> {
-    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web (DECISIONS C11: tài xế dùng app di động).');
+    throw new ServiceError('Chưa có API tải ảnh cho tài xế trên web. Tài xế hãy dùng app di động.');
   },
   async confirmCashCollected(_orderId: string): Promise<ShippingOrder> {
     throw new ServiceError('Backend chưa có endpoint xác nhận thu tiền mặt riêng cho web.');

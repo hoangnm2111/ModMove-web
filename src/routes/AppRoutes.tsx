@@ -23,6 +23,7 @@ const DriverJobListPage = page(() => import('../pages/driver/DriverJobListPage')
 const DriverHomePage = page(() => import('../pages/driver/DriverHomePage'), 'DriverHomePage');
 const DriverEarningsPage = page(() => import('../pages/driver/DriverEarningsPage'), 'DriverEarningsPage');
 const DriverProfilePage = page(() => import('../pages/driver/DriverProfilePage'), 'DriverProfilePage');
+const DriverIncidentsPage = page(() => import('../pages/driver/DriverIncidentsPage'), 'DriverIncidentsPage');
 const LiveMapPage = page(() => import('../pages/dispatcher/LiveMapPage'), 'LiveMapPage');
 const IncidentsPage = page(() => import('../pages/dispatcher/IncidentsPage'), 'IncidentsPage');
 const DispatcherComplaintsPage = page(() => import('../pages/dispatcher/DispatcherComplaintsPage'), 'DispatcherComplaintsPage');
@@ -97,7 +98,7 @@ export const AppRoutes: React.FC = () => (
           <Route index element={<DriverJobListPage />} />
           <Route path="trip" element={<DriverHomePage />} />
           <Route path="history" element={<Navigate to="/driver/trip" replace />} />
-          <Route path="incidents" element={<Navigate to="/driver/trip" replace />} />
+          <Route path="incidents" element={<DriverIncidentsPage />} />
           <Route path="earnings" element={<DriverEarningsPage />} />
           <Route path="profile" element={<DriverProfilePage />} />
         </Route>

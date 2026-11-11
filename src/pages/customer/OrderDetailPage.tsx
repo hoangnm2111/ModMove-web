@@ -24,11 +24,14 @@ import { customerApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, ORDER_FLOW, ORDER_STATUS, PAYER_ROLE, PAYMENT_STATUS, PAYMENT_TX_STATUS, PROOF_STATUS, REFUND_SOURCE, REFUND_STATUS } from '../../api/labels';
 import type { MyIncidentResponse, MyRefundDetailResponse, OrderDetailResponse } from '../../api/types';
+import { PayoutAccountModal } from '../../features/customer/PayoutAccountForm';
 import { CancelOrderModal, ComplaintModal, IncidentRefundModal, RatingModal, RejectPickupModal, ReplyInfoModal, ReportIncidentModal } from '../../features/customer/CustomerModals';
 import { PayOsPaymentModal } from '../../features/payment/PayOsPaymentModal';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
+import { useOrderRealtime } from '../../hooks/useRealtime';
 
 const H = 3_600_000;
 const ACTIVE_TRACK = ['Accepted', 'Arrived', 'PickedUp', 'InTransit'];
@@ -37,6 +40,7 @@ type ModalState =
   | { kind: 'cancel' | 'rejectPickup' | 'complaint' | 'incident' | 'rate' | 'pay' }
   | { kind: 'incidentRefund'; incident: MyIncidentResponse }
   | { kind: 'reply'; refund: MyRefundDetailResponse }
+  | { kind: 'payout'; refund: MyRefundDetailResponse }
   | null;
 
 /** SCR chi tiết đơn của khách – GET /customer/Orders/{id} + tracking + sự cố + hoàn tiền + đánh giá */
@@ -53,7 +57,7 @@ export const OrderDetailPage: React.FC = () => {
   }, []);
 
   const order = useQuery(() => customerApi.order(orderId), [orderId], { refreshMs: 20_000 });
-  const incidents = useQuery(() => customerApi.incidents(1, 50), [orderId]);
+  const incidents = useQuery(() => customerApi.incidents(1, 50, orderId), [orderId]);
   const refunds = useQuery(() => customerApi.refunds(1, 50), [orderId]);
   const ratings = useQuery(() => customerApi.ratings(1, 50), [orderId]);
   const o = order.data;
@@ -69,6 +73,18 @@ export const OrderDetailPage: React.FC = () => {
     setModal(null);
     void reloadAll();
   };
+  // Tài xế đổi trạng thái đơn → tự tải lại chi tiết đơn đang xem (SignalR OrderStatusChanged)
+  useOrderRealtime(() => void reloadAll(), orderId);
+
+  // Còn sự cố mở (của ai cũng được) hoặc tài xế đang có sự cố chặn chuyến: tải lại mỗi 15 giây
+  const hasOpenIncident =
+    !!o?.pendingDriverIncidentId || (incidents.data?.items ?? []).some((i) => i.orderId === orderId && (i.resolutionStatus === 'Open' || i.resolutionStatus === 'InProgress'));
+  useEffect(() => {
+    if (!hasOpenIncident) return;
+    const timer = setInterval(() => void reloadAll(), 15_000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOpenIncident]);
 
   if (order.loading && !o) return <Loading />;
   if (order.error && !o) return <ErrorBox error={order.error} onRetry={order.reload} />;
@@ -95,6 +111,19 @@ export const OrderDetailPage: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-6xl mx-auto space-y-4">
           <Progress order={o} />
+          {o.pendingDriverIncidentId ? (
+            <button
+              type="button"
+              onClick={() => document.getElementById('incidents-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="w-full text-left rounded-2xl border border-rose-200 bg-rose-50 p-4 flex gap-3 items-start hover:bg-rose-100 transition"
+            >
+              <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <span className="text-xs text-rose-800">
+                <b className="block text-sm">Tài xế đã báo sự cố #{o.pendingDriverIncidentId}</b>
+                Chuyến tạm dừng chờ điều phối viên xử lý. Bấm để xem chi tiết sự cố.
+              </span>
+            </button>
+          ) : null}
           <NextAction
             order={o}
             hasOpenComplaint={myRefunds.some((r) => r.sourceType === 'Complaint' && ['Requested', 'Approved'].includes(r.refundStatus))}
@@ -115,7 +144,7 @@ export const OrderDetailPage: React.FC = () => {
                 onReport={() => setModal({ kind: 'incident' })}
                 onRefund={(incident) => setModal({ kind: 'incidentRefund', incident })}
               />
-              <RefundsCard refunds={myRefunds} onReply={(refund) => setModal({ kind: 'reply', refund })} onChanged={reloadAll} />
+              <RefundsCard refunds={myRefunds} onReply={(refund) => setModal({ kind: 'reply', refund })} onPayout={(refund) => setModal({ kind: 'payout', refund })} onChanged={reloadAll} />
               <Card title="Lịch sử trạng thái">
                 <StatusTimeline items={o.history.map((h) => ({ ...h, at: h.changedAt }))} />
               </Card>
@@ -125,9 +154,7 @@ export const OrderDetailPage: React.FC = () => {
               <Card title="Người nhận">
                 <KV label="Họ tên">{o.receiverName}</KV>
                 <KV label="Số điện thoại">
-                  <a href={`tel:${o.receiverPhone}`} className="text-blue-600">
-                    {o.receiverPhone}
-                  </a>
+                  <PhoneLink phone={o.receiverPhone} />
                 </KV>
               </Card>
               <FareCard order={o} />
@@ -154,6 +181,7 @@ export const OrderDetailPage: React.FC = () => {
       {modal?.kind === 'incident' && <ReportIncidentModal order={o} onClose={() => setModal(null)} onDone={done} />}
       {modal?.kind === 'incidentRefund' && <IncidentRefundModal order={o} incident={modal.incident} onClose={() => setModal(null)} onDone={done} />}
       {modal?.kind === 'reply' && <ReplyInfoModal refund={modal.refund} onClose={() => setModal(null)} onDone={done} />}
+      {modal?.kind === 'payout' && <PayoutAccountModal refund={modal.refund} onClose={() => setModal(null)} onDone={done} />}
       {modal?.kind === 'rate' && <RatingModal orderId={o.id} orderCode={o.orderCode} driverName={o.driver?.fullName} onClose={() => setModal(null)} onDone={done} />}
       {modal?.kind === 'pay' && (
         <PayOsPaymentModal
@@ -232,6 +260,8 @@ const NextAction: React.FC<{
   onModal: (k: 'cancel' | 'rejectPickup' | 'complaint' | 'incident' | 'rate' | 'pay') => void;
   onReload: () => Promise<void>;
 }> = ({ order: o, hasOpenComplaint, rated, onModal, onReload }) => {
+  // Tài xế có sự cố mở: khách chưa duyệt được ảnh lấy hàng (BE trả INCIDENT_PENDING), vẫn từ chối được
+  const driverIncidentPending = !!o.pendingDriverIncidentId;
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -281,7 +311,7 @@ const NextAction: React.FC<{
           <CreditCard className="w-5 h-5 text-rose-600" />,
           'Thanh toán để bắt đầu tìm tài xế',
           <>
-            Đơn PayOS chỉ được gửi tới tài xế sau khi thanh toán (GB-31). Đơn tự huỷ nếu chưa thanh toán sau 30 phút – còn <b>{fmtLeft(left)}</b>.
+            Đơn PayOS chỉ được gửi tới tài xế sau khi thanh toán. Đơn tự huỷ nếu chưa thanh toán sau 30 phút – còn <b>{fmtLeft(left)}</b>.
             {o.payment?.isExpired && ' Mã thanh toán trước đã hết hạn, hãy tạo mã mới.'}
           </>,
           <>
@@ -296,7 +326,7 @@ const NextAction: React.FC<{
         'bg-amber-50 border-amber-200',
         <Clock className="w-5 h-5 text-amber-600" />,
         'Đang tìm tài xế phù hợp gần điểm lấy',
-        'Đơn hiển thị cho mọi tài xế đủ điều kiện trong bán kính; tài xế nhận trước sẽ được giao đơn. Không có tài xế nhận trong 10 phút, đơn tự huỷ (GB-24).',
+        'Đơn hiển thị cho mọi tài xế đủ điều kiện trong bán kính; tài xế nhận trước sẽ được giao đơn. Không có tài xế nhận trong 10 phút, đơn tự huỷ.',
         cancelBtn
       );
     }
@@ -305,7 +335,7 @@ const NextAction: React.FC<{
         'bg-blue-50 border-blue-200',
         <Truck className="w-5 h-5 text-blue-600" />,
         `Tài xế ${o.driver?.fullName ?? ''} đang tới điểm lấy hàng`,
-        'Bạn vẫn có thể huỷ miễn phí cho tới khi tài xế đến điểm lấy (GB-22).',
+        'Bạn vẫn có thể huỷ miễn phí cho tới khi tài xế đến điểm lấy.',
         cancelBtn
       );
     case 'Arrived':
@@ -325,9 +355,15 @@ const NextAction: React.FC<{
           'bg-purple-50 border-purple-200',
           <CheckCircle2 className="w-5 h-5 text-purple-600" />,
           `Duyệt ảnh lấy hàng (lần gửi ${o.proof?.pickupSubmissionCount ?? 1}/5)`,
-          'Kiểm tra ảnh hàng tài xế vừa chụp bên dưới. Chuyến chỉ bắt đầu sau khi bạn duyệt (GB-26).',
+          driverIncidentPending ? (
+            <>
+              Kiểm tra ảnh hàng tài xế vừa chụp bên dưới. <b className="text-rose-700">Chưa duyệt được khi tài xế đang có sự cố</b>; bạn vẫn có thể từ chối để tài xế chụp lại.
+            </>
+          ) : (
+            'Kiểm tra ảnh hàng tài xế vừa chụp bên dưới. Chuyến chỉ bắt đầu sau khi bạn duyệt.'
+          ),
           <>
-            <Button size="sm" isLoading={busy} onClick={() => run(() => customerApi.reviewPickup(o.id, true), 'Đã duyệt ảnh. Tài xế bắt đầu vận chuyển.')}>
+            <Button size="sm" isLoading={busy} disabled={driverIncidentPending} onClick={() => run(() => customerApi.reviewPickup(o.id, true), 'Đã duyệt ảnh. Tài xế bắt đầu vận chuyển.')}>
               <CheckCircle2 className="w-4 h-4 mr-1" /> Duyệt ảnh, cho xuất phát
             </Button>
             <Button size="sm" variant="danger" onClick={() => onModal('rejectPickup')}>
@@ -364,11 +400,11 @@ const NextAction: React.FC<{
         <CheckCircle2 className="w-5 h-5 text-teal-600" />,
         'Hàng đã giao – kiểm tra và xác nhận',
         hasOpenComplaint ? (
-          <>Đơn đang có khiếu nại mở. Đơn sẽ hoàn tất sau khi khiếu nại được đóng (7.3).</>
+          <>Đơn đang có khiếu nại mở. Đơn sẽ hoàn tất sau khi khiếu nại được đóng.</>
         ) : (
           <>
             Hàng ổn: bấm <b>Xác nhận đã nhận hàng</b>. Hàng có vấn đề: bấm <b>Khiếu nại</b> (còn <b>{fmtLeft(left)}</b>). Xác nhận rồi sẽ không khiếu nại được nữa; quá 24 giờ đơn tự hoàn
-            tất (GB-18, GB-23).
+            tất.
           </>
         ),
         <>
@@ -400,7 +436,7 @@ const NextAction: React.FC<{
         'bg-emerald-50 border-emerald-200',
         <Star className="w-5 h-5 text-amber-500" />,
         'Đơn đã hoàn thành',
-        left > 0 ? <>Hãy đánh giá tài xế (còn {fmtLeft(left)}, chỉ một lần – GB-20).</> : 'Đã quá thời hạn 1 ngày để đánh giá.',
+        left > 0 ? <>Hãy đánh giá tài xế (còn {fmtLeft(left)}, chỉ một lần).</> : 'Đã quá thời hạn 1 ngày để đánh giá.',
         left > 0 && (
           <Button size="sm" onClick={() => onModal('rate')}>
             <Star className="w-4 h-4 mr-1" /> Đánh giá tài xế
@@ -613,6 +649,7 @@ const IncidentsCard: React.FC<{
   if (incidents.length === 0 && !canReport) return null;
   return (
     <Card
+      id="incidents-card"
       title={`Sự cố (${incidents.length})`}
       actions={
         canReport && (
@@ -625,52 +662,69 @@ const IncidentsCard: React.FC<{
       {incidents.length === 0 ? (
         <p className="text-xs text-slate-400">Chưa có sự cố nào.</p>
       ) : (
-        <ul className="space-y-3">
-          {incidents.map((i) => (
-            <li key={i.id} className="border border-slate-200 rounded-xl p-3 text-xs space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <b className="text-slate-900">#{i.id} – {INCIDENT_TYPE[i.incidentType]}</b>
-                <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} />
-                <span className="text-slate-400">{i.reportedByYou ? 'Bạn báo' : 'Tài xế báo'} • {formatDateTime(i.createdAt)}</span>
+        <div className="space-y-4">
+          {[
+            { title: 'Tài xế báo', items: incidents.filter((i) => !i.reportedByYou) },
+            { title: 'Bạn báo', items: incidents.filter((i) => i.reportedByYou) },
+          ]
+            .filter((g) => g.items.length > 0)
+            .map((g) => (
+              <div key={g.title}>
+                <div className="text-[11px] font-black uppercase tracking-wide text-slate-400 mb-1.5">{g.title}</div>
+                <ul className="space-y-3">
+                  {g.items.map((i) => (
+                    <li key={i.id} className="border border-slate-200 rounded-xl p-3 text-xs space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <b className="text-slate-900">#{i.id} – {INCIDENT_TYPE[i.incidentType]}</b>
+                        <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} />
+                        <span className="text-slate-400">{formatDateTime(i.createdAt)}</span>
+                      </div>
+                      <p className="text-slate-700">{i.description}</p>
+                      <PhotoGrid urls={i.photoUrls} size="sm" emptyText="Không có ảnh" />
+                      {i.resolutionStatus === 'InProgress' && <p className="text-amber-700 font-semibold">Điều phối viên đang xử lý</p>}
+                      {i.resolutionStatus === 'Resolved' && i.resolutionDecision && (
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                          <b>Kết quả:</b> {INCIDENT_DECISION[i.resolutionDecision]}
+                          {i.resolutionNote && <span className="text-slate-600"> – {i.resolutionNote}</span>}
+                          {i.resolvedAt && <span className="text-slate-400"> ({formatDateTime(i.resolvedAt)})</span>}
+                        </div>
+                      )}
+                      {i.resolutionStatus === 'Cancelled' && (
+                        <p className="text-slate-500">
+                          Báo cáo đã bị hủy{i.resolutionNote ? `: ${i.resolutionNote}` : ''}
+                        </p>
+                      )}
+                      {canRefund && (
+                        <Button size="sm" variant="outline" onClick={() => onRefund(i)}>
+                          Yêu cầu hoàn tiền cho sự cố này
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="text-slate-700">{i.description}</p>
-              <PhotoGrid urls={i.photoUrls} size="sm" emptyText="Không có ảnh" />
-              {i.resolutionDecision && (
-                <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
-                  <b>Kết quả xử lý:</b> {INCIDENT_DECISION[i.resolutionDecision]}
-                  {i.resolutionNote && <span className="text-slate-600"> – {i.resolutionNote}</span>}
-                  {i.resolvedAt && <span className="text-slate-400"> ({formatDateTime(i.resolvedAt)})</span>}
-                </div>
-              )}
-              {i.resolutionStatus === 'Cancelled' && i.resolutionNote && <p className="text-slate-500">Lý do huỷ sự cố: {i.resolutionNote}</p>}
-              {canRefund && (
-                <Button size="sm" variant="outline" onClick={() => onRefund(i)}>
-                  Yêu cầu hoàn tiền cho sự cố này
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+            ))}
+        </div>
       )}
     </Card>
   );
 };
 
 /* ------------------------------------------------------------------ Hoàn tiền / khiếu nại */
-const RefundsCard: React.FC<{ refunds: { id: number }[]; onReply: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ refunds, onReply, onChanged }) => {
+const RefundsCard: React.FC<{ refunds: { id: number }[]; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ refunds, onReply, onPayout, onChanged }) => {
   if (refunds.length === 0) return null;
   return (
     <Card title={`Khiếu nại & hoàn tiền (${refunds.length})`}>
       <ul className="space-y-3">
         {refunds.map((r) => (
-          <RefundItem key={r.id} id={r.id} onReply={onReply} onChanged={onChanged} />
+          <RefundItem key={r.id} id={r.id} onReply={onReply} onPayout={onPayout} onChanged={onChanged} />
         ))}
       </ul>
     </Card>
   );
 };
 
-const RefundItem: React.FC<{ id: number; onReply: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ id, onReply, onChanged }) => {
+const RefundItem: React.FC<{ id: number; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ id, onReply, onPayout, onChanged }) => {
   const q = useQuery(() => customerApi.refund(id), [id]);
   const [busy, setBusy] = useState(false);
   const r = q.data;
@@ -726,7 +780,28 @@ const RefundItem: React.FC<{ id: number; onReply: (r: MyRefundDetailResponse) =>
           <b>Quyết định của Admin:</b> {r.decisionReason}
         </div>
       )}
+      {r.payoutAccount && (
+        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+          <b>Tài khoản nhận hoàn tiền:</b> {r.payoutAccount.bankName} • {r.payoutAccount.maskedAccountNumber} • {r.payoutAccount.accountHolder}
+        </div>
+      )}
+      {r.needsPayoutAccount && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-amber-800">Bạn chưa khai tài khoản nhận hoàn tiền nên quản trị viên chưa thể chuyển khoản.</div>
+      )}
+      {r.payoutFailureReason && (
+        <div className="rounded-lg bg-rose-50 border border-rose-200 p-2 text-rose-700">Chuyển khoản hoàn tiền bị lỗi: {r.payoutFailureReason}. Hãy kiểm tra hoặc nhập tài khoản khác.</div>
+      )}
+      {r.bankReferenceCode && (
+        <p className="text-slate-600">
+          Mã chuyển khoản: <b>{r.bankReferenceCode}</b>
+        </p>
+      )}
       <div className="flex gap-2 pt-1">
+        {(r.needsPayoutAccount || r.refundStatus === 'Failed' || (r.payoutAccount && ['Requested', 'Approved'].includes(r.refundStatus))) && (
+          <Button size="sm" variant={r.needsPayoutAccount || r.refundStatus === 'Failed' ? 'primary' : 'outline'} onClick={() => onPayout(r)}>
+            {r.payoutAccount ? 'Sửa tài khoản nhận tiền' : 'Khai tài khoản nhận tiền'}
+          </Button>
+        )}
         {r.waitingForYourReply && (
           <Button size="sm" onClick={() => onReply(r)}>
             Bổ sung thông tin

@@ -31,12 +31,12 @@ export const AdminPricingPage: React.FC = () => {
     <PageShell title="Bảng cước & hoa hồng" subtitle="Giá mới áp dụng cho đơn đặt sau thời điểm thay đổi; đơn đã đặt giữ nguyên giá">
       <div className="max-w-6xl mx-auto space-y-4">
         <Banner kind="info">
-          Công thức (GB-29): <b>Tổng cước = max(Giá tối thiểu, Giá mở cửa + Giá/km × km) + Phí bốc xếp (nếu chọn) − Giảm giá</b>. Không có phụ phí giờ cao điểm hay hàng cồng kềnh (B2).
+          Công thức: <b>Tổng cước = max(Giá tối thiểu, Giá mở cửa + Giá/km × km) + Phí bốc xếp (nếu chọn) − Giảm giá</b>. Không có phụ phí giờ cao điểm hay hàng cồng kềnh.
         </Banner>
         <DataState q={q}>
           {(p) => (
             <>
-              <Card title="Giá theo loại xe (UC-ADM-11)">
+              <Card title="Giá theo loại xe">
                 <Table
                   rows={p.vehicleTypes}
                   rowKey={(v) => v.id}
@@ -76,15 +76,15 @@ export const AdminPricingPage: React.FC = () => {
 };
 
 const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promise<void> }> = ({ s, onSaved }) => {
-  const [f, setF] = useState({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.minCodDeposit, radius: s.matchingRadiusKm });
+  const [f, setF] = useState({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.requiredDeposit, radius: s.matchingRadiusKm });
   const [busy, setBusy] = useState(false);
-  useEffect(() => setF({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.minCodDeposit, radius: s.matchingRadiusKm }), [s]);
+  useEffect(() => setF({ commission: s.commissionRate * 100, loadingFee: s.loadingFee, minCod: s.requiredDeposit, radius: s.matchingRadiusKm }), [s]);
   const save = async () => {
     const patch: Partial<PlatformSettingsResponse> = {};
     const rate = Math.round(f.commission * 100) / 10000;
     if (rate !== s.commissionRate) patch.commissionRate = rate;
     if (f.loadingFee !== s.loadingFee) patch.loadingFee = f.loadingFee;
-    if (f.minCod !== s.minCodDeposit) patch.minCodDeposit = f.minCod;
+    if (f.minCod !== s.requiredDeposit) patch.requiredDeposit = f.minCod;
     if (f.radius !== s.matchingRadiusKm) patch.matchingRadiusKm = f.radius;
     if (Object.keys(patch).length === 0) return toast.info('Chưa có thay đổi.');
     if (rate < 0 || rate >= 1) return toast.error('Tỷ lệ hoa hồng phải từ 0% đến dưới 100%.');
@@ -101,7 +101,7 @@ const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promi
   };
   return (
     <Card
-      title="Tham số nền tảng (UC-ADM-12/13)"
+      title="Tham số nền tảng"
       actions={
         <Button size="sm" onClick={save} isLoading={busy}>
           <Save className="w-4 h-4 mr-1" /> Lưu thay đổi
@@ -111,11 +111,11 @@ const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promi
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field label="Hoa hồng nền tảng (%)" type="number" step="0.1" value={f.commission} onChange={(e) => setF({ ...f, commission: Number(e.target.value) })} hint="Trừ trên cước sau giảm giá; chốt khi tài xế nhận đơn" />
         <Field label="Phí bốc xếp (VND)" type="number" value={f.loadingFee} onChange={(e) => setF({ ...f, loadingFee: Number(e.target.value) })} hint="Cộng vào cước khi khách chọn bốc xếp" />
-        <Field label="Ký quỹ COD tối thiểu (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận đơn tiền mặt (GB-16)" />
-        <Field label="Bán kính ghép đơn (km)" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} hint="Tài xế thấy đơn trong bán kính này (GB-08)" />
+        <Field label="Ký quỹ tối thiểu để nhận đơn (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận mọi đơn; đơn tiền mặt cần thêm ≥ hoa hồng của đơn" />
+        <Field label="Bán kính ghép đơn (km)" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} hint="Tài xế thấy đơn trong bán kính này" />
       </div>
       <p className="text-[11px] text-amber-700 mt-3">
-        Không đổi được hoa hồng khi còn đơn đang chạy (từ “Tài xế đã nhận” tới trước “Đã giao”) – hệ thống sẽ báo lỗi COMMISSION_RATE_LOCKED (C8).
+        Không đổi được hoa hồng khi còn đơn đang chạy (từ “Tài xế đã nhận” tới trước “Đã giao”) – hệ thống sẽ từ chối thay đổi.
       </p>
     </Card>
   );

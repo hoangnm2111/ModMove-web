@@ -73,7 +73,7 @@ export const DriverProfilePage: React.FC = () => {
   const st = ob.profileApprovalStatus;
 
   return (
-    <PageShell title="Hồ sơ & phương tiện" subtitle="Nộp giấy tờ để được duyệt và bắt đầu nhận đơn (GB-03)">
+    <PageShell title="Hồ sơ & phương tiện" subtitle="Nộp giấy tờ để được duyệt và bắt đầu nhận đơn">
       <div className="max-w-5xl mx-auto space-y-4">
         <Card title="Trạng thái hồ sơ" actions={st ? <Pill tone={APPROVAL_STATUS[st]} /> : <Pill tone={{ label: 'Chưa nộp', cls: 'bg-slate-100 text-slate-600 border-slate-200' }} />}>
           <div className="grid sm:grid-cols-2 gap-x-6">
@@ -98,7 +98,7 @@ export const DriverProfilePage: React.FC = () => {
                   <li key={i}>{r}</li>
                 ))}
               </ul>
-              <p className="mt-1">Sửa các mục trên rồi nộp lại – hệ thống tạo phiên bản mới (UC-DRV-05).</p>
+              <p className="mt-1">Sửa các mục trên rồi nộp lại – hệ thống tạo phiên bản mới.</p>
             </div>
           )}
         </Card>
@@ -139,8 +139,7 @@ export const DriverProfilePage: React.FC = () => {
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">Giấy tờ & ảnh xe (đúng 5 ảnh, theo thứ tự)</div>
               <p className="text-[11px] text-slate-500 mb-2">
-                Backend chưa có API tải ảnh cho tài xế trên web, nên tải ảnh từ máy được thực hiện trên app tài xế. Trên web, hãy dán đường dẫn ảnh (https) đã lưu sẵn. Mỗi ảnh JPG/PNG ≤ 5 MB
-                (GB-06).
+                Backend chưa có API tải ảnh cho tài xế trên web, nên tải ảnh từ máy được thực hiện trên app tài xế. Trên web, hãy dán đường dẫn ảnh (https) đã lưu sẵn. Mỗi ảnh JPG/PNG ≤ 5 MB.
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 {DOCS.map((label, i) => (

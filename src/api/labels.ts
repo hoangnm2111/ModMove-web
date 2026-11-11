@@ -1,4 +1,4 @@
-/** Nhãn tiếng Việt + màu cho các enum của backend */
+﻿/** Nhãn tiếng Việt + màu cho các enum của backend */
 import type * as T from './types';
 
 type Tone = { label: string; cls: string };
@@ -37,10 +37,10 @@ export const INCIDENT_TYPE: Record<T.IncidentType, string> = {
   Other: 'Khác (trễ, sai tuyến, vắng mặt…)',
 };
 export const INCIDENT_STATUS: Record<T.IncidentResolutionStatus, Tone> = {
-  Open: tone('Mới', 'bg-rose-50 text-rose-700 border-rose-200'),
-  InProgress: tone('Đang xử lý', 'bg-amber-50 text-amber-700 border-amber-200'),
+  Open: tone('Đang chờ xử lý', 'bg-rose-50 text-rose-700 border-rose-200'),
+  InProgress: tone('Điều phối viên đang xử lý', 'bg-amber-50 text-amber-700 border-amber-200'),
   Resolved: tone('Đã xử lý', 'bg-emerald-50 text-emerald-700 border-emerald-200'),
-  Cancelled: tone('Đã huỷ', 'bg-slate-100 text-slate-600 border-slate-200'),
+  Cancelled: tone('Báo cáo đã bị hủy', 'bg-slate-100 text-slate-600 border-slate-200'),
 };
 export const INCIDENT_DECISION: Record<T.IncidentDecision, string> = {
   ContinueTrip: 'Tiếp tục chuyến',
@@ -86,12 +86,21 @@ export const WITHDRAWAL_STATUS: Record<T.WalletTransactionStatus, Tone> = {
   Failed: tone('Lỗi', 'bg-rose-50 text-rose-700 border-rose-200'),
   Rejected: tone('Từ chối', 'bg-slate-100 text-slate-600 border-slate-200'),
 };
+/** Loại biến động ví tài xế (api/driver/wallet/transactions) */
+export const WALLET_TX_TYPE: Record<string, string> = {
+  TopUpDeposit: 'Nạp ký quỹ',
+  TripEarning: 'Thu nhập chuyến đi',
+  CommissionDeduction: 'Trừ hoa hồng đơn tiền mặt',
+  DepositRefill: 'Tự bù ký quỹ từ thu nhập',
+  Withdrawal: 'Rút tiền',
+};
 export const CHANGED_BY: Record<string, string> = { Customer: 'Khách hàng', Driver: 'Tài xế', Dispatcher: 'Điều phối', Administrator: 'Admin', System: 'Hệ thống' };
 export const MASTER_CATEGORY: Record<T.MasterDataCategory, { label: string; hint: string }> = {
-  POLICY: { label: 'Chính sách', hint: 'Bảo hành, hoàn tiền, điều khoản, quyền riêng tư – nội dung ở mô tả (B13)' },
+  POLICY: { label: 'Chính sách', hint: 'Bảo hành, hoàn tiền, điều khoản, quyền riêng tư – nội dung ở mô tả' },
   SERVICE_INFO: { label: 'Giới thiệu dịch vụ', hint: 'Giới thiệu, khu vực phục vụ, lợi ích – hiển thị trang chủ' },
-  CARGO_TYPE: { label: 'Loại hàng hoá', hint: 'Khách chọn khi đặt đơn (GST-10)' },
+  CARGO_TYPE: { label: 'Loại hàng hoá', hint: 'Khách chọn khi đặt đơn' },
   CANCELLATION_REASON: { label: 'Lý do huỷ đơn', hint: 'Khách chọn khi huỷ đơn; mã OTHER bắt buộc ghi lý do' },
   COMPLAINT_REASON: { label: 'Lý do khiếu nại', hint: 'Khách chọn khi khiếu nại; mã OTHER bắt buộc ghi lý do' },
   INCIDENT_CATEGORY: { label: 'Nhóm sự cố', hint: 'Danh mục tham khảo cho sự cố' },
+  BANK: { label: 'Ngân hàng', hint: 'Ngân hàng nhận hoàn tiền; mã là 6 chữ số (mã BIN), khách chọn khi khai tài khoản nhận hoàn tiền' },
 };

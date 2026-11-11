@@ -40,7 +40,7 @@ export const FareSummary: React.FC<{ fare: FareBreakdown | null; vehicle?: Vehic
           <span className="text-xs font-bold text-slate-600">Tổng thanh toán</span>
           <span className="text-xl font-black text-slate-900">{formatCurrency(fare.total)}</span>
         </div>
-        <p className="text-[10px] text-slate-400">Giá cố định tại thời điểm gửi đơn, không tính lại theo lộ trình thực tế (GB-29).</p>
+        <p className="text-[10px] text-slate-400">Giá cố định tại thời điểm gửi đơn, không tính lại theo lộ trình thực tế.</p>
       </>
     )}
   </aside>

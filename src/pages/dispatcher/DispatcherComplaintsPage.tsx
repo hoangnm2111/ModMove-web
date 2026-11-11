@@ -206,7 +206,7 @@ const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: ()
               </Card>
             </div>
 
-            <Card title="Đối chiếu bằng chứng (UC-DIS-13)">
+            <Card title="Đối chiếu bằng chứng">
               {c.order.cargo && (
                 <div className="mb-3">
                   <SectionTitle>
@@ -268,7 +268,7 @@ const InfoModal: React.FC<{ onClose: () => void; onSubmit: (note: string) => Pro
   return (
     <Modal
       open
-      title="Xin khách bổ sung thông tin (UC-DIS-14)"
+      title="Xin khách bổ sung thông tin"
       onClose={onClose}
       footer={
         <>
@@ -296,7 +296,7 @@ const InfoModal: React.FC<{ onClose: () => void; onSubmit: (note: string) => Pro
       }
     >
       <TextArea label="Câu hỏi / thông tin cần bổ sung *" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
-      <p className="text-[11px] text-slate-400 mt-2">Khách trả lời bằng một đoạn chữ và có thể thêm ảnh (tổng tối đa 5 ảnh – GB-43).</p>
+      <p className="text-[11px] text-slate-400 mt-2">Khách trả lời bằng một đoạn chữ và có thể thêm ảnh (tổng tối đa 5 ảnh).</p>
     </Modal>
   );
 };

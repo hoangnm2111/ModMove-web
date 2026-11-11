@@ -34,13 +34,13 @@ export const DriverJobListPage: React.FC = () => {
     { ok: s.hasProfile && s.approvalStatus === 'Approved', label: 'Hồ sơ đã được duyệt', fix: () => navigate('/driver/profile'), fixLabel: 'Xem hồ sơ' },
     { ok: s.isOnline, label: 'Đang bật nhận đơn (Online)' },
     { ok: !s.isGpsStale, label: s.lastLocationAt ? `GPS mới (cập nhật ${timeAgo(s.lastLocationAt)})` : 'Đã gửi vị trí GPS' },
-    { ok: !s.activeOrderId, label: 'Không có đơn đang chạy (GB-09)', fix: () => navigate('/driver/trip'), fixLabel: 'Xem chuyến' },
+    { ok: !s.activeOrderId, label: 'Không có đơn đang chạy', fix: () => navigate('/driver/trip'), fixLabel: 'Xem chuyến' },
   ];
 
   return (
     <PageShell
       title="Nhận đơn gần tôi"
-      subtitle="Đơn trong bán kính ghép đơn, đúng loại xe, gần nhất trước – tài xế nhận trước sẽ được giao đơn (GB-08)"
+      subtitle="Đơn trong bán kính ghép đơn, đúng loại xe, gần nhất trước – tài xế nhận trước sẽ được giao đơn"
       actions={
         s.approvalStatus === 'Approved' && (
           <Button size="sm" variant={s.isOnline ? 'outline' : 'primary'} onClick={toggleOnline} isLoading={toggling}>
@@ -66,7 +66,7 @@ export const DriverJobListPage: React.FC = () => {
               ))}
             </ul>
             <p className="text-[11px] text-slate-500 mt-3">
-              Đơn tiền mặt chỉ hiện khi ví cọc ≥ mức ký quỹ tối thiểu và ≥ hoa hồng của đơn (GB-16). Ví cọc hiện tại: <b>{formatCurrency(s.depositBalance)}</b>.
+              Đơn tiền mặt chỉ hiện khi ví cọc ≥ mức ký quỹ tối thiểu và ≥ hoa hồng của đơn. Ví cọc hiện tại: <b>{formatCurrency(s.depositBalance)}</b>.
             </p>
           </Card>
           <Card title="Vị trí GPS">
@@ -77,7 +77,7 @@ export const DriverJobListPage: React.FC = () => {
             <label className="flex items-center gap-2 text-xs text-slate-600 mt-2">
               <input type="checkbox" checked={gps.enabled} onChange={(e) => gps.setSharing(e.target.checked)} /> Gửi vị trí từ trình duyệt này khi Online / đang có đơn
             </label>
-            <p className="text-[11px] text-slate-400 mt-2">Quá 5 phút không có GPS sẽ không thấy đơn mới và bị ẩn khỏi bản đồ điều phối (GB-39).</p>
+            <p className="text-[11px] text-slate-400 mt-2">Quá 5 phút không có GPS sẽ không thấy đơn mới và bị ẩn khỏi bản đồ điều phối.</p>
           </Card>
         </div>
 
@@ -226,11 +226,11 @@ const JobModal: React.FC<{ job: NearbyOrderDto; onClose: () => void; onAccepted:
         </div>
         {j.paymentMethod === 'Cash' && (
           <Banner kind="warning">
-            Đơn tiền mặt: hoa hồng {formatCurrency(j.commissionAmount)} sẽ trừ vào ví cọc khi đơn hoàn tất (GB-15).
+            Đơn tiền mặt: hoa hồng {formatCurrency(j.commissionAmount)} sẽ trừ vào ví cọc khi đơn hoàn tất.
           </Banner>
         )}
         <p className="text-[11px] text-slate-400 flex gap-1">
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Đã nhận thì không tự huỷ được; gặp sự cố phải báo để Điều phối xử lý (GB-36).
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Đã nhận thì không tự huỷ được; gặp sự cố phải báo để Điều phối xử lý.
         </p>
         <a className="text-xs font-bold text-blue-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${j.pickupLatitude},${j.pickupLongitude}`}>
           <Navigation className="w-3.5 h-3.5" /> Xem đường tới điểm lấy

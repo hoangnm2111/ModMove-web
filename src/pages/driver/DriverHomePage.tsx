@@ -21,13 +21,13 @@ const readAccepted = (id: number | null): NearbyOrderDto | null => {
 };
 
 const STEPS = [
-  { Icon: Navigation, label: 'Đến điểm lấy & xác nhận đã đến (trong 500 m – GB-52)', uc: 'UC-DRV-12' },
-  { Icon: Camera, label: 'Kiểm hàng, chụp 2–5 ảnh lấy hàng, chờ khách duyệt (GB-11, GB-26)', uc: 'UC-DRV-13' },
-  { Icon: Truck, label: 'Vận chuyển tới điểm giao', uc: 'UC-DRV-14' },
-  { Icon: Flag, label: 'Báo đã tới điểm giao', uc: 'UC-DRV-15' },
-  { Icon: CheckCircle2, label: 'Chụp ảnh giao hàng (POD), đơn chuyển Đã giao (GB-12)', uc: 'UC-DRV-16' },
-  { Icon: CircleDollarSign, label: 'Xác nhận đã thu tiền mặt (đơn COD)', uc: 'UC-DRV-17' },
-  { Icon: ShieldAlert, label: 'Báo sự cố giữa đường (hỏng xe, hàng cấm, khách vắng mặt…)', uc: 'UC-DRV-18' },
+  { Icon: Navigation, label: 'Đến điểm lấy & xác nhận đã đến (trong 500 m)' },
+  { Icon: Camera, label: 'Kiểm hàng, chụp 2–5 ảnh lấy hàng, chờ khách duyệt' },
+  { Icon: Truck, label: 'Vận chuyển tới điểm giao' },
+  { Icon: Flag, label: 'Báo đã tới điểm giao' },
+  { Icon: CheckCircle2, label: 'Chụp ảnh giao hàng (POD), đơn chuyển Đã giao' },
+  { Icon: CircleDollarSign, label: 'Xác nhận đã thu tiền mặt (đơn COD)' },
+  { Icon: ShieldAlert, label: 'Báo sự cố giữa đường (hỏng xe, hàng cấm, khách vắng mặt…)' },
 ];
 
 /** Chuyến hiện tại của tài xế – activeOrderId lấy từ GET /driver/status */
@@ -111,12 +111,12 @@ export const DriverHomePage: React.FC = () => {
             )}
             <Card title="Các bước của chuyến">
               <ol className="space-y-2">
-                {STEPS.map(({ Icon, label, uc }, i) => (
-                  <li key={uc} className="flex items-center gap-3 text-xs rounded-xl border border-slate-200 p-2.5">
+                {STEPS.map(({ Icon, label }, i) => (
+                  <li key={label} className="flex items-center gap-3 text-xs rounded-xl border border-slate-200 p-2.5">
                     <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-black flex items-center justify-center">{i + 1}</span>
                     <Icon className="w-4 h-4 text-slate-500" />
                     <span className="flex-1 text-slate-700">{label}</span>
-                    <span className="text-[10px] font-bold text-slate-400">{uc} • trên app</span>
+                    <span className="text-[10px] font-bold text-slate-400">Thực hiện trên app</span>
                   </li>
                 ))}
               </ol>

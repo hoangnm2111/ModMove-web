@@ -11,6 +11,7 @@ import { APPROVAL_STATUS } from '../../api/labels';
 import type { DriverApplicationDetailsResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatDateTime, timeAgo } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 /** Thứ tự cố định của documentUrls (DECISIONS D10) */
 const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe'];
@@ -40,7 +41,7 @@ export const DriverApprovalPage: React.FC = () => {
                           {a.versionNumber > 1 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">Nộp lại v{a.versionNumber}</span>}
                         </div>
                         <div className="text-slate-500 mt-0.5">
-                          {a.phoneNumber} • <span className="font-mono">{a.licensePlate}</span> • {a.vehicleTypeName}
+                          <PhoneLink phone={a.phoneNumber} /> • <span className="font-mono">{a.licensePlate}</span> • {a.vehicleTypeName}
                         </div>
                         <div className="text-slate-400">Nộp {timeAgo(a.submittedAt)}</div>
                       </button>
@@ -110,7 +111,9 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
             <div className="grid sm:grid-cols-2 gap-x-6">
               <div>
                 <KV label="Email">{a.email}</KV>
-                <KV label="Số điện thoại">{a.phoneNumber}</KV>
+                <KV label="Số điện thoại">
+                  <PhoneLink phone={a.phoneNumber} />
+                </KV>
                 <KV label="Số CCCD">{a.citizenIdNumber}</KV>
                 <KV label="Số GPLX">{a.driverLicenseNumber}</KV>
               </div>
@@ -217,7 +220,7 @@ const RejectModal: React.FC<{ app: DriverApplicationDetailsResponse; onClose: ()
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Chọn từng mục cần tài xế sửa và ghi lý do cụ thể (UC-ADM-09). Tài xế nộp lại sẽ tạo phiên bản mới.</Banner>
+        <Banner kind="info">Chọn từng mục cần tài xế sửa và ghi lý do cụ thể. Tài xế nộp lại sẽ tạo phiên bản mới.</Banner>
         <ul className="space-y-2">
           {CHECK_ITEMS.map((k) => (
             <li key={k} className="text-xs">

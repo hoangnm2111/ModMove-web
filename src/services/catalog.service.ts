@@ -7,7 +7,7 @@ import { PagedResult } from './pagination';
 export interface PlatformSettings {
   commissionRate: number;
   loadingFee: number;
-  minCodDeposit: number;
+  requiredDeposit: number;
   matchingRadiusKm: number;
 }
 
@@ -31,7 +31,7 @@ export const CATALOG_KEYS = {
 
 export const CUSTOMER_COUPONS_KEY = 'customerCoupons';
 
-const DEFAULT_SETTINGS: PlatformSettings = { commissionRate: 0.1, loadingFee: 100_000, minCodDeposit: 200_000, matchingRadiusKm: 5 };
+const DEFAULT_SETTINGS: PlatformSettings = { commissionRate: 0.1, loadingFee: 100_000, requiredDeposit: 200_000, matchingRadiusKm: 5 };
 
 const iconFor = (maxLoadKg: number): VehicleType['iconType'] => (maxLoadKg <= 600 ? 'pickup' : maxLoadKg <= 1200 ? 'truck' : 'heavy_truck');
 

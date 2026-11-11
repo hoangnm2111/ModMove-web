@@ -1,282 +1,116 @@
 import React, { useState } from 'react';
-import {
-  ShieldAlert,
-  Search,
-  Filter,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
-  Phone,
-  Eye,
-  X,
-  FileText,
-  UserCheck,
-  RotateCcw,
-  Truck
-} from 'lucide-react';
-import { INCIDENT_TYPE_LABEL } from '../../constants';
-import { useDriverContext } from '../../hooks/useDriverContext';
+import { Phone } from 'lucide-react';
+import { Banner } from '../../components/ui/feedback';
+import { Card, DataState, Drawer, KV, PageShell, Pager, PhotoGrid, Pill, Table, Tabs } from '../../components/ui/kit';
+import { driverApi } from '../../api/endpoints';
+import { useQuery } from '../../api/useQuery';
+import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, ORDER_STATUS } from '../../api/labels';
+import type { DriverIncidentResponse, IncidentResolutionStatus } from '../../api/types';
 import { formatDateTime } from '../../utils/format';
 
-interface IncidentRecord {
-  id: string;
-  orderCode: string;
-  reportedAt: string;
-  incidentType: string;
-  description: string;
-  evidencePhoto: string;
-  gpsLocation: string;
-  status: 'PENDING_REVIEW' | 'CONTINUE_TRIP' | 'REASSIGNED' | 'CANCELLED';
-  dispatcherName?: string;
-  dispatcherDecision?: string;
-  dispatcherReason?: string;
-  resolvedAt?: string;
-}
+type Tab = IncidentResolutionStatus | 'ALL';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'ALL', label: 'Tất cả' },
+  { key: 'Open', label: 'Đang chờ xử lý' },
+  { key: 'InProgress', label: 'Đang xử lý' },
+  { key: 'Resolved', label: 'Đã xử lý' },
+  { key: 'Cancelled', label: 'Đã hủy' },
+];
 
-
+/** Sự cố của tôi (GET /driver/incidents): sự cố tôi báo, và sự cố khách báo trên đơn đang giao cho tôi (chỉ thấy câu chung). */
 export const DriverIncidentsPage: React.FC = () => {
-  const [selectedIncident, setSelectedIncident] = useState<IncidentRecord | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-
-  useDriverContext();
-  // Backend chưa có API cho tài xế xem lại các sự cố mình đã báo trên web (chỉ Customer/Dispatcher có endpoint tương ứng).
-  const records: IncidentRecord[] = [];
-
-  const filteredIncidents = records.filter((item) => {
-    if (filterStatus === 'ALL') return true;
-    return item.status === filterStatus;
-  });
+  const [tab, setTab] = useState<Tab>('ALL');
+  const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const status = tab === 'ALL' ? undefined : tab;
+  const q = useQuery(() => driverApi.incidents({ status, page, pageSize: 20 }), [tab, page], { refreshMs: 15_000 });
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50/70 select-none overflow-y-auto font-sans min-w-0">
-      {/* 1. Header Bar */}
-      <div className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-4 sticky top-0 z-10 shadow-2xs">
-        <div className="max-w-[1680px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-rose-600" />
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-tight">
-                Nhật Ký Báo Cáo Sự Cố Trên Đường
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-extrabold text-xs">
-                {filteredIncidents.length} sự cố
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5 font-medium">
-              Theo dõi tình trạng xử lý và quyết định hỗ trợ từ Trung tâm Điều phối đối với các sự cố bạn đã báo
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <a
-              href="tel:19006868"
-              className="py-2 px-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition flex items-center gap-1.5"
-            >
-              <Phone className="w-3.5 h-3.5 text-rose-600" />
-              <span>Hotline khẩn cấp: 1900 6868</span>
-            </a>
-          </div>
+    <PageShell
+      title="Sự cố của tôi"
+      subtitle="Theo dõi trạng thái xử lý và quyết định của điều phối viên cho các sự cố bạn đã báo hoặc khách đã báo trên đơn của bạn"
+      toolbar={
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
+          <a
+            href="tel:19006868"
+            className="ml-auto py-2 px-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition flex items-center gap-1.5"
+          >
+            <Phone className="w-3.5 h-3.5" /> Đường dây khẩn cấp: 1900 6868
+          </a>
         </div>
+      }
+    >
+      <div className="max-w-6xl mx-auto space-y-4">
+        <Banner kind="warning">Sự cố do bạn báo đang chờ xử lý sẽ làm chuyến tạm dừng: bạn chưa thể xác nhận đến nơi, lấy hàng hay giao hàng cho tới khi điều phối viên xử lý xong.</Banner>
+        <Card padded={false}>
+          <DataState q={q} empty={(d) => d.items.length === 0}>
+            {(d) => (
+              <>
+                <Table
+                  rows={d.items}
+                  rowKey={(i) => i.id}
+                  onRow={(i) => setOpenId(i.id)}
+                  cols={[
+                    { head: 'Sự cố', cell: (i) => <b>#{i.id}</b> },
+                    { head: 'Đơn hàng', cell: (i) => i.orderCode },
+                    { head: 'Loại', cell: (i) => INCIDENT_TYPE[i.incidentType] },
+                    { head: 'Ai báo', cell: (i) => (i.reportedByYou ? 'Bạn báo' : 'Khách báo') },
+                    { head: 'Trạng thái', cell: (i) => <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} /> },
+                    { head: 'Chặn chuyến', cell: (i) => (i.reportedByYou && (i.resolutionStatus === 'Open' || i.resolutionStatus === 'InProgress') ? <span className="text-rose-600 font-bold">Có</span> : '—') },
+                    { head: 'Thời gian', cell: (i) => formatDateTime(i.createdAt) },
+                  ]}
+                />
+                <Pager page={d.pageNumber} pageSize={d.pageSize} total={d.totalCount} onChange={setPage} />
+              </>
+            )}
+          </DataState>
+        </Card>
       </div>
-
-      {/* 2. Main Content */}
-      <div className="max-w-[1680px] mx-auto w-full p-4 sm:p-6 space-y-4">
-        {/* Filter Toolbar */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-xs flex items-center gap-2 overflow-x-auto text-xs font-bold text-slate-600">
-          <button
-            type="button"
-            onClick={() => setFilterStatus('ALL')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-              filterStatus === 'ALL' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
-            }`}
-          >
-            Tất cả sự cố ({records.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterStatus('CONTINUE_TRIP')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-              filterStatus === 'CONTINUE_TRIP' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-100'
-            }`}
-          >
-            Tiếp tục hành trình
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterStatus('REASSIGNED')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-              filterStatus === 'REASSIGNED' ? 'bg-blue-600 text-white' : 'hover:bg-slate-100'
-            }`}
-          >
-            Đã điều xe sang hàng
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterStatus('CANCELLED')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-              filterStatus === 'CANCELLED' ? 'bg-rose-600 text-white' : 'hover:bg-slate-100'
-            }`}
-          >
-            Hủy chuyến & Bồi hoàn
-          </button>
-        </div>
-
-        {/* List of Incidents */}
-        <div className="space-y-3">
-          {filteredIncidents.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white rounded-3xl border border-slate-200 hover:border-slate-300 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition"
-            >
-              <div className="space-y-2 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono font-black text-xs text-slate-900 bg-slate-100 px-2.5 py-1 rounded-xl">
-                    Đơn hàng #{item.orderCode}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {item.reportedAt}
-                  </span>
-
-                  {item.status === 'CONTINUE_TRIP' && (
-                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      Tiếp tục chạy
-                    </span>
-                  )}
-                  {item.status === 'REASSIGNED' && (
-                    <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <RotateCcw className="w-3 h-3 text-blue-600" />
-                      Đã điều xe khác hỗ trợ
-                    </span>
-                  )}
-                  {item.status === 'CANCELLED' && (
-                    <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-rose-600" />
-                      Hủy đơn & Hoàn hàng
-                    </span>
-                  )}
-                </div>
-
-                <div className="font-black text-slate-800 text-sm">
-                  {item.incidentType}
-                </div>
-
-                <p className="text-xs text-slate-600 line-clamp-2">
-                  {item.description}
-                </p>
-
-                {item.dispatcherDecision && (
-                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                      <UserCheck className="w-4 h-4 text-brand-600" />
-                      <span>{item.dispatcherName}:</span>
-                      <span className="text-brand-600">{item.dispatcherDecision}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 pl-5">
-                      Ghi chú: {item.dispatcherReason}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex sm:flex-col items-center sm:items-end justify-between gap-3 flex-shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
-                <span className="text-[11px] text-slate-400 font-medium">
-                  Giải quyết lúc: {item.resolvedAt}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIncident(item)}
-                  className="py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <Eye className="w-4 h-4 text-slate-500" />
-                  <span>Xem hồ sơ sự cố</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. Modal Xem Chi Tiết Sự Cố */}
-      {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-rose-600 to-rose-700 p-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <ShieldAlert className="w-5 h-5 text-white" />
-                <h3 className="font-black text-sm text-white">
-                  Chi tiết sự cố đơn hàng #{selectedIncident.orderCode}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedIncident(null)}
-                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 max-h-[75vh] overflow-y-auto space-y-4 text-xs">
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">Loại sự cố:</span>
-                <span className="font-black text-slate-900 text-sm">{selectedIncident.incidentType}</span>
-                <span className="text-slate-500 text-[11px] block mt-0.5">Báo lúc: {selectedIncident.reportedAt}</span>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">Vị trí xe gặp sự cố:</span>
-                <span className="font-extrabold text-slate-800">{selectedIncident.gpsLocation}</span>
-              </div>
-
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1">Mô tả chi tiết:</span>
-                <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed">
-                  {selectedIncident.description}
-                </p>
-              </div>
-
-              {selectedIncident.evidencePhoto && (
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1">Ảnh bằng chứng hiện trường:</span>
-                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-black max-h-48 flex items-center justify-center">
-                    <img src={selectedIncident.evidencePhoto} alt="Ảnh sự cố" className="w-full h-full object-cover max-h-48" />
-                  </div>
-                </div>
-              )}
-
-              {/* Quyết định của Dispatcher */}
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1.5">
-                <div className="font-black text-emerald-900 text-xs flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Quyết định từ {selectedIncident.dispatcherName}:</span>
-                </div>
-                <div className="font-extrabold text-emerald-700 text-sm">
-                  {selectedIncident.dispatcherDecision}
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  Lý do: {selectedIncident.dispatcherReason}
-                </p>
-                <div className="text-[10px] text-slate-400 pt-1 border-t border-emerald-100">
-                  Thời gian giải quyết: {selectedIncident.resolvedAt}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-200 text-right">
-              <button
-                type="button"
-                onClick={() => setSelectedIncident(null)}
-                className="py-2.5 px-5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-black transition cursor-pointer"
-              >
-                Đóng hồ sơ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {openId !== null && <IncidentDrawer id={openId} onClose={() => setOpenId(null)} />}
+    </PageShell>
   );
 };
+
+const IncidentDrawer: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {
+  const q = useQuery(() => driverApi.incident(id), [id], { refreshMs: 15_000 });
+  return (
+    <Drawer open onClose={onClose} title={q.data ? <>Sự cố #{q.data.id} <Pill tone={INCIDENT_STATUS[q.data.resolutionStatus]} /></> : 'Sự cố'}>
+      <DataState q={q}>{(i) => <IncidentDetail i={i} />}</DataState>
+    </Drawer>
+  );
+};
+
+const IncidentDetail: React.FC<{ i: DriverIncidentResponse }> = ({ i }) => (
+  <div className="space-y-3">
+    <Card title="Thông tin">
+      <KV label="Đơn hàng">
+        {i.orderCode} • {ORDER_STATUS[i.orderStatus].label}
+      </KV>
+      <KV label="Loại sự cố">{INCIDENT_TYPE[i.incidentType]}</KV>
+      <KV label="Ai báo">{i.reportedByYou ? 'Bạn báo' : 'Khách báo (bạn chỉ thấy câu chung)'}</KV>
+      <KV label="Báo lúc">{formatDateTime(i.createdAt)}</KV>
+      <KV label="Vị trí">{i.latitude !== null && i.longitude !== null ? `${i.latitude.toFixed(5)}, ${i.longitude.toFixed(5)}` : '—'}</KV>
+    </Card>
+    <Card title="Mô tả">
+      <p className="text-sm text-slate-700 whitespace-pre-wrap">{i.description}</p>
+      {i.reportedByYou && (
+        <div className="mt-3">
+          <PhotoGrid urls={i.photoUrls} emptyText="Không có ảnh" />
+        </div>
+      )}
+    </Card>
+    <Card title="Xử lý của điều phối viên">
+      {i.resolutionStatus === 'Open' && <p className="text-sm text-slate-600">Đang chờ điều phối viên nhận xử lý.</p>}
+      {i.resolutionStatus === 'InProgress' && <p className="text-sm text-amber-700 font-semibold">Điều phối viên đang xử lý sự cố này.</p>}
+      {i.resolutionStatus === 'Resolved' && i.resolutionDecision && (
+        <>
+          <KV label="Quyết định">{INCIDENT_DECISION[i.resolutionDecision]}</KV>
+          <KV label="Ghi chú">{i.resolutionNote ?? '—'}</KV>
+          <KV label="Xử lý lúc">{i.resolvedAt ? formatDateTime(i.resolvedAt) : '—'}</KV>
+        </>
+      )}
+      {i.resolutionStatus === 'Cancelled' && <p className="text-sm text-slate-600">Báo cáo đã bị hủy{i.resolutionNote ? `: ${i.resolutionNote}` : '.'}</p>}
+    </Card>
+  </div>
+);

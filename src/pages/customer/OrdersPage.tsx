@@ -8,6 +8,8 @@ import { ORDER_STATUS, PAYMENT_STATUS } from '../../api/labels';
 import type { OrderStatus, OrderView } from '../../api/types';
 import { DataState, PageShell, Pager, Pill, SearchBox, Select, StatusPill, Tabs, isAwaitingPayment } from '../../components/ui/kit';
 import { formatCurrency, formatDateTime } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
+import { useNotificationRefresh } from '../../hooks/useRealtime';
 
 const VIEWS: { key: OrderView; label: string }[] = [
   { key: 'All', label: 'Tất cả' },
@@ -32,6 +34,8 @@ export const OrdersPage: React.FC = () => {
 
   const filters = { view, status: status || undefined, search: search.trim(), fromDate, toDate, receiverPhone: receiverPhone.replace(/\D/g, '') };
   const q = useQuery(() => customerApi.orders({ ...filters, page, pageSize: PAGE_SIZE }), [JSON.stringify(filters), page]);
+  // Ở danh sách khách chỉ nhận NotificationReceived (OrderStatusChanged chỉ tới đơn đang theo dõi): làm mới khi có thông báo
+  useNotificationRefresh(() => void q.reload());
   const set = <V,>(fn: (v: V) => void) => (v: V) => {
     fn(v);
     setPage(1);
@@ -66,7 +70,7 @@ export const OrdersPage: React.FC = () => {
             <input
               value={receiverPhone}
               onChange={(e) => set(setReceiverPhone)(e.target.value)}
-              placeholder="SĐT người nhận"
+              placeholder="Số điện thoại người nhận"
               inputMode="numeric"
               className="py-2 px-3 rounded-xl border border-slate-200 text-sm w-40"
             />
@@ -84,8 +88,10 @@ export const OrdersPage: React.FC = () => {
               <ul className="space-y-3">
                 {d.items.map((o) => (
                   <li key={o.id}>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/orders/${o.id}`)}
                       onClick={() => navigate(`/orders/${o.id}`)}
                       className="w-full text-left bg-white border border-slate-200 hover:border-slate-400 rounded-2xl p-4 transition flex gap-3 items-center"
                     >
@@ -109,14 +115,14 @@ export const OrdersPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="mt-1.5 text-[11px] text-slate-400">
-                          {formatDateTime(o.createdAt)} • {o.vehicleTypeName} • {o.paymentMethod === 'PayOS' ? 'PayOS' : 'Tiền mặt'} • Người nhận: {o.receiverName} ({o.receiverPhone})
+                          {formatDateTime(o.createdAt)} • {o.vehicleTypeName} • {o.paymentMethod === 'PayOS' ? 'PayOS' : 'Tiền mặt'} • Người nhận: {o.receiverName} (<PhoneLink phone={o.receiverPhone} />)
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-sm font-black text-slate-900">{formatCurrency(o.totalFee)}</div>
                         <ChevronRight className="w-4 h-4 text-slate-400 ml-auto mt-1" />
                       </div>
-                    </button>
+                    </div>
                   </li>
                 ))}
               </ul>

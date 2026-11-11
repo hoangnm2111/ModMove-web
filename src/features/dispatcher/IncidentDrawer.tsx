@@ -13,6 +13,7 @@ import type { CargoDisposition, IncidentDetailResponse } from '../../api/types';
 import { useAuthStore } from '../../store/useAuthStore';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 type Action = 'continue' | 'reassign' | 'cancelOrder' | 'cancelIncident' | 'refundInfo' | 'refundPropose' | null;
 
@@ -39,7 +40,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
     setBusy(true);
     try {
       await dispatcherApi.startIncident(incidentId);
-      await after('Bạn đã nhận xử lý sự cố này.');
+      await after('Đã nhận xử lý. Tài xế và khách đã được báo.');
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -51,6 +52,9 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
   const mine = i?.resolutionStatus === 'InProgress' && String(i.handledById) === String(me?.id);
   const tripActive = i && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(i.order.orderStatus);
   const refundOpen = i?.refund && i.refund.refundStatus === 'Requested';
+  // Sự cố do tài xế báo còn mở thì chuyến tạm dừng; sự cố của khách không chặn chuyến
+  const blocksTrip = !!i && i.reporterRole === 'Driver' && isOpen;
+  const orderFinished = !!i && ['Delivered', 'Completed', 'Cancelled'].includes(i.order.orderStatus);
 
   return (
     <Drawer
@@ -60,7 +64,8 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
       title={
         i ? (
           <>
-            Sự cố #{i.id} – {INCIDENT_TYPE[i.incidentType]} <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} />
+            Sự cố #{i.id} – {INCIDENT_TYPE[i.incidentType]} <Pill tone={INCIDENT_STATUS[i.resolutionStatus]} />{' '}
+            {isOpen && <Pill tone={blocksTrip ? { label: 'Chặn chuyến', cls: 'bg-rose-50 text-rose-700 border-rose-200' } : { label: 'Không chặn chuyến', cls: 'bg-slate-100 text-slate-600 border-slate-200' }} />}
           </>
         ) : (
           'Chi tiết sự cố'
@@ -74,6 +79,11 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
               <Button size="sm" onClick={start} isLoading={busy}>
                 <PlayCircle className="w-4 h-4 mr-1" /> Nhận xử lý
               </Button>
+            )}
+            {orderFinished && (
+              <span className="text-xs text-slate-600 mr-auto self-center">
+                Đơn đã {i.order.orderStatus === 'Cancelled' ? 'huỷ' : 'giao xong'} nên không còn chuyến để tiếp tục. Hãy dùng “Huỷ sự cố” và ghi lý do.
+              </span>
             )}
             {i.resolutionStatus === 'InProgress' && !mine && <span className="text-xs text-amber-700 mr-auto self-center">Đang được {i.handledByName} xử lý.</span>}
             {(mine || i.resolutionStatus === 'Open') && (
@@ -348,7 +358,7 @@ export const ProposeModal: React.FC<{ max: number; onClose: () => void; onSubmit
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Số đề xuất không vượt số khách yêu cầu ({formatCurrency(max)}). Đề xuất 0đ = không hoàn. Admin là người duyệt cuối (GB-19, GB-42).</Banner>
+        <Banner kind="info">Số đề xuất không vượt số khách yêu cầu ({formatCurrency(max)}). Đề xuất 0đ = không hoàn. Admin là người duyệt cuối.</Banner>
         <div className="flex gap-2">
           {[1, 0.5, 0].map((r) => (
             <button key={r} type="button" onClick={() => setAmount(Math.round(max * r))} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50">
@@ -388,7 +398,7 @@ const ReassignModal: React.FC<{ incident: IncidentDetailResponse; onClose: () =>
     <Modal
       open
       size="lg"
-      title="Đổi tài xế (UC-DIS-06)"
+      title="Đổi tài xế"
       onClose={onClose}
       footer={
         <>
@@ -404,7 +414,7 @@ const ReassignModal: React.FC<{ incident: IncidentDetailResponse; onClose: () =>
       <div className="space-y-3">
         <Banner kind="info">
           Chỉ hiện tài xế Online, đã duyệt, GPS ≤ 5 phút, không có đơn, đúng loại xe, trong bán kính{incident.order.paymentMethod === 'Cash' ? ', đủ ví cọc COD' : ''}. Tài xế mới nhận toàn bộ thu nhập
-          chuyến, kiểm hàng và gửi lại ảnh với lượt đếm mới (GB-37).
+          chuyến, kiểm hàng và gửi lại ảnh với lượt đếm mới.
         </Banner>
         <DataState q={drivers} empty={(d) => d.length === 0}>
           {(list) => (
@@ -419,7 +429,7 @@ const ReassignModal: React.FC<{ incident: IncidentDetailResponse; onClose: () =>
                     <div className="flex-1 min-w-0">
                       <div className="font-black text-slate-900">{d.fullName}</div>
                       <div className="text-slate-500">
-                        {d.phoneNumber} • <span className="font-mono">{d.licensePlate}</span> • {d.vehicleTypeName}
+                        <PhoneLink phone={d.phoneNumber} /> • <span className="font-mono">{d.licensePlate}</span> • {d.vehicleTypeName}
                       </div>
                     </div>
                     <div className="text-right">
@@ -463,7 +473,7 @@ const CancelOrderModal: React.FC<{ incident: IncidentDetailResponse; onClose: ()
     <Modal
       open
       size="lg"
-      title="Huỷ đơn do sự cố (UC-DIS-07)"
+      title="Huỷ đơn do sự cố"
       onClose={onClose}
       footer={
         <>
@@ -478,7 +488,7 @@ const CancelOrderModal: React.FC<{ incident: IncidentDetailResponse; onClose: ()
     >
       <div className="space-y-3 text-xs">
         <Banner kind="warning">
-          Hàng cấm (GB-07) hoặc khách vắng mặt ở điểm lấy (GB-35): <b>không hoàn tiền</b>. Không tìm được tài xế thay thế (GB-38): đơn PayOS đã thanh toán <b>hoàn 100%</b> phần còn lại. Đơn tiền mặt xử lý ngoài hệ thống. Tài
+          Hàng cấm hoặc khách vắng mặt ở điểm lấy: <b>không hoàn tiền</b>. Không tìm được tài xế thay thế: đơn PayOS đã thanh toán <b>hoàn 100%</b> phần còn lại. Đơn tiền mặt xử lý ngoài hệ thống. Tài
           xế cũ không nhận tiền chuyến này.
         </Banner>
         <label className={cx('flex items-start gap-2 p-3 rounded-xl border', paidPayOs ? 'border-slate-200' : 'border-slate-100 opacity-60')}>

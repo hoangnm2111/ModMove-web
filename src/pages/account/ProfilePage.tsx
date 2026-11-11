@@ -117,7 +117,7 @@ export const ProfilePage: React.FC = () => {
             <Field label="Nhập lại mật khẩu mới" type="password" autoComplete="new-password" value={newPwd2} error={pwdErr.confirm} onChange={(e) => setNewPwd2(e.target.value)} />
           </div>
           {pwdErr.form && <Banner kind="error">{pwdErr.form}</Banner>}
-          <p className="text-[11px] text-slate-500">Sau khi đổi mật khẩu, mọi phiên đăng nhập sẽ bị đăng xuất (GB-47).</p>
+          <p className="text-[11px] text-slate-500">Sau khi đổi mật khẩu, mọi phiên đăng nhập sẽ bị đăng xuất.</p>
           <div className="flex justify-end">
             <Button type="submit" size="sm" isLoading={savingPwd}>
               Cập nhật mật khẩu
@@ -130,7 +130,7 @@ export const ProfilePage: React.FC = () => {
             <h2 className="font-extrabold text-sm text-rose-700 flex items-center gap-2">
               <Trash2 className="w-4 h-4" /> Xoá tài khoản
             </h2>
-            <p className="text-xs text-slate-600">Tài khoản sẽ chuyển sang trạng thái vô hiệu hoá; lịch sử đơn được giữ lại. Quản trị viên có thể kích hoạt lại (GB-46).</p>
+            <p className="text-xs text-slate-600">Tài khoản sẽ chuyển sang trạng thái vô hiệu hoá; lịch sử đơn được giữ lại. Quản trị viên có thể kích hoạt lại.</p>
             <Field label="Nhập mật khẩu để xác nhận" type="password" value={deletePwd} error={deleteErr} onChange={(e) => setDeletePwd(e.target.value)} />
             <Button size="sm" variant="danger" onClick={deleteAccount} disabled={!deletePwd}>
               Xoá tài khoản

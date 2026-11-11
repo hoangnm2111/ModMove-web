@@ -40,14 +40,15 @@ export const PageShell: React.FC<{ title: React.ReactNode; subtitle?: React.Reac
   </div>
 );
 
-export const Card: React.FC<{ title?: React.ReactNode; actions?: React.ReactNode; className?: string; children: React.ReactNode; padded?: boolean }> = ({
+export const Card: React.FC<{ id?: string; title?: React.ReactNode; actions?: React.ReactNode; className?: string; children: React.ReactNode; padded?: boolean }> = ({
+  id,
   title,
   actions,
   className,
   children,
   padded = true,
 }) => (
-  <section className={cx('bg-white border border-slate-200 rounded-2xl shadow-xs', className)}>
+  <section id={id} className={cx('bg-white border border-slate-200 rounded-2xl shadow-xs scroll-mt-4', className)}>
     {(title || actions) && (
       <div className="flex items-center gap-2 px-4 sm:px-5 py-3 border-b border-slate-100">
         <h2 className="text-sm font-black text-slate-900 mr-auto">{title}</h2>

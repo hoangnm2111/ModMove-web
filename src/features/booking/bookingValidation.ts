@@ -38,7 +38,7 @@ export function validateCargo(d: BookingDraft): StepErrors {
     e['cargo.largestItem'] = msg('MSG03', { field_name: 'Kích thước kiện lớn nhất', constraints: 'dài, rộng, cao lớn hơn 0 cm' });
   }
   if (c.photos.length < BUSINESS.MIN_CARGO_PHOTOS) e['cargo.photos'] = msg('MSG44', { evidence_type: 'ít nhất 1 ảnh hàng hoá' });
-  if (!d.agreedNoProhibitedCargo) e.agreedNoProhibitedCargo = 'Vui lòng xác nhận cam kết không gửi hàng cấm (GB-07).';
+  if (!d.agreedNoProhibitedCargo) e.agreedNoProhibitedCargo = 'Vui lòng xác nhận cam kết không gửi hàng cấm.';
   return e;
 }
 

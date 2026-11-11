@@ -13,6 +13,7 @@ import type { AccountStatus, UserDetailResponse, UserRole } from '../../api/type
 import { useAuthStore } from '../../store/useAuthStore';
 import { errorMessage } from '../../services/mock/storage';
 import { formatDateTime } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 const ROLE_OPTS = [{ value: '', label: 'Mọi vai trò' }, ...(Object.keys(ROLE_LABEL) as UserRole[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))];
 const STATUS_OPTS = [{ value: '', label: 'Mọi trạng thái' }, ...(Object.keys(ACCOUNT_STATUS) as AccountStatus[]).map((s) => ({ value: s, label: ACCOUNT_STATUS[s].label }))];
@@ -40,7 +41,7 @@ export const AdminUsersPage: React.FC = () => {
       }
       toolbar={
         <div className="flex flex-wrap gap-2">
-          <SearchBox value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Tên, SĐT, email…" />
+          <SearchBox value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Tên, số điện thoại, email…" />
           <Select value={role} onChange={(e) => (setRole(e.target.value as UserRole | ''), setPage(1))} options={ROLE_OPTS} />
           <Select value={status} onChange={(e) => (setStatus(e.target.value as AccountStatus | ''), setPage(1))} options={STATUS_OPTS} />
         </div>
@@ -68,7 +69,7 @@ export const AdminUsersPage: React.FC = () => {
                         </div>
                       ),
                     },
-                    { head: 'Liên hệ', cell: (u) => <div>{u.email}<div className="text-[11px] text-slate-400">{u.phoneNumber}</div></div> },
+                    { head: 'Liên hệ', cell: (u) => <div>{u.email}<div className="text-[11px] text-slate-400"><PhoneLink phone={u.phoneNumber} /></div></div> },
                     { head: 'Vai trò', cell: (u) => ROLE_LABEL[u.role] },
                     { head: 'Trạng thái', cell: (u) => <Pill tone={ACCOUNT_STATUS[u.accountStatus]} /> },
                     { head: 'Email', cell: (u) => (u.emailVerified ? <span className="text-emerald-700 font-bold">Đã xác minh</span> : <span className="text-amber-700 font-bold">Chưa xác minh</span>) },
@@ -193,7 +194,7 @@ const StatusModal: React.FC<{ user: UserDetailResponse; status: AccountStatus; o
       }
     >
       <div className="space-y-3">
-        {status !== 'Active' && <Banner kind="warning">Người dùng sẽ bị đăng xuất khỏi mọi thiết bị và không thể đăng nhập (GB-46, GB-47).</Banner>}
+        {status !== 'Active' && <Banner kind="warning">Người dùng sẽ bị đăng xuất khỏi mọi thiết bị và không thể đăng nhập.</Banner>}
         <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
     </Modal>
@@ -204,8 +205,8 @@ const CreateDispatcherModal: React.FC<{ onClose: () => void; onDone: () => void 
   const [f, setF] = useState({ fullName: '', phoneNumber: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!f.fullName.trim() || !f.phoneNumber.trim() || !f.email.trim()) return toast.error('Nhập đủ họ tên, SĐT, email.');
-    if (f.password.length < 8 || f.password.length > 100) return toast.error('Mật khẩu 8–100 ký tự (GB-53).');
+    if (!f.fullName.trim() || !f.phoneNumber.trim() || !f.email.trim()) return toast.error('Nhập đủ họ tên, số điện thoại, email.');
+    if (f.password.length < 8 || f.password.length > 100) return toast.error('Mật khẩu 8–100 ký tự.');
     setBusy(true);
     try {
       await adminApi.createDispatcher({ fullName: f.fullName.trim(), phoneNumber: f.phoneNumber.trim(), email: f.email.trim().toLowerCase(), password: f.password });
@@ -220,7 +221,7 @@ const CreateDispatcherModal: React.FC<{ onClose: () => void; onDone: () => void 
   return (
     <Modal
       open
-      title="Tạo tài khoản điều phối viên (UC-ADM-07)"
+      title="Tạo tài khoản điều phối viên"
       onClose={onClose}
       footer={
         <>

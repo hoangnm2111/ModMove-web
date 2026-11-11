@@ -9,6 +9,8 @@ import { MapEmbed } from '../../components/MapEmbed';
 import { DispatcherOrderDrawer } from '../../features/dispatcher/DispatcherOrderDrawer';
 import { IncidentDrawer } from '../../features/dispatcher/IncidentDrawer';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
+import { useNotificationRefresh } from '../../hooks/useRealtime';
 
 const SUMMARY_KEYS: { key: OrderStatus | 'ALL'; field: keyof import('../../api/types').DispatcherOrdersSummaryResponse }[] = [
   { key: 'ALL', field: 'total' },
@@ -37,6 +39,8 @@ export const LiveMapPage: React.FC = () => {
   const filters = { status: status === 'ALL' ? undefined : status, search: search.trim(), from: from ? new Date(from).toISOString() : undefined, to: to ? new Date(`${to}T23:59:59`).toISOString() : undefined };
   const orders = useQuery(() => dispatcherApi.orders({ ...filters, page, pageSize: 15 }), [JSON.stringify(filters), page], { refreshMs: 30_000 });
   const drivers = useQuery(() => dispatcherApi.onlineDrivers(), [], { refreshMs: 30_000 });
+  // Thông báo mới (đơn, sự cố, khiếu nại) → tải lại bảng giám sát ngay, không chờ 30 giây
+  useNotificationRefresh(() => (void summary.reload(), void orders.reload()));
 
   const driverList = drivers.data ?? [];
   const selDriver = driverList.find((d) => d.driverProfileId === driverId) ?? driverList[0];
@@ -78,7 +82,7 @@ export const LiveMapPage: React.FC = () => {
             title={`Đơn hàng${status !== 'ALL' ? ` – ${ORDER_STATUS[status].label}` : ''}`}
             actions={
               <div className="flex flex-wrap gap-2 items-center">
-                <SearchBox value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Mã đơn, SĐT khách, tài xế, biển số…" />
+                <SearchBox value={search} onChange={(v) => (setSearch(v), setPage(1))} placeholder="Mã đơn, số điện thoại khách, tài xế, biển số…" />
                 <input type="date" value={from} onChange={(e) => (setFrom(e.target.value), setPage(1))} className="py-2 px-2 rounded-xl border border-slate-200 text-xs" aria-label="Từ ngày" />
                 <input type="date" value={to} onChange={(e) => (setTo(e.target.value), setPage(1))} className="py-2 px-2 rounded-xl border border-slate-200 text-xs" aria-label="Đến ngày" />
               </div>
@@ -134,7 +138,7 @@ export const LiveMapPage: React.FC = () => {
                         cell: (r) => (
                           <div>
                             <div className="font-semibold">{r.customerName}</div>
-                            <div className="text-[11px] text-slate-400">{r.customerPhone}</div>
+                            <div className="text-[11px] text-slate-400"><PhoneLink phone={r.customerPhone} /></div>
                           </div>
                         ),
                       },
@@ -180,7 +184,10 @@ export const LiveMapPage: React.FC = () => {
                 <ul className="max-h-[420px] overflow-y-auto divide-y divide-slate-100">
                   {list.map((d) => (
                     <li key={d.driverProfileId}>
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && setDriverId(d.driverProfileId)}
                         onClick={() => setDriverId(d.driverProfileId)}
                         className={cx('w-full text-left px-4 py-2.5 text-xs flex gap-2 items-center', selDriver?.driverProfileId === d.driverProfileId ? 'bg-blue-50' : 'hover:bg-slate-50')}
                       >
@@ -188,7 +195,7 @@ export const LiveMapPage: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="font-black text-slate-900 truncate">{d.fullName}</div>
                           <div className="text-slate-500 truncate">
-                            <span className="font-mono">{d.licensePlate}</span> • {d.vehicleTypeName} • {d.phoneNumber}
+                            <span className="font-mono">{d.licensePlate}</span> • {d.vehicleTypeName} • <PhoneLink phone={d.phoneNumber} />
                           </div>
                           <div className="text-slate-400">GPS {timeAgo(d.lastLocationAt)}</div>
                         </div>
@@ -205,7 +212,7 @@ export const LiveMapPage: React.FC = () => {
                         ) : (
                           <span className="text-[11px] font-bold text-emerald-600">Rảnh</span>
                         )}
-                      </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

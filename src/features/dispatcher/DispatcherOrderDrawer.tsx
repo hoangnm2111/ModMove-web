@@ -33,14 +33,14 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
             <div className="grid sm:grid-cols-2 gap-4">
               <Card title="Khách hàng & người nhận">
                 <KV label="Khách">{o.customer.fullName}</KV>
-                <KV label="SĐT khách">
+                <KV label="Số điện thoại khách">
                   <a className="text-blue-600" href={`tel:${o.customer.phoneNumber}`}>
                     {o.customer.phoneNumber}
                   </a>
                 </KV>
                 <KV label="Email">{o.customer.email}</KV>
                 <KV label="Người nhận">{o.receiver.name}</KV>
-                <KV label="SĐT người nhận">
+                <KV label="Số điện thoại người nhận">
                   <a className="text-blue-600" href={`tel:${o.receiver.phoneNumber}`}>
                     {o.receiver.phoneNumber}
                   </a>
@@ -50,7 +50,7 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
                 {o.driver ? (
                   <>
                     <KV label="Họ tên">{o.driver.fullName}</KV>
-                    <KV label="SĐT">
+                    <KV label="Số điện thoại">
                       <a className="text-blue-600 inline-flex items-center gap-1" href={`tel:${o.driver.phoneNumber}`}>
                         <Phone className="w-3 h-3" /> {o.driver.phoneNumber}
                       </a>

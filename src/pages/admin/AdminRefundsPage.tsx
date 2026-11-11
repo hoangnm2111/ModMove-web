@@ -12,6 +12,7 @@ import { REFUND_SOURCE, REFUND_STATUS } from '../../api/labels';
 import type { AdminRefundDetailResponse, RefundSourceType, RefundStatus } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
+import { PhoneLink } from '../../components/ui/PhoneLink';
 
 type Tab = RefundStatus | 'ALL';
 const TABS: { key: Tab; label: string }[] = [
@@ -62,7 +63,7 @@ export const AdminRefundsPage: React.FC = () => {
                     { head: 'Mã', cell: (r) => <b>#{r.id}</b> },
                     { head: 'Nguồn', cell: (r) => REFUND_SOURCE[r.sourceType] },
                     { head: 'Đơn', cell: (r) => <span className="font-bold">{r.orderCode}</span> },
-                    { head: 'Khách', cell: (r) => <div>{r.customerName}<div className="text-[11px] text-slate-400">{r.customerPhone}</div></div> },
+                    { head: 'Khách', cell: (r) => <div>{r.customerName}<div className="text-[11px] text-slate-400"><PhoneLink phone={r.customerPhone} /></div></div> },
                     {
                       head: 'Số tiền',
                       className: 'text-right',
@@ -135,7 +136,7 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
         {(r) => (
           <>
             {r.refundStatus === 'Requested' && r.sourceType !== 'Cancellation' && r.proposedAmount === null && (
-              <Banner kind="warning">Khoản này chưa có đề xuất của Điều phối viên nên chưa thể duyệt (GB-19).</Banner>
+              <Banner kind="warning">Khoản này chưa có đề xuất của Điều phối viên nên chưa thể duyệt.</Banner>
             )}
             <div className="grid sm:grid-cols-3 gap-3">
               <Amount label="Khách yêu cầu" v={r.requestedAmount} />
@@ -173,12 +174,12 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
               </Card>
               <Card title="Khách & tài xế">
                 <KV label="Khách">{r.customerName}</KV>
-                <KV label="SĐT / Email">
-                  {r.customerPhone} • {r.customerEmail}
+                <KV label="Số điện thoại / Email">
+                  <PhoneLink phone={r.customerPhone} /> • {r.customerEmail}
                 </KV>
                 {r.driverName && (
                   <KV label="Tài xế">
-                    {r.driverName} • {r.driverPhone} • <span className="font-mono">{r.licensePlate}</span>
+                    {r.driverName} • <PhoneLink phone={r.driverPhone} /> • <span className="font-mono">{r.licensePlate}</span>
                   </KV>
                 )}
               </Card>
@@ -244,7 +245,7 @@ const ActModal: React.FC<{ act: Exclude<Act, null>; refund: AdminRefundDetailRes
     >
       {act === 'payout' ? (
         <div className="space-y-3">
-          <Banner kind="info">Chuyển khoản {formatCurrency(refund.proposedAmount ?? refund.requestedAmount)} cho {refund.customerName} rồi nhập mã tham chiếu ngân hàng (GB-27).</Banner>
+          <Banner kind="info">Chuyển khoản {formatCurrency(refund.proposedAmount ?? refund.requestedAmount)} cho {refund.customerName} rồi nhập mã tham chiếu ngân hàng.</Banner>
           <Field label="Mã giao dịch ngân hàng" required value={text} onChange={(e) => setText(e.target.value)} maxLength={50} />
         </div>
       ) : (

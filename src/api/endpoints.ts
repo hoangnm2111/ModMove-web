@@ -31,6 +31,8 @@ export const publicApi = {
   cargoTypes: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/cargo-types')),
   complaintReasons: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/complaint-reasons')),
   cancellationReasons: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/cancellation-reasons')),
+  /** Ngân hàng nhận hoàn tiền: `code` là mã BIN 6 số, gửi làm payoutAccount.bankCode */
+  banks: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/banks')),
   supportRequest: (body: T.SupportRequestBody) => call(() => apiClient.post<void>('/public/SupportRequests', body)),
   fareEstimate: (body: T.FareEstimateRequest) => call(() => apiClient.post<T.FareEstimateResponse>('/public/FareEstimate', body)),
 };
@@ -66,13 +68,16 @@ export const customerApi = {
   rate: (orderId: number, stars: number, comment?: string) => call(() => apiClient.post<{ ratingId: number }>('/customer/Ratings', { orderId, stars, comment: comment || null })),
   ratings: (page = 1, pageSize = 20) => call(() => apiClient.get<T.PagedResult<T.MyRatingResponse>>('/customer/Ratings', { params: { page, pageSize } })),
 
-  incidents: (page = 1, pageSize = 50) => call(() => apiClient.get<T.PagedResult<T.MyIncidentResponse>>('/customer/Incidents', { params: { page, pageSize } })),
+  incidents: (page = 1, pageSize = 50, orderId?: number, status?: T.IncidentResolutionStatus) =>
+    call(() => apiClient.get<T.PagedResult<T.MyIncidentResponse>>('/customer/Incidents', { params: q({ page, pageSize, orderId, status }) })),
   reportIncident: (body: T.ReportIncidentRequest) => call(() => apiClient.post<{ incidentId: number }>('/customer/Incidents', body)),
 
   refunds: (page = 1, pageSize = 50) => call(() => apiClient.get<T.PagedResult<T.MyRefundSummaryResponse>>('/customer/Refunds', { params: { page, pageSize } })),
   refund: (id: number) => call(() => apiClient.get<T.MyRefundDetailResponse>(`/customer/Refunds/${id}`)),
   submitComplaint: (body: T.SubmitComplaintRequest) => call(() => apiClient.post<{ refundId: number }>('/customer/Refunds/complaints', body)),
   requestIncidentRefund: (body: T.RequestIncidentRefundRequest) => call(() => apiClient.post<{ refundId: number }>('/customer/Refunds/incidents', body)),
+  /** Khai hoặc sửa tài khoản nhận hoàn tiền khi khoản hoàn còn Requested/Approved/Failed */
+  setRefundPayoutAccount: (id: number, body: T.PayoutAccountInput) => call(() => apiClient.put<void>(`/customer/Refunds/${id}/payout-account`, body)),
   replyRefund: (id: number, reply: string, photoUrls?: string[]) => call(() => apiClient.post<void>(`/customer/Refunds/${id}/reply`, { reply, photoUrls })),
   withdrawRefund: (id: number) => call(() => apiClient.post<void>(`/customer/Refunds/${id}/withdraw`)),
 };
@@ -86,6 +91,11 @@ export const driverApi = {
   submitOnboarding: (body: T.SubmitDriverApplicationRequest) => call(() => apiClient.post<{ id: number }>('/driver/Onboarding', body)),
   nearbyOrders: () => call(() => apiClient.get<T.NearbyOrderDto[]>('/driver/Matching/orders')),
   acceptOrder: (id: number) => call(() => apiClient.post<void>(`/driver/Matching/orders/${id}/accept`)),
+  incidents: (p: T.DriverIncidentsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.DriverIncidentResponse>>('/driver/Incidents', { params: q({ page: 1, pageSize: 20, ...p }) })),
+  incident: (id: number) => call(() => apiClient.get<T.DriverIncidentResponse>(`/driver/Incidents/${id}`)),
+  wallet: () => call(() => apiClient.get<T.DriverWalletResponse>('/driver/Wallet')),
+  walletTransactions: (page = 1, pageSize = 20) =>
+    call(() => apiClient.get<T.PagedResult<T.DriverWalletTransactionDto>>('/driver/Wallet/transactions', { params: { page, pageSize } })),
 };
 
 /* ================================================================ DISPATCHER */

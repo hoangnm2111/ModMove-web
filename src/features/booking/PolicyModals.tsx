@@ -13,7 +13,7 @@ export const ProhibitedCargoModal: React.FC<{ open: boolean; onClose: () => void
       <li>Hàng hoá không rõ nguồn gốc, hàng lậu.</li>
     </ul>
     <p className="mt-3 text-xs text-slate-500">
-      Nếu tài xế phát hiện hàng cấm khi lấy hàng, tài xế sẽ không bốc hàng và báo sự cố; điều phối viên huỷ đơn và không hoàn tiền (GB-07).
+      Nếu tài xế phát hiện hàng cấm khi lấy hàng, tài xế sẽ không bốc hàng và báo sự cố; điều phối viên huỷ đơn và không hoàn tiền.
     </p>
   </Modal>
 );

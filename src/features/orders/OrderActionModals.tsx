@@ -76,7 +76,7 @@ export const CancelOrderModal: React.FC<BaseProps & { customerId: string }> = ({
     >
       <div className="space-y-3">
         <p>{msg('MSG36', { order_id: order.code })}</p>
-        {refund > 0 && <Banner kind="info">Bạn sẽ được hoàn {formatCurrency(refund)} sau khi quản trị viên duyệt (GB-41).</Banner>}
+        {refund > 0 && <Banner kind="info">Bạn sẽ được hoàn {formatCurrency(refund)} sau khi quản trị viên duyệt.</Banner>}
         {reasons.length > 0 && (
           <div>
             <span className="block text-xs font-bold text-slate-700 mb-1">Lý do huỷ</span>
@@ -124,7 +124,7 @@ export const ComplaintModal: React.FC<BaseProps> = ({ order, onClose }) => {
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Chỉ được khiếu nại trong {BUSINESS.COMPLAINT_WINDOW_HOURS} giờ sau khi giao và trước khi xác nhận đã nhận hàng (GB-18).</Banner>
+        <Banner kind="info">Chỉ được khiếu nại trong {BUSINESS.COMPLAINT_WINDOW_HOURS} giờ sau khi giao và trước khi xác nhận đã nhận hàng.</Banner>
         {reasons.length > 0 && (
           <div>
             <span className="block text-xs font-bold text-slate-700 mb-1">Lý do khiếu nại</span>
@@ -149,7 +149,7 @@ export const ComplaintModal: React.FC<BaseProps> = ({ order, onClose }) => {
             onChange={(e) => setAmount(Number(e.target.value))}
           />
         ) : (
-          <Banner kind="warning">Đơn tiền mặt không hoàn tiền trong hệ thống; khiếu nại được giải quyết ngoài hệ thống (GB-42).</Banner>
+          <Banner kind="warning">Đơn tiền mặt không hoàn tiền trong hệ thống; khiếu nại được giải quyết ngoài hệ thống.</Banner>
         )}
         {error && <Banner kind="error">{error}</Banner>}
       </div>
@@ -204,7 +204,7 @@ export const RatingModal: React.FC<BaseProps> = ({ order, onClose }) => {
       }
     >
       <div className="space-y-3">
-        <p className="text-xs text-slate-500">Mỗi đơn chỉ đánh giá 1 lần và không sửa được (GB-20).</p>
+        <p className="text-xs text-slate-500">Mỗi đơn chỉ đánh giá 1 lần và không sửa được.</p>
         <div className="flex justify-center gap-1" role="radiogroup" aria-label="Số sao">
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} type="button" role="radio" aria-checked={stars === n} aria-label={`${n} sao`} onClick={() => setStars(n)}>
@@ -264,7 +264,7 @@ export const IncidentReportModal: React.FC<BaseProps> = ({ order, onClose }) => 
         {refundable && (
           <label className="flex items-center gap-2 text-xs font-semibold">
             <input type="checkbox" checked={wantRefund} onChange={(e) => setWantRefund(e.target.checked)} />
-            Yêu cầu hoàn tiền do sự cố (UC-CUS-17)
+            Yêu cầu hoàn tiền do sự cố
           </label>
         )}
         {wantRefund && (
