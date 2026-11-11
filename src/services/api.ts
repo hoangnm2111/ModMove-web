@@ -2,6 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { ServiceError } from './mock/storage';
 import { ERROR_MESSAGES } from '../api/errors';
+import { notify } from '../notifications/store';
 
 /** HTTP client cho backend ASP.NET Core (ModMove.WebApi). */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5133/api';
@@ -52,7 +53,10 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(config);
       }
+      // Hết phiên: chỉ báo một lần dù nhiều request cùng bị 401 (request sau thấy đã đăng xuất)
+      const wasSignedIn = useAuthStore.getState().isAuthenticated;
       useAuthStore.getState().logout();
+      if (wasSignedIn) notify('SESSION_EXPIRED');
     }
     return Promise.reject(error);
   }

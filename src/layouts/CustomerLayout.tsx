@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { SuspenseOutlet } from '../components/SuspenseOutlet';
 import { Clock, LogOut, Menu, Radio, Star, Truck, User as UserIcon, X } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { toast } from '../components/ui/feedback';
+import { notify } from '../notifications/store';
 import { msg } from '../constants/messages';
 
 interface CustomerLayoutContextType {
@@ -52,7 +52,7 @@ export const CustomerLayout: React.FC<{ children?: React.ReactNode }> = ({ child
 
   const handleLogout = () => {
     logout();
-    toast.info(msg('MSG21'));
+    notify('LOGGED_OUT');
     navigate('/login', { replace: true });
   };
 

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { BUSINESS } from '../../config/business';
 import { validatePhotoFile } from '../../domain/validators';
+import { notify } from '../../notifications/store';
 
 interface PhotoUploaderProps {
   value: string[];
@@ -48,7 +49,9 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, m
         try {
           accepted.push(upload ? await upload(f) : await readAsDataUrl(f));
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Tải ảnh lên thất bại.');
+          const reason = e instanceof Error ? e.message : 'Tải ảnh lên thất bại.';
+          setError(reason);
+          notify('DOCUMENT_UPLOAD_FAILED', { document: f.name, reason });
         }
       }
       if (accepted.length) onChange([...value, ...accepted]);

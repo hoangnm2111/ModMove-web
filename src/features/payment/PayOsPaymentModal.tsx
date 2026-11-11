@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink, RefreshCw, ShieldCheck, Timer } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
-import { Banner, toast } from '../../components/ui/feedback';
+import { Banner } from '../../components/ui/feedback';
+import { notify } from '../../notifications/store';
 import { Button } from '../../components/Button';
 import { customerApi } from '../../api/endpoints';
-import type { CreateOrderPaymentResponse } from '../../api/types';
+import type { CreateOrderPaymentResponse, OrderDetailResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
 
@@ -13,7 +14,7 @@ import { formatCurrency, formatDateTime } from '../../utils/format';
  * Mã sống 10 phút; hết hạn thì tạo mã mới cho cùng đơn (DECISIONS 3.1).
  * Trạng thái "đã trả" chỉ tin webhook → nút "Kiểm tra" tải lại chi tiết đơn.
  */
-export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; onClose: () => void; onChecked: () => Promise<boolean> }> = ({
+export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; onClose: () => void; onChecked: () => Promise<OrderDetailResponse> }> = ({
   orderId,
   orderCode,
   onClose,
@@ -55,11 +56,15 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
   const check = async () => {
     setChecking(true);
     try {
-      const paid = await onChecked();
-      if (paid) {
-        toast.success(`Đã nhận thanh toán cho đơn ${orderCode}. Đơn đang được gửi tới tài xế.`);
+      const fresh = await onChecked();
+      if (fresh.paymentStatus === 'Paid') {
+        notify('PAYMENT_CONFIRMED', { orderId: String(orderId), orderCode, amount: formatCurrency(fresh.totalFee) });
         onClose();
-      } else toast.warning('Chưa nhận được xác nhận từ PayOS. Nếu bạn vừa chuyển khoản, đợi vài giây rồi kiểm tra lại.');
+        return;
+      }
+      // Không truyền orderId: bấm "kiểm tra" nhiều lần phải nhận phản hồi mỗi lần, không bị chống trùng nuốt
+      const byStatus: Record<string, string> = { Expired: 'PAYMENT_EXPIRED', Failed: 'PAYMENT_FAILED', Cancelled: 'PAYMENT_CANCELLED' };
+      notify(byStatus[fresh.payment?.transactionStatus ?? ''] ?? 'PAYMENT_PENDING', { orderCode });
     } finally {
       setChecking(false);
     }

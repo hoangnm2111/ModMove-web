@@ -8,6 +8,7 @@ import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
 import { orderService } from '../../services/order.service';
+import { notify } from '../../notifications/store';
 import { errorMessage } from '../../services/mock/storage';
 import { ShippingOrder } from '../../types/order.types';
 import { formatCurrency } from '../../utils/format';
@@ -108,8 +109,9 @@ export const BookingPage: React.FC = () => {
   /** Đặt xong → trang chi tiết đơn; đơn PayOS tự mở thanh toán (UC-CUS-27) */
   const finish = (order: ShippingOrder) => {
     reset();
-    toast.success(msg('MSG33', { order_id: order.code }));
     navigate(`/orders/${order.id}${order.paymentMethod === 'PayOS' ? '?pay=1' : ''}`);
+    // Sau navigate để toast biết đã ở trang đích (không hiện "Xem" trỏ về chính trang đang mở)
+    notify('ORDER_CREATED', { orderId: String(order.id), orderCode: order.code });
   };
 
   const handleSubmit = async () => {

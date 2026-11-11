@@ -9,7 +9,7 @@ import { useQuery } from '../../api/useQuery';
 import { APPROVAL_STATUS } from '../../api/labels';
 import { useDriver } from '../../features/driver/DriverContext';
 import { useAuthStore } from '../../store/useAuthStore';
-import { errorMessage } from '../../services/mock/storage';
+import { notify, notifyError } from '../../notifications/store';
 import { formatDateTime } from '../../utils/format';
 
 const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe'];
@@ -60,10 +60,10 @@ export const DriverProfilePage: React.FC = () => {
         maxLoadWeightKg: f.maxLoad,
         documentUrls: f.docs.map((d) => d.trim()),
       });
-      toast.success('Đã nộp hồ sơ. Quản trị viên sẽ thẩm định và thông báo kết quả.');
+      notify('DRIVER_APPLICATION_SUBMITTED');
       await reload();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }

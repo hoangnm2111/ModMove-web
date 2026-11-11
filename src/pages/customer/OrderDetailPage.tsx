@@ -28,7 +28,7 @@ import { PayoutAccountModal } from '../../features/customer/PayoutAccountForm';
 import { CancelOrderModal, ComplaintModal, IncidentRefundModal, RatingModal, RejectPickupModal, ReplyInfoModal, ReportIncidentModal } from '../../features/customer/CustomerModals';
 import { PayOsPaymentModal } from '../../features/payment/PayOsPaymentModal';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
-import { errorMessage } from '../../services/mock/storage';
+import { notify, notifyError } from '../../notifications/store';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
 import { useOrderRealtime } from '../../hooks/useRealtime';
@@ -197,7 +197,7 @@ export const OrderDetailPage: React.FC = () => {
           onChecked={async () => {
             const fresh = await customerApi.order(o.id);
             order.setData(fresh);
-            return fresh.paymentStatus === 'Paid';
+            return fresh;
           }}
         />
       )}
@@ -272,14 +272,15 @@ const NextAction: React.FC<{
     return () => clearInterval(t);
   }, []);
 
-  const run = async (fn: () => Promise<void>, ok: string) => {
+  const run = async (fn: () => Promise<void>, ok: string | (() => void)) => {
     setBusy(true);
     try {
       await fn();
-      toast.success(ok);
+      if (typeof ok === 'string') toast.success(ok);
+      else ok();
       await onReload();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -417,7 +418,7 @@ const NextAction: React.FC<{
               isLoading={busy}
               onClick={async () => {
                 if (!(await confirm({ title: 'Xác nhận đã nhận hàng', message: `Bạn đã kiểm tra hàng của đơn ${o.orderCode} và hàng nguyên vẹn? Sau khi xác nhận bạn không thể khiếu nại.` }))) return;
-                await run(() => customerApi.confirmReceipt(o.id), `Đơn ${o.orderCode} đã hoàn thành. Cảm ơn bạn!`);
+                await run(() => customerApi.confirmReceipt(o.id), () => notify('RECEIPT_CONFIRMED', { orderId: String(o.id), orderCode: o.orderCode }));
               }}
             >
               <CheckCircle2 className="w-4 h-4 mr-1" /> Xác nhận đã nhận hàng
@@ -738,10 +739,10 @@ const RefundItem: React.FC<{ id: number; onReply: (r: MyRefundDetailResponse) =>
     setBusy(true);
     try {
       await customerApi.withdrawRefund(r.id);
-      toast.success('Đã rút yêu cầu.');
+      notify('REFUND_WITHDRAWN', { orderId: String(r.orderId) });
       await Promise.all([q.reload(), onChanged()]);
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }

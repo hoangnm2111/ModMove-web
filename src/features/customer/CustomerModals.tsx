@@ -10,7 +10,7 @@ import { customerApi, publicApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_TYPE } from '../../api/labels';
 import type { IncidentType, MyIncidentResponse, MyRefundDetailResponse, OrderDetailResponse } from '../../api/types';
-import { errorMessage } from '../../services/mock/storage';
+import { notify, notifyError } from '../../notifications/store';
 import { formatCurrency } from '../../utils/format';
 import { PayoutAccountForm, emptyPayoutAccount, toPayoutInput, validatePayoutAccount, type PayoutAccountValue } from './PayoutAccountForm';
 
@@ -52,10 +52,10 @@ export const CancelOrderModal: React.FC<BaseProps & { order: OrderDetailResponse
     setBusy(true);
     try {
       await customerApi.cancelOrder(order.id, code, reason.trim());
-      toast.success(`Đã huỷ đơn ${order.orderCode}.${paid ? ' Yêu cầu hoàn 100% đã được gửi tới Admin.' : ''}`);
+      notify('ORDER_CANCELLED', { orderId: String(order.id), orderCode: order.orderCode });
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -101,7 +101,7 @@ export const RejectPickupModal: React.FC<BaseProps & { order: OrderDetailRespons
       toast.success('Đã từ chối ảnh. Tài xế sẽ kiểm tra và chụp lại.');
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -150,10 +150,10 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
     setBusy(true);
     try {
       await customerApi.submitComplaint({ orderId: order.id, reasonCode: code, reason: reason.trim() || null, evidenceUrls: photos, requestedAmount: Math.round(amount), payoutAccount: toPayoutInput(payout) });
-      toast.success('Đã gửi khiếu nại. Điều phối viên sẽ xem xét và có thể liên hệ bổ sung thông tin.');
+      notify('COMPLAINT_SUBMITTED', { orderCode: order.orderCode });
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -232,10 +232,10 @@ export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailRespo
     try {
       const pos = await getPos();
       await customerApi.reportIncident({ orderId: order.id, incidentType: type, description: desc.trim(), photoUrls: photos, latitude: pos?.latitude ?? null, longitude: pos?.longitude ?? null });
-      toast.success('Đã gửi báo cáo sự cố. Điều phối viên sẽ xử lý ngay.');
+      notify('INCIDENT_REPORTED', { orderCode: order.orderCode });
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -301,10 +301,10 @@ export const IncidentRefundModal: React.FC<BaseProps & { order: OrderDetailRespo
     setBusy(true);
     try {
       await customerApi.requestIncidentRefund({ incidentId: incident.id, reason: reason.trim(), evidenceUrls: photos, requestedAmount: Math.round(amount), payoutAccount: toPayoutInput(payout) });
-      toast.success('Đã gửi yêu cầu hoàn tiền. Điều phối viên sẽ đề xuất, Admin duyệt và chuyển khoản.');
+      notify('INCIDENT_REFUND_REQUESTED', { orderCode: order.orderCode });
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -351,10 +351,10 @@ export const ReplyInfoModal: React.FC<BaseProps & { refund: MyRefundDetailRespon
     setBusy(true);
     try {
       await customerApi.replyRefund(refund.id, reply.trim(), photos);
-      toast.success('Đã gửi thông tin bổ sung.');
+      notify('REFUND_INFO_REPLIED');
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
@@ -402,10 +402,10 @@ export const RatingModal: React.FC<BaseProps & { orderId: number; orderCode: str
     setBusy(true);
     try {
       await customerApi.rate(orderId, stars, comment.trim());
-      toast.success('Cảm ơn bạn đã đánh giá!');
+      notify('RATING_SUBMITTED', { orderCode });
       onDone();
     } catch (e) {
-      toast.error(errorMessage(e));
+      notifyError(e);
     } finally {
       setBusy(false);
     }
