@@ -1,10 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { noticeBus } from '../notifications/realtime';
+import { useToastStore } from '../notifications/store';
 import { realtime } from '../services/realtime.service';
 import { useAuthStore } from '../store/useAuthStore';
 
+/** Toast báo chính việc đăng xuất / hết phiên: hiện ngay sau khi phiên kết thúc nên không bị xoá cùng toast cũ */
+const SESSION_END_TOASTS = ['SESSION_EXPIRED', 'LOGGED_OUT'];
+
 /**
- * Giữ kết nối SignalR theo phiên đăng nhập: có phiên thì kết nối, đăng xuất hoặc đổi tài khoản thì ngắt.
- * Gắn một lần ở App.
+ * Giữ kết nối SignalR theo phiên đăng nhập: có phiên thì kết nối, đăng xuất hoặc đổi tài khoản thì ngắt
+ * và xoá toast của phiên cũ. Gắn một lần ở App.
  */
 export const useRealtimeConnection = () => {
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -14,6 +19,7 @@ export const useRealtimeConnection = () => {
     else void realtime.stop();
     return () => {
       void realtime.stop();
+      useToastStore.getState().clear(SESSION_END_TOASTS);
     };
   }, [userId, hasToken]);
 };
@@ -43,5 +49,5 @@ export const useOrderRealtime = (onChange: () => void, orderId?: number | null) 
 export const useNotificationRefresh = (onChange: () => void) => {
   const callback = useRef(onChange);
   callback.current = onChange;
-  useEffect(() => realtime.onNotification(() => callback.current()), []);
+  useEffect(() => noticeBus.on(() => callback.current()), []);
 };

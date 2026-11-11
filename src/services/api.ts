@@ -4,7 +4,7 @@ import { ServiceError } from './mock/storage';
 import { ERROR_MESSAGES } from '../api/errors';
 
 /** HTTP client cho backend ASP.NET Core (ModMove.WebApi). */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5133/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5133/api';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

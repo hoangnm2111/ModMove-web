@@ -26,7 +26,8 @@ interface ToastState {
   /** Hover: dừng đếm, giữ lại phần thời gian còn lại */
   pause: (id: number) => void;
   resume: (id: number) => void;
-  clear: () => void;
+  /** Xoá toast (đăng xuất / đổi tài khoản); `keepTypes` giữ lại các toast báo chính việc đăng xuất */
+  clear: (keepTypes?: string[]) => void;
 }
 
 interface Timer {
@@ -76,10 +77,13 @@ export const useToastStore = create<ToastState>((set, get) => {
       if (!t || t.handle) return;
       startTimer(id, t.remaining);
     },
-    clear: () => {
-      get().items.forEach((t) => dropTimer(t.id));
+    clear: (keepTypes = []) => {
+      const kept = get().items.filter((t) => keepTypes.includes(t.type));
+      get().items.forEach((t) => {
+        if (!kept.includes(t)) dropTimer(t.id);
+      });
       recent.clear();
-      set({ items: [] });
+      set({ items: kept });
     },
   };
 });
