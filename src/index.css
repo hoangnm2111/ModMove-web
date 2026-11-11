@@ -58,3 +58,13 @@
   animation: slide-right 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+
+/* Thanh tiến trình của toast (thời lượng truyền qua inline style) */
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
