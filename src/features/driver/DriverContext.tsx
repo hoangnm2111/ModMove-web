@@ -4,6 +4,7 @@ import { useQuery } from '../../api/useQuery';
 import type { DriverOnboardingStatusResponse, DriverStatusResponse } from '../../api/types';
 import { toast } from '../../components/ui/feedback';
 import { errorMessage } from '../../services/mock/storage';
+import { useNoticeRefresh } from '../../notifications/useNoticeRefresh';
 
 interface Ctx {
   status: DriverStatusResponse | undefined;
@@ -31,6 +32,9 @@ const SEND_EVERY_MS = 10_000;
 export const DriverProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const st = useQuery(() => driverApi.status(), [], { refreshMs: 15_000 });
   const ob = useQuery(() => driverApi.onboardingStatus(), [], { refreshMs: 60_000 });
+  // Thông báo realtime: đơn mới / ảnh được duyệt hoặc từ chối / đơn bị huỷ → tải lại trạng thái; hồ sơ được duyệt hoặc từ chối → tải lại hồ sơ
+  useNoticeRefresh((t) => t === 'NEW_MATCHING_ORDER' || t.startsWith('PICKUP_') || t === 'ORDER_CANCELLED', () => void st.reload());
+  useNoticeRefresh((t) => t.startsWith('DRIVER_APPLICATION_'), () => void ob.reload());
   const [toggling, setToggling] = useState(false);
   const [sharing, setSharing] = useState(true);
   const [gpsError, setGpsError] = useState<string | null>(null);

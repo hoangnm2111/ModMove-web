@@ -125,7 +125,9 @@ export function notify(type: string, data: NoticeData = {}, server?: { title?: s
   if (isDuplicate(type, data.orderId)) return;
 
   const role = useAuthStore.getState().user?.role;
-  const href = def?.href && role ? def.href(data, role) : undefined;
+  const target = def?.href && role ? def.href(data, role) : undefined;
+  // Đang ở đúng trang đích: không hiện "Xem" (trang tự tải lại dữ liệu qua useNoticeRefresh)
+  const href = target && target !== window.location.pathname ? target : undefined;
   useToastStore.getState().push({ type, kind, title, text, href });
 }
 

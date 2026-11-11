@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useSidebarStore } from '../store/useSidebarStore';
 import { dispatcherApi } from '../api/endpoints';
 import { useQuery } from '../api/useQuery';
+import { useNoticeRefresh } from '../notifications/useNoticeRefresh';
 
 interface DispatcherLayoutContextType {
   isSidebarOpen: boolean;
@@ -29,6 +30,11 @@ export const DispatcherLayout: React.FC<{ children?: React.ReactNode }> = ({ chi
   const needsReview = useQuery(() => dispatcherApi.complaints({ stage: 'NeedsReview', pageSize: 1 }), [], { refreshMs: 60_000 });
   const replied = useQuery(() => dispatcherApi.complaints({ stage: 'CustomerReplied', pageSize: 1 }), [], { refreshMs: 60_000 });
   const pendingCases = (needsReview.data?.totalCount ?? 0) + (replied.data?.totalCount ?? 0);
+  // Thông báo realtime làm đổi bộ đếm → tải lại ngay thay vì chờ 60 giây
+  useNoticeRefresh(
+    (t) => ['INCIDENT_REPORTED', 'COMPLAINT_SUBMITTED', 'REFUND_INFO_REPLIED', 'INCIDENT_REFUND_REQUESTED'].includes(t),
+    () => void Promise.all([openIncidents.reload(), needsReview.reload(), replied.reload()])
+  );
 
   const sections: NavSection[] = [
     { title: 'Giám sát thời gian thực', items: [{ path: '/dispatcher/live-map', label: 'Giám sát đơn & tài xế', Icon: Radio }] },

@@ -32,6 +32,7 @@ import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
 import { useOrderRealtime } from '../../hooks/useRealtime';
+import { useNoticeRefresh } from '../../notifications/useNoticeRefresh';
 
 const H = 3_600_000;
 const ACTIVE_TRACK = ['Accepted', 'Arrived', 'PickedUp', 'InTransit'];
@@ -75,6 +76,8 @@ export const OrderDetailPage: React.FC = () => {
   };
   // Tài xế đổi trạng thái đơn → tự tải lại chi tiết đơn đang xem (SignalR OrderStatusChanged)
   useOrderRealtime(() => void reloadAll(), orderId);
+  // Thông báo (SignalR NotificationReceived) về đúng đơn đang xem → tải lại ngay
+  useNoticeRefresh((_type, d) => d.orderId === String(orderId), () => void reloadAll());
 
   // Còn sự cố mở (của ai cũng được) hoặc tài xế đang có sự cố chặn chuyến: tải lại mỗi 15 giây
   const hasOpenIncident =
