@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Truck,
   ChevronDown,
+  Truck,
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
@@ -11,22 +11,22 @@ import {
   Home,
   User,
   LogOut,
+  Menu,
   Package,
   Layers,
   CheckCircle2,
   X,
-  MessageCircle,
-  Send,
 } from 'lucide-react';
 import { publicApi } from '../../api/endpoints';
-import { errorMessage } from '../../services/mock/storage';
 import { useAuthStore, getRoleHomePath } from '../../store/useAuthStore';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
 import { AddressInput } from '../../features/booking/AddressInput';
 import { GeoPoint } from '../../services/map.service';
-import { toast } from '../../components/ui/feedback';
 import { formatCurrency } from '../../utils/format';
+import { BrandLogo } from '../../components/BrandLogo';
+import { CargoTypesModal, PolicyListModal, VehiclePriceModal } from '../../features/landing/LandingInfoModals';
+import { AboutSection, BenefitsSection, CoverageSection, LandingFooter, ProcessSection, VehicleCardsSection } from '../../features/landing/LandingSections';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,6 +34,11 @@ export const LandingPage: React.FC = () => {
   const { setPickup, setDropoff, update } = useBookingDraftStore();
   const vehicleTypes = useVehicleTypes().filter((v) => v.isActive);
   const { loadingFee } = usePlatformSettings();
+
+  // Menu giữa: dropdown "Bảng giá" và các modal thông tin lấy từ DB
+  const [priceMenu, setPriceMenu] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [infoModal, setInfoModal] = useState<'prices' | 'cargo' | 'policies' | null>(null);
 
   // Carousel Slide State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -44,54 +49,28 @@ export const LandingPage: React.FC = () => {
   // Estimator inputs
   const [pickup, setPickupPlace] = useState<GeoPoint>({ address: '', lat: 0, lng: 0 });
   const [dropoff, setDropoffPlace] = useState<GeoPoint>({ address: '', lat: 0, lng: 0 });
-  // Trạng thái mở dropdown menu Tài xế
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  // Carousel slides data
+  // Carousel: 1 slide giới thiệu + mỗi loại xe đang hoạt động 1 slide (giá, tải trọng lấy từ bảng vehicle_types)
+  const THEMES = ['from-[#0B1528] via-[#101E36] to-[#0A101D]', 'from-[#0E1E38] via-[#162744] to-[#0A1220]', 'from-[#112340] via-[#1A3156] to-[#0B1424]'];
   const slides = [
     {
-      id: 1,
-      badge: 'DỊCH VỤ NỔI BẬT NĂM 2026 • ModMove®',
-      highlightTitle: 'CHUYÊN GIA',
-      mainTitle: 'Chuyển nhà',
-      subtitle:
-        'Thảnh thơi dọn về nhà mới • Khảo sát miễn phí • Đóng gói bọc lót kỹ càng • Cam kết đền bù 100% nếu xảy ra hư hại',
-      tags: [
-        'Bọc lót chống trầy xước',
-        'Tháo lắp giường tủ/máy lạnh',
-        'Đội ngũ bốc vác nhiệt tình',
-      ],
-      themeBg: 'from-[#0B1528] via-[#101E36] to-[#0A101D]',
+      id: 'intro',
+      badge: 'ĐẶT XE TẢI NHỎ THEO YÊU CẦU',
+      highlightTitle: 'CHUYỂN NHÀ',
+      mainTitle: 'Vận chuyển đồ',
+      subtitle: 'Nhập điểm nhận và điểm giao, chọn loại xe phù hợp, xem giá ước tính trước khi đặt và theo dõi xe trên bản đồ.',
+      tags: ['Giá ước tính trước khi đặt', 'Theo dõi xe trực tiếp', 'Thanh toán PayOS hoặc tiền mặt'],
     },
-    {
-      id: 2,
-      badge: 'VẬN TẢI HỎA TỐC NỘI ĐÔ • ModMove®',
-      highlightTitle: 'HẠM ĐỘI',
-      mainTitle: 'Xe tải 1 - 2 Tấn',
-      subtitle:
-        'Tiếp cận điểm lấy hàng trong 15-30 phút • Xe van & xe tải thùng kín an toàn • Hỗ trợ bốc dỡ 2 đầu cẩn thận',
-      tags: [
-        'Không phụ phí giờ cao điểm',
-        'Định vị GPS trực tiếp 24/7',
-        'Hoá đơn điện tử sau thanh toán',
-      ],
-      themeBg: 'from-[#0E1E38] via-[#162744] to-[#0A1220]',
-    },
-    {
-      id: 3,
-      badge: 'GIẢI PHÁP TIẾT KIỆM • ModMove®',
-      highlightTitle: 'LINH HOẠT',
-      mainTitle: 'Xe bán tải 500kg',
-      subtitle:
-        'Chuyên chở đồ đạc phòng trọ, căn hộ nhỏ, hàng hóa vừa và nhỏ • Luồn lách hẻm sâu nhanh chóng',
-      tags: [
-        'Cước phí tối ưu từ 150.000 đ',
-        'Có mặt sau 10 phút gọi',
-        'Tài xế chuyên nghiệp thân thiện',
-      ],
-      themeBg: 'from-[#112340] via-[#1A3156] to-[#0B1424]',
-    },
-  ];
+    ...vehicleTypes.map((v) => ({
+      id: v.id,
+      badge: 'LOẠI XE',
+      highlightTitle: `TẢI TRỌNG ${v.maxLoadKg.toLocaleString('vi-VN')} KG`,
+      mainTitle: v.name,
+      subtitle: `Thùng xe ${v.cargoBed.lengthCm} × ${v.cargoBed.widthCm} × ${v.cargoBed.heightCm} cm`,
+      tags: [`Giá mở cửa ${formatCurrency(v.baseFare)}`, `${formatCurrency(v.pricePerKm)}/km`, `Tối thiểu ${formatCurrency(v.minimumFare)}`],
+    })),
+  ].map((slide, i) => ({ ...slide, themeBg: THEMES[i % THEMES.length] }));
+  const slide = slides[currentSlide % slides.length];
 
   // Auto-play carousel
   useEffect(() => {
@@ -152,69 +131,88 @@ export const LandingPage: React.FC = () => {
     navigate('/booking');
   };
 
-  /** GB-45: tài xế đăng ký trên Driver App */
-  const handleDriverRegister = () => toast.info('Tài xế vui lòng tải ứng dụng ModMove Driver để đăng ký và nộp hồ sơ.');
+  /** Bấm "Đặt xe này" ở thẻ loại xe: chọn sẵn xe rồi vào luồng đặt xe. */
+  const handlePickVehicle = (vehicleTypeId: string) => {
+    update({ vehicleTypeId });
+    navigate('/booking');
+  };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans select-none antialiased">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans antialiased">
       {/* ========================================================================= */}
       {/* 1. TOP HEADER / NAVBAR (CHUẨN THEO ĐẶC TẢ SRS 1.1.1 & ẢNH IMAGE6.PNG) */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between">
+        <div className="relative max-w-[1440px] mx-auto px-3 sm:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           {/* Left: Brand Logo & Subtitle */}
           <div
             onClick={() => navigate('/')}
             className="flex items-center gap-3 cursor-pointer group"
             title="ModMove - Trang chủ"
           >
-            <div className="w-11 h-11 rounded-2xl bg-[#0F172A] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
-              <Truck className="w-5 h-5 text-sky-400 stroke-[2.2]" />
-            </div>
+            <BrandLogo className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl shadow-xs group-hover:scale-105 transition-transform" />
             <div className="flex flex-col">
               <div className="flex items-baseline">
-                <span className="text-2xl font-black tracking-tight text-slate-900">Mod</span>
-                <span className="text-2xl font-black tracking-tight text-blue-600">Move</span>
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">Mod</span>
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-blue-600">Move</span>
                 <span className="text-[10px] text-slate-400 align-super ml-0.5 font-bold">®</span>
               </div>
-              <span className="text-[9px] text-slate-500 font-extrabold tracking-wider uppercase -mt-0.5">
+              <span className="hidden sm:block text-[9px] text-slate-500 font-extrabold tracking-wider uppercase -mt-0.5">
                 VẬN TẢI XE TẢI CHUYÊN NGHIỆP
               </span>
             </div>
           </div>
 
-          {/* Center: Navigation Menu with Dropdowns (SRS 1.1.1) */}
+          {/* Menu giữa: dữ liệu công khai từ DB (vehicle_types, master_data_items). Không có nút Tài xế vì tài xế đăng ký trên app mobile. */}
           <nav className="hidden lg:flex items-center gap-3 text-xs sm:text-sm font-bold text-slate-700">
-            {/* Drivers menu – SRS III.1.1.1: chỉ mở đăng ký tài xế trên Driver App */}
-            <div
-              className="relative"
-              onMouseEnter={() => setActiveDropdown('drivers')}
-              onMouseLeave={() => setActiveDropdown(null)}
-            >
+            <div className="relative" onMouseLeave={() => setPriceMenu(false)}>
               <button
                 type="button"
-                onClick={() => handleDriverRegister()}
+                id="nav-prices"
+                aria-haspopup="menu"
+                aria-expanded={priceMenu}
+                onClick={() => setPriceMenu((v) => !v)}
                 className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
               >
-                <span>Tài xế</span>
+                <span>Bảng giá</span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
-              {activeDropdown === 'drivers' && (
-                <div className="absolute top-full left-0 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-fadeIn">
-                  <div
-                    onClick={() => handleDriverRegister()}
-                    className="p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition"
+              {priceMenu && (
+                <div role="menu" className="absolute top-full left-0 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-fadeIn">
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => {
+                      setPriceMenu(false);
+                      setInfoModal('prices');
+                    }}
+                    className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 transition"
                   >
-                    <div className="text-xs font-bold text-slate-900">Đăng ký làm đối tác tài xế</div>
-                    <div className="text-[10px] text-slate-500">Thu nhập ổn định 18 - 25 triệu/tháng</div>
-                  </div>
+                    <div className="text-xs font-bold text-slate-900">Giá theo loại xe</div>
+                    <div className="text-[10px] text-slate-500">Giá mở cửa, giá mỗi km, giá tối thiểu</div>
+                  </button>
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => {
+                      setPriceMenu(false);
+                      setInfoModal('cargo');
+                    }}
+                    className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 transition"
+                  >
+                    <div className="text-xs font-bold text-slate-900">Loại hàng hoá</div>
+                    <div className="text-[10px] text-slate-500">Các loại hàng nhận vận chuyển</div>
+                  </button>
                 </div>
               )}
             </div>
+            <button type="button" id="nav-policies" onClick={() => setInfoModal('policies')} className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer">
+              <span>Chính sách</span>
+            </button>
           </nav>
 
           {/* Right: Sign In Button & Deliver Now Button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2">
                 <button
@@ -227,7 +225,7 @@ export const LandingPage: React.FC = () => {
                 <button
                   onClick={logout}
                   title="Đăng xuất"
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                  className="hidden sm:inline-flex p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -236,13 +234,13 @@ export const LandingPage: React.FC = () => {
               <>
                 <button
                   onClick={() => navigate('/register')}
-                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
+                  className="hidden sm:flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
                 >
                   <span>Đăng ký</span>
                 </button>
                 <button
                   onClick={() => navigate('/login')}
-                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
+                  className="hidden sm:flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
                 >
                   <span>Đăng nhập</span>
                 </button>
@@ -253,11 +251,53 @@ export const LandingPage: React.FC = () => {
             <button
               id="deliver-now-btn"
               onClick={handleBookNow}
-              className="bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="whitespace-nowrap bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-3.5 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Giao hàng ngay</span>
             </button>
+
+            {/* Màn < lg: menu gom Bảng giá, Loại hàng hoá, Chính sách và (khách vãng lai) Đăng ký/Đăng nhập */}
+            <button
+              type="button"
+              aria-label="Mở menu"
+              aria-expanded={mobileMenu}
+              onClick={() => setMobileMenu((v) => !v)}
+              className="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-700 flex items-center justify-center flex-shrink-0"
+            >
+              {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
+
+          {mobileMenu && (
+            <div className="lg:hidden absolute top-full right-3 left-3 sm:left-auto sm:w-72 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50">
+              {[
+                { label: 'Giá theo loại xe', run: () => setInfoModal('prices') },
+                { label: 'Loại hàng hoá', run: () => setInfoModal('cargo') },
+                { label: 'Chính sách', run: () => setInfoModal('policies') },
+                ...(isAuthenticated && user
+                  ? [
+                      { label: `Vào trang của tôi (${user.fullName})`, run: () => navigate(getRoleHomePath(activeRole)) },
+                      { label: 'Đăng xuất', run: logout },
+                    ]
+                  : [
+                      { label: 'Đăng ký', run: () => navigate('/register') },
+                      { label: 'Đăng nhập', run: () => navigate('/login') },
+                    ]),
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    setMobileMenu(false);
+                    item.run();
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -266,7 +306,7 @@ export const LandingPage: React.FC = () => {
       {/* ========================================================================= */}
       <section className="relative px-3 sm:px-8 pt-4 sm:pt-6 max-w-[1440px] mx-auto w-full">
         <div
-          className={`relative rounded-[28px] overflow-hidden shadow-xl bg-gradient-to-br ${slides[currentSlide].themeBg} border border-slate-800 min-h-[420px] md:min-h-[460px] flex items-center justify-center text-center px-6 py-10 transition-all duration-700`}
+          className={`relative rounded-[28px] overflow-hidden shadow-xl bg-gradient-to-br ${slide.themeBg} border border-slate-800 min-h-[420px] md:min-h-[460px] flex items-center justify-center text-center px-6 py-10 transition-all duration-700`}
         >
           {/* Subtle City Silhouette Overlay */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-slate-900/80 to-slate-950 z-0 pointer-events-none" />
@@ -298,27 +338,27 @@ export const LandingPage: React.FC = () => {
               <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white">
                 <Truck className="w-2.5 h-2.5" />
               </div>
-              <span>{slides[currentSlide].badge}</span>
+              <span>{slide.badge}</span>
             </div>
 
             {/* Big Titles */}
             <div className="space-y-1">
               <div className="text-xl sm:text-2xl font-black text-[#FF7A00] tracking-wider uppercase">
-                {slides[currentSlide].highlightTitle}
+                {slide.highlightTitle}
               </div>
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-100 via-orange-200 to-amber-300 tracking-tight drop-shadow-sm">
-                {slides[currentSlide].mainTitle}
+                {slide.mainTitle}
               </h1>
             </div>
 
             {/* Subtitle description */}
             <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed max-w-2xl px-4">
-              {slides[currentSlide].subtitle}
+              {slide.subtitle}
             </p>
 
             {/* 3 Feature Tags */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[11px] text-amber-200 font-semibold">
-              {slides[currentSlide].tags.map((tag, i) => (
+              {slide.tags.map((tag, i) => (
                 <span
                   key={i}
                   className="px-3 py-1 rounded-full bg-black/30 border border-amber-400/30 backdrop-blur-xs flex items-center gap-1.5"
@@ -348,7 +388,7 @@ export const LandingPage: React.FC = () => {
                   key={idx}
                   onClick={() => setCurrentSlide(idx)}
                   className={`transition-all rounded-full ${
-                    currentSlide === idx
+                    currentSlide % slides.length === idx
                       ? 'w-7 h-2 bg-blue-500 shadow-xs'
                       : 'w-2 h-2 bg-white/40 hover:bg-white/70'
                   }`}
@@ -431,54 +471,16 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      <section className="relative px-3 sm:px-8 pb-10 max-w-[1440px] mx-auto w-full">
-        <SupportRequestForm />
-      </section>
-    </div>
-  );
-};
+      <AboutSection />
+      <BenefitsSection />
+      <VehicleCardsSection onPick={handlePickVehicle} />
+      <ProcessSection />
+      <CoverageSection />
+      <LandingFooter onPolicies={() => setInfoModal('policies')} />
 
-/** UC-GST-05 – Gửi yêu cầu hỗ trợ: POST /public/SupportRequests { fullName, contact, content } */
-const SupportRequestForm: React.FC = () => {
-  const { user } = useAuthStore();
-  const [fullName, setFullName] = useState(user?.fullName ?? '');
-  const [contact, setContact] = useState(user?.email ?? '');
-  const [content, setContent] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !contact.trim() || !content.trim()) return toast.error('Vui lòng nhập đủ họ tên, liên hệ và nội dung.');
-    setBusy(true);
-    try {
-      await publicApi.supportRequest({ fullName: fullName.trim(), contact: contact.trim(), content: content.trim() });
-      toast.success('Đã gửi yêu cầu hỗ trợ. Đội ngũ ModMove sẽ liên hệ lại với bạn.');
-      setContent('');
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
-  return (
-    <form onSubmit={submit} className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm grid md:grid-cols-3 gap-5">
-      <div>
-        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
-          <MessageCircle className="w-5 h-5" />
-        </div>
-        <h2 className="text-lg font-black text-slate-900">Cần tư vấn trước khi đặt?</h2>
-        <p className="text-xs text-slate-500 mt-1">Gửi câu hỏi về giá, loại xe, khu vực phục vụ… chúng tôi sẽ phản hồi qua email hoặc số điện thoại bạn để lại.</p>
-      </div>
-      <div className="md:col-span-2 grid sm:grid-cols-2 gap-3">
-        <input className={inp} placeholder="Họ và tên *" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={100} />
-        <input className={inp} placeholder="Email hoặc số điện thoại *" value={contact} onChange={(e) => setContact(e.target.value)} maxLength={150} />
-        <textarea className={`${inp} sm:col-span-2`} rows={3} placeholder="Nội dung cần hỗ trợ *" value={content} onChange={(e) => setContent(e.target.value)} maxLength={2000} />
-        <div className="sm:col-span-2 flex justify-end">
-          <button disabled={busy} className="h-11 px-5 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white font-extrabold text-sm disabled:opacity-60 flex items-center gap-1.5">
-            <Send className="w-4 h-4" /> {busy ? 'Đang gửi…' : 'Gửi yêu cầu hỗ trợ'}
-          </button>
-        </div>
-      </div>
-    </form>
+      <VehiclePriceModal open={infoModal === 'prices'} onClose={() => setInfoModal(null)} />
+      <CargoTypesModal open={infoModal === 'cargo'} onClose={() => setInfoModal(null)} />
+      <PolicyListModal open={infoModal === 'policies'} onClose={() => setInfoModal(null)} />
+    </div>
   );
 };
