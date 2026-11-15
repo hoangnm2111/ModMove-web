@@ -50,7 +50,7 @@ export const AdminRefundsPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -78,7 +78,16 @@ export const AdminRefundsPage: React.FC = () => {
                         </div>
                       ),
                     },
-                    { head: 'Trạng thái', cell: (r) => <Pill tone={REFUND_STATUS[r.refundStatus]} /> },
+                    {
+                      head: 'Trạng thái',
+                      cell: (r) => (
+                        <div className="space-y-1">
+                          <Pill tone={REFUND_STATUS[r.refundStatus]} />
+                          {['Approved', 'Failed'].includes(r.refundStatus) && !r.hasPayoutAccount && <div className="text-[11px] font-bold text-amber-700">Khách chưa khai tài khoản nhận</div>}
+                          {r.payoutFailureReason && <div className="text-[11px] text-rose-700">Chuyển khoản lỗi: {r.payoutFailureReason}</div>}
+                        </div>
+                      ),
+                    },
                     { head: 'Tạo lúc', cell: (r) => formatDateTime(r.createdAt) },
                   ]}
                 />
@@ -93,16 +102,20 @@ export const AdminRefundsPage: React.FC = () => {
   );
 };
 
-type Act = 'approve' | 'reject' | 'payout' | null;
+type Act = 'approve' | 'reject' | 'payout' | 'failed' | null;
 const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () => void }> = ({ id, onClose, onChanged }) => {
   const q = useQuery(() => adminApi.refund(id), [id]);
   const [act, setAct] = useState<Act>(null);
   const r = q.data;
   const canDecide = r && r.refundStatus === 'Requested' && (r.sourceType === 'Cancellation' || r.proposedAmount !== null);
-  const done = () => {
+  // Q5 (B9): Dispatcher đề xuất 0đ thì Admin chỉ từ chối được
+  const zeroProposal = r?.proposedAmount === 0;
+  /** `finished`: từ chối hoặc đã chuyển khoản là xong khoản này → đóng ngăn chi tiết; duyệt / báo lỗi còn bước tiếp nên giữ mở. */
+  const done = (finished: boolean) => {
     setAct(null);
-    void q.reload();
     onChanged();
+    if (finished) onClose();
+    else void q.reload();
   };
   return (
     <Drawer
@@ -118,15 +131,22 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
                 <Button size="sm" variant="danger" onClick={() => setAct('reject')}>
                   <XCircle className="w-4 h-4 mr-1" /> Từ chối
                 </Button>
-                <Button size="sm" onClick={() => setAct('approve')}>
-                  <CheckCircle2 className="w-4 h-4 mr-1" /> Duyệt {formatCurrency(r.proposedAmount ?? r.requestedAmount)}
-                </Button>
+                {!zeroProposal && (
+                  <Button size="sm" onClick={() => setAct('approve')}>
+                    <CheckCircle2 className="w-4 h-4 mr-1" /> Duyệt {formatCurrency(r.proposedAmount ?? r.requestedAmount)}
+                  </Button>
+                )}
               </>
             )}
             {r.refundStatus === 'Approved' && (
-              <Button size="sm" onClick={() => setAct('payout')}>
-                <Banknote className="w-4 h-4 mr-1" /> Xác nhận đã chuyển khoản
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => setAct('failed')} disabled={!r.hasPayoutAccount} title={r.hasPayoutAccount ? undefined : 'Khách chưa khai tài khoản nhận'}>
+                  <XCircle className="w-4 h-4 mr-1" /> Chuyển khoản lỗi
+                </Button>
+                <Button size="sm" onClick={() => setAct('payout')} disabled={!r.hasPayoutAccount} title={r.hasPayoutAccount ? undefined : 'Khách chưa khai tài khoản nhận'}>
+                  <Banknote className="w-4 h-4 mr-1" /> Xác nhận đã chuyển khoản
+                </Button>
+              </>
             )}
           </>
         )
@@ -138,6 +158,11 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
             {r.refundStatus === 'Requested' && r.sourceType !== 'Cancellation' && r.proposedAmount === null && (
               <Banner kind="warning">Khoản này chưa có đề xuất của Điều phối viên nên chưa thể duyệt.</Banner>
             )}
+            {r.refundStatus === 'Requested' && r.proposedAmount === 0 && <Banner kind="warning">Điều phối viên đề xuất hoàn 0đ: khoản này chỉ có thể từ chối.</Banner>}
+            {['Approved', 'Failed'].includes(r.refundStatus) && !r.hasPayoutAccount && (
+              <Banner kind="warning">Khách chưa khai tài khoản nhận hoàn tiền. Chưa thể chuyển khoản; hệ thống đã nhắc khách khai báo.</Banner>
+            )}
+            {r.payoutFailureReason && <Banner kind="error">Lần chuyển khoản trước bị lỗi: {r.payoutFailureReason}</Banner>}
             <div className="grid sm:grid-cols-3 gap-3">
               <Amount label="Khách yêu cầu" v={r.requestedAmount} />
               <Amount label="Dispatcher đề xuất" v={r.proposedAmount} />
@@ -184,6 +209,20 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
                 )}
               </Card>
             </div>
+            <Card title="Tài khoản nhận hoàn tiền">
+              {r.payoutAccount ? (
+                <>
+                  <KV label="Ngân hàng">{r.payoutAccount.bankName}</KV>
+                  <KV label="Số tài khoản">
+                    <span className="font-mono font-bold">{r.payoutAccount.accountNumber}</span>
+                  </KV>
+                  <KV label="Chủ tài khoản">{r.payoutAccount.accountHolder}</KV>
+                  {r.payoutAccount.infoUpdatedAt && <KV label="Cập nhật lúc">{formatDateTime(r.payoutAccount.infoUpdatedAt)}</KV>}
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">Khách chưa khai tài khoản nhận.</p>
+              )}
+            </Card>
             {(r.decidedAt || r.processedAt) && (
               <Card title="Kết quả xử lý">
                 {r.approvedByName && <KV label="Admin xử lý">{r.approvedByName}</KV>}
@@ -208,25 +247,29 @@ const Amount: React.FC<{ label: string; v: number | null }> = ({ label, v }) => 
   </div>
 );
 
-const ActModal: React.FC<{ act: Exclude<Act, null>; refund: AdminRefundDetailResponse; onClose: () => void; onDone: () => void }> = ({ act, refund, onClose, onDone }) => {
+const ActModal: React.FC<{ act: Exclude<Act, null>; refund: AdminRefundDetailResponse; onClose: () => void; onDone: (finished: boolean) => void }> = ({ act, refund, onClose, onDone }) => {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (act === 'payout' && !text.trim()) return toast.error('Nhập mã giao dịch ngân hàng.');
+    if (act === 'failed' && !text.trim()) return toast.error('Nhập lý do chuyển khoản lỗi.');
     setBusy(true);
     try {
       if (act === 'approve') await adminApi.approveRefund(refund.id, text.trim());
       if (act === 'reject') await adminApi.rejectRefund(refund.id, text.trim());
       if (act === 'payout') await adminApi.payoutRefund(refund.id, text.trim());
-      toast.success(act === 'approve' ? 'Đã duyệt hoàn tiền.' : act === 'reject' ? 'Đã từ chối hoàn tiền.' : 'Đã ghi nhận chuyển khoản.');
-      onDone();
+      if (act === 'failed') await adminApi.refundPayoutFailed(refund.id, text.trim());
+      toast.success(
+        { approve: 'Đã duyệt hoàn tiền.', reject: 'Đã từ chối hoàn tiền.', payout: 'Đã ghi nhận chuyển khoản.', failed: 'Đã ghi nhận chuyển khoản lỗi. Khách sẽ được nhắc khai lại tài khoản.' }[act]
+      );
+      onDone(act === 'reject' || act === 'payout');
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
-  const title = { approve: 'Duyệt hoàn tiền', reject: 'Từ chối hoàn tiền', payout: 'Xác nhận đã chuyển khoản' }[act];
+  const title = { approve: 'Duyệt hoàn tiền', reject: 'Từ chối hoàn tiền', payout: 'Xác nhận đã chuyển khoản', failed: 'Báo chuyển khoản lỗi' }[act];
   return (
     <Modal
       open
@@ -247,6 +290,11 @@ const ActModal: React.FC<{ act: Exclude<Act, null>; refund: AdminRefundDetailRes
         <div className="space-y-3">
           <Banner kind="info">Chuyển khoản {formatCurrency(refund.proposedAmount ?? refund.requestedAmount)} cho {refund.customerName} rồi nhập mã tham chiếu ngân hàng.</Banner>
           <Field label="Mã giao dịch ngân hàng" required value={text} onChange={(e) => setText(e.target.value)} maxLength={50} />
+        </div>
+      ) : act === 'failed' ? (
+        <div className="space-y-3">
+          <Banner kind="warning">Khoản hoàn chuyển sang "Chuyển khoản lỗi", khách được nhắc khai lại tài khoản nhận. Sau đó bạn duyệt chuyển khoản lại.</Banner>
+          <TextArea label="Lý do (khách sẽ thấy)" required value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
         </div>
       ) : (
         <TextArea label="Ghi chú cho khách (không bắt buộc – khách sẽ thấy)" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />

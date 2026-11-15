@@ -40,9 +40,9 @@ export const AdminWithdrawalsPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         <Banner kind="info" className="mb-4">
-          Yêu cầu rút tiền do tài xế tạo trên app. Số tiền rút được trừ từ ví thu nhập trước, thiếu thì trừ tiếp từ ví ký quỹ; từ chối thì hoàn đúng từng phần về hai ví. Mỗi tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu.
+          Yêu cầu rút tiền do tài xế tạo trên app. Số tiền rút được trừ từ ví thu nhập trước, thiếu thì trừ tiếp từ ví tiền cọc; từ chối thì hoàn đúng từng phần về hai ví. Mỗi tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu.
         </Banner>
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
@@ -57,7 +57,7 @@ export const AdminWithdrawalsPage: React.FC = () => {
                     { head: 'Tài xế', cell: (w) => <div>{w.driverName}<div className="text-[11px] text-slate-400"><PhoneLink phone={w.driverPhone} /></div></div> },
                     { head: 'Số tiền', className: 'text-right', cell: (w) => <b>{formatCurrency(w.amount)}</b> },
                     { head: 'Trừ từ thu nhập', className: 'text-right', cell: (w) => formatCurrency(w.earningsAmount) },
-                    { head: 'Trừ từ ký quỹ', className: 'text-right', cell: (w) => formatCurrency(w.depositAmount) },
+                    { head: 'Trừ từ tiền cọc', className: 'text-right', cell: (w) => formatCurrency(w.depositAmount) },
                     { head: 'Ngân hàng', cell: (w) => (w.bankName ? `${w.bankName} • ${w.bankAccountNumber}` : '—') },
                     { head: 'Trạng thái', cell: (w) => <Pill tone={WITHDRAWAL_STATUS[w.transactionStatus]} /> },
                     { head: 'Tạo lúc', cell: (w) => formatDateTime(w.createdAt) },
@@ -103,7 +103,7 @@ const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: (
               <div className="text-[11px] font-bold text-slate-500">Số tiền rút</div>
               <div className="text-3xl font-black">{formatCurrency(w.amount)}</div>
               <div className="text-[11px] text-slate-500 mt-1">
-                Từ thu nhập {formatCurrency(w.earningsAmount)} • Từ ký quỹ {formatCurrency(w.depositAmount)}
+                Từ thu nhập {formatCurrency(w.earningsAmount)} • Từ tiền cọc {formatCurrency(w.depositAmount)}
               </div>
             </div>
             <Card title="Tài xế">

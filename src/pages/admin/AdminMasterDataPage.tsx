@@ -51,7 +51,7 @@ export const AdminMasterDataPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-6xl mx-auto space-y-3">
+      <div className="w-full space-y-3">
         <Banner kind="info">
           <b>{MASTER_CATEGORY[cat].label}:</b> {MASTER_CATEGORY[cat].hint}. Mục bị tắt không hiển thị cho khách; mã đã tắt gửi lên sẽ bị từ chối.
         </Banner>

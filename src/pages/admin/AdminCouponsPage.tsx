@@ -57,7 +57,7 @@ export const AdminCouponsPage: React.FC = () => {
         />
       }
     >
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (

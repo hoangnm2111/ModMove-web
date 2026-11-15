@@ -13,8 +13,8 @@ import { errorMessage } from '../../services/mock/storage';
 import { formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
 
-/** Thứ tự cố định của documentUrls (DECISIONS D10) */
-const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe'];
+/** Thứ tự cố định của documentUrls (DECISIONS D2): 7 ảnh, CCCD ở cuối; hồ sơ nộp trước 2026-11-12 chỉ có 5 ảnh đầu. */
+const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe', 'CCCD – mặt trước', 'CCCD – mặt sau'];
 const CHECK_ITEMS = ['Số CCCD', 'Số giấy phép lái xe', 'Biển số xe', 'Tải trọng khai báo', ...DOCS];
 
 /** UC-ADM-08/09 – Thẩm định hồ sơ tài xế */
@@ -27,7 +27,7 @@ export const DriverApprovalPage: React.FC = () => {
 
   return (
     <PageShell title="Thẩm định hồ sơ tài xế" subtitle="Hồ sơ nộp trước được duyệt trước • mỗi lần nộp lại là một phiên bản mới">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-4">
+      <div className="w-full grid lg:grid-cols-3 gap-4">
         <Card title={`Chờ duyệt (${list.data?.totalCount ?? 0})`} padded={false}>
           <DataState q={list} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -128,7 +128,7 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
             </div>
           </Card>
           <Card title="Giấy tờ & ảnh xe">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
               {DOCS.map((label, i) => {
                 const url = a.documentUrls[i];
                 return (
@@ -139,7 +139,7 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
                       onClick={() => url && setZoom(url)}
                       className="w-full aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 hover:ring-2 ring-blue-500 disabled:hover:ring-0"
                     >
-                      {url ? <img src={url} alt={label} className="w-full h-full object-cover" /> : <span className="text-[10px] text-rose-500">Thiếu</span>}
+                      {url ? <img src={url} alt={label} className="w-full h-full object-cover" /> : <span className="text-[10px] text-rose-500">{i >= 5 ? 'Hồ sơ cũ, chưa có' : 'Thiếu'}</span>}
                     </button>
                     <div className="text-[11px] font-bold text-slate-600 mt-1">{label}</div>
                   </div>

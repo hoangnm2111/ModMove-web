@@ -105,7 +105,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="w-full space-y-5">
         {/* Việc cần xử lý */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <TodoTile icon={<ShieldCheck className="w-5 h-5" />} label="Hồ sơ tài xế chờ duyệt" value={pendingApps.data?.totalCount} onClick={() => navigate('/admin/drivers')} />

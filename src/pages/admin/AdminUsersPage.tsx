@@ -47,7 +47,7 @@ export const AdminUsersPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -195,6 +195,18 @@ const StatusModal: React.FC<{ user: UserDetailResponse; status: AccountStatus; o
     >
       <div className="space-y-3">
         {status !== 'Active' && <Banner kind="warning">Người dùng sẽ bị đăng xuất khỏi mọi thiết bị và không thể đăng nhập.</Banner>}
+        {/* B8 (2026-11-12): luật khi khoá/vô hiệu hoá theo vai trò */}
+        {status !== 'Active' && user.role === 'Customer' && (
+          <Banner kind="info">Đơn đang tìm tài xế của khách sẽ bị huỷ tự động (đơn PayOS đã trả được tạo hoàn 100%). Khách còn đơn đã có tài xế thì chưa khoá được.</Banner>
+        )}
+        {status !== 'Active' && user.role === 'Customer' && (user.openRefundCount ?? 0) > 0 && (
+          <Banner kind="error">
+            Khách còn {user.openRefundCount} khoản hoàn tiền đang mở. Khoá vẫn được, nhưng khách sẽ không khai được tài khoản nhận hay trả lời điều phối viên: hãy xử lý các khoản này ngoài hệ thống
+            (đã có tài khoản nhận thì chuyển khoản như bình thường; chưa có thì từ chối với ghi chú "Xử lý ngoài hệ thống").
+          </Banner>
+        )}
+        {status !== 'Active' && user.role === 'Driver' && <Banner kind="info">Tài xế còn đơn đang chạy thì chưa khoá được: điều phối viên cần mở sự cố rồi đổi tài xế hoặc huỷ đơn trước.</Banner>}
+        {status !== 'Active' && user.role === 'Dispatcher' && <Banner kind="info">Các sự cố người này đang xử lý sẽ tự trả về "Chờ xử lý" để điều phối viên khác nhận.</Banner>}
         <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
     </Modal>

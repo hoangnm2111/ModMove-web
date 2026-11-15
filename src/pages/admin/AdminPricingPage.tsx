@@ -29,7 +29,7 @@ export const AdminPricingPage: React.FC = () => {
   };
   return (
     <PageShell title="Bảng cước & hoa hồng" subtitle="Giá mới áp dụng cho đơn đặt sau thời điểm thay đổi; đơn đã đặt giữ nguyên giá">
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className="w-full space-y-4">
         <Banner kind="info">
           Công thức: <b>Tổng cước = max(Giá tối thiểu, Giá mở cửa + Giá/km × km) + Phí bốc xếp (nếu chọn) − Giảm giá</b>. Không có phụ phí giờ cao điểm hay hàng cồng kềnh.
         </Banner>
@@ -111,7 +111,7 @@ const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promi
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field label="Hoa hồng nền tảng (%)" type="number" step="0.1" value={f.commission} onChange={(e) => setF({ ...f, commission: Number(e.target.value) })} hint="Trừ trên cước sau giảm giá; chốt khi tài xế nhận đơn" />
         <Field label="Phí bốc xếp (VND)" type="number" value={f.loadingFee} onChange={(e) => setF({ ...f, loadingFee: Number(e.target.value) })} hint="Cộng vào cước khi khách chọn bốc xếp" />
-        <Field label="Ký quỹ tối thiểu để nhận đơn (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận mọi đơn; đơn tiền mặt cần thêm ≥ hoa hồng của đơn" />
+        <Field label="Tiền cọc tối thiểu để nhận đơn (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận mọi đơn; đơn tiền mặt cần thêm ≥ hoa hồng của đơn" />
         <Field label="Bán kính ghép đơn (km)" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} hint="Tài xế thấy đơn trong bán kính này" />
       </div>
       <p className="text-[11px] text-amber-700 mt-3">
