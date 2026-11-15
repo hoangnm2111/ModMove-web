@@ -104,8 +104,8 @@ export const authService = {
     }
   },
 
-  /** UC-GST-01 bước 1: tạo tài khoản (role tuỳ endpoint) và gửi OTP email. */
-  async registerCustomer(data: { fullName: string; phoneNumber: string; email: string; password: string }): Promise<{ userId: number; email: string }> {
+  /** UC-GST-01 bước 1: chỉ gửi OTP email; tài khoản Customer được tạo khi xác minh OTP thành công (BE 2026-11-12, D1). */
+  async registerCustomer(data: { fullName: string; phoneNumber: string; email: string; password: string }): Promise<{ email: string }> {
     const err = passwordRule(data.password);
     if (err) throw new ServiceError(err);
     try {

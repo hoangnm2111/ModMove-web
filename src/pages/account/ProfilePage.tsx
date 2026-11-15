@@ -4,6 +4,8 @@ import { KeyRound, Trash2, UserRound } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, confirm, toast } from '../../components/ui/feedback';
 import { Field } from '../../components/ui/Field';
+import { PageShell } from '../../components/ui/kit';
+import { ROLE_LABEL } from '../../api/labels';
 import { BUSINESS } from '../../config/business';
 import { msg } from '../../constants/messages';
 import { confirmPassword, password, phone, required, validate } from '../../domain/validators';
@@ -84,12 +86,11 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const card = 'bg-white border border-slate-200 rounded-2xl p-5 space-y-3';
   return (
-    <div className="flex-1 h-full overflow-y-auto bg-slate-50 min-w-0">
-      <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-5">
-        <h1 className="text-lg font-black text-slate-900">Hồ sơ & bảo mật</h1>
-
-        <form onSubmit={saveProfile} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3" noValidate>
+    <PageShell title="Hồ sơ & bảo mật" subtitle={`${user.fullName} • ${ROLE_LABEL[user.role] ?? user.role}`}>
+      <div className="w-full grid lg:grid-cols-2 gap-4 items-start">
+        <form onSubmit={saveProfile} className={card} noValidate>
           <h2 className="font-extrabold text-sm flex items-center gap-2">
             <UserRound className="w-4 h-4" /> Thông tin cá nhân
           </h2>
@@ -97,7 +98,7 @@ export const ProfilePage: React.FC = () => {
             <Field label="Họ và tên" required value={fullName} error={profileErr.fullName} onChange={(e) => setFullName(e.target.value)} />
             <Field label="Số điện thoại" required value={phoneNumber} error={profileErr.phone} onChange={(e) => setPhoneNumber(e.target.value)} />
             <Field label="Email" value={user.email} disabled hint="Email dùng để nhận OTP, không thay đổi được." />
-            <Field label="Vai trò" value={user.role} disabled />
+            <Field label="Vai trò" value={ROLE_LABEL[user.role] ?? user.role} disabled />
           </div>
           {profileErr.form && <Banner kind="error">{profileErr.form}</Banner>}
           <div className="flex justify-end">
@@ -107,7 +108,7 @@ export const ProfilePage: React.FC = () => {
           </div>
         </form>
 
-        <form onSubmit={changePassword} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3" noValidate>
+        <form onSubmit={changePassword} className={card} noValidate>
           <h2 className="font-extrabold text-sm flex items-center gap-2">
             <KeyRound className="w-4 h-4" /> Đổi mật khẩu
           </h2>
@@ -126,11 +127,13 @@ export const ProfilePage: React.FC = () => {
         </form>
 
         {user.role === 'Customer' && (
-          <section className="bg-white border border-rose-200 rounded-2xl p-5 space-y-3">
-            <h2 className="font-extrabold text-sm text-rose-700 flex items-center gap-2">
-              <Trash2 className="w-4 h-4" /> Xoá tài khoản
-            </h2>
-            <p className="text-xs text-slate-600">Tài khoản sẽ chuyển sang trạng thái vô hiệu hoá; lịch sử đơn được giữ lại. Quản trị viên có thể kích hoạt lại.</p>
+          <section className="lg:col-span-2 bg-white border border-rose-200 rounded-2xl p-5 grid md:grid-cols-[1fr_minmax(0,360px)_auto] gap-4 md:items-end">
+            <div>
+              <h2 className="font-extrabold text-sm text-rose-700 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> Xoá tài khoản
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">Tài khoản sẽ chuyển sang trạng thái vô hiệu hoá; lịch sử đơn được giữ lại. Quản trị viên có thể kích hoạt lại.</p>
+            </div>
             <Field label="Nhập mật khẩu để xác nhận" type="password" value={deletePwd} error={deleteErr} onChange={(e) => setDeletePwd(e.target.value)} />
             <Button size="sm" variant="danger" onClick={deleteAccount} disabled={!deletePwd}>
               Xoá tài khoản
@@ -138,6 +141,6 @@ export const ProfilePage: React.FC = () => {
           </section>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
