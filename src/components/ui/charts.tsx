@@ -36,7 +36,7 @@ export const ColumnChart: React.FC<{ data: Datum[]; height?: number; format?: (v
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * max);
   const labelEvery = Math.ceil(data.length / 10);
   return (
-    <div className="relative select-none">
+    <div className="relative">
       <div className="flex" style={{ height }}>
         {/* trục y */}
         <div className="flex flex-col-reverse justify-between pr-2 text-[10px] text-slate-400 text-right w-14 flex-shrink-0">

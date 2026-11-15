@@ -1,7 +1,7 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FileCheck2, Headphones, Layers, LogOut, Radio, ShieldAlert, UserCog, X } from 'lucide-react';
-import { IconRail, NavSection, SidebarNav } from './SidebarParts';
+import { FileCheck2, Layers, LogOut, Radio, ShieldAlert, UserCog } from 'lucide-react';
+import { IconRail, MobileDrawer, MobileTopBar, NavSection, SidebarHeader, SidebarNav } from './SidebarParts';
 import { SuspenseOutlet } from '../components/SuspenseOutlet';
 import { useAuthStore } from '../store/useAuthStore';
 import { useSidebarStore } from '../store/useSidebarStore';
@@ -23,6 +23,8 @@ export const DispatcherLayout: React.FC<{ children?: React.ReactNode }> = ({ chi
   const { pathname } = useLocation();
   const { user, logout } = useAuthStore();
   const { isSidebarOpen, setIsSidebarOpen, toggleSidebar } = useSidebarStore();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const closeMenu = () => (mobileOpen ? setMobileOpen(false) : setIsSidebarOpen(false));
 
   // Số liệu thật cho badge
   const openIncidents = useQuery(() => dispatcherApi.incidents({ status: 'Open', pageSize: 1 }), [], { refreshMs: 60_000 });
@@ -52,32 +54,15 @@ export const DispatcherLayout: React.FC<{ children?: React.ReactNode }> = ({ chi
     navigate('/login', { replace: true });
   };
 
+  const go = (p: string) => {
+    setMobileOpen(false);
+    navigate(p);
+  };
+
   const sidebar = (
     <div className="flex flex-col h-full bg-white text-slate-800 overflow-hidden">
-      <div className="bg-slate-900 text-white p-4 flex-shrink-0">
-        <div className="flex items-center justify-between pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-sky-500 text-slate-950 flex items-center justify-center">
-              <Headphones className="w-4 h-4" />
-            </div>
-            <span className="text-xl font-black tracking-tight">
-              Mod<span className="text-sky-400">Move</span>
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-slate-800 text-sky-300 border border-slate-700">Điều phối</span>
-          </div>
-          <button type="button" onClick={() => setIsSidebarOpen(false)} className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center" aria-label="Đóng menu" title="Đóng menu">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-sky-500 text-slate-950 font-black text-sm flex items-center justify-center flex-shrink-0">{user?.fullName?.charAt(0) ?? 'D'}</div>
-          <div className="min-w-0">
-            <div className="font-extrabold text-sm truncate">{user?.fullName ?? 'Điều phối viên'}</div>
-            <div className="text-[11px] text-slate-400 truncate">{user?.email}</div>
-          </div>
-        </div>
-      </div>
-      <SidebarNav sections={sections} isActive={isActive} go={navigate} />
+      <SidebarHeader roleLabel="Điều phối" name={user?.fullName ?? 'Điều phối viên'} subtitle={user?.email} onClose={closeMenu} />
+      <SidebarNav sections={sections} isActive={isActive} go={go} />
       <div className="p-3 border-t border-slate-200 bg-slate-50 flex-shrink-0">
         <button type="button" onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-bold text-xs">
           <LogOut className="w-4 h-4" /> Đăng xuất
@@ -88,19 +73,17 @@ export const DispatcherLayout: React.FC<{ children?: React.ReactNode }> = ({ chi
 
   return (
     <DispatcherLayoutContext.Provider value={{ isSidebarOpen, setIsSidebarOpen, toggleSidebar }}>
-      <div className="flex w-screen h-screen overflow-hidden bg-slate-100 font-sans">
+      <div className="flex flex-col md:flex-row w-screen h-screen h-[100dvh] overflow-hidden bg-slate-100 font-sans">
+        <MobileTopBar onOpen={() => setMobileOpen(true)} />
         {isSidebarOpen ? (
-          <aside className="hidden md:flex w-72 h-full flex-shrink-0 flex-col border-r border-slate-200 z-30 shadow-lg">{sidebar}</aside>
+          <aside className="hidden md:flex w-64 xl:w-72 h-full flex-shrink-0 flex-col border-r border-slate-200 z-30 shadow-lg">{sidebar}</aside>
         ) : (
-          <IconRail items={all} isActive={isActive} go={navigate} onOpen={toggleSidebar} />
+          <IconRail items={all} isActive={isActive} go={go} onOpen={toggleSidebar} />
         )}
-        {isSidebarOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
-            <div className="fixed inset-0 bg-slate-900/40" />
-            <div className="relative w-72 h-full shadow-2xl z-50">{sidebar}</div>
-          </div>
-        )}
-        <main className="flex-1 h-full overflow-hidden relative flex bg-slate-50 min-w-0">{children ?? <SuspenseOutlet />}</main>
+        <MobileDrawer open={mobileOpen} onClose={() => setMobileOpen(false)}>
+          {sidebar}
+        </MobileDrawer>
+        <main className="flex-1 min-h-0 md:h-full overflow-hidden relative flex bg-slate-50 min-w-0">{children ?? <SuspenseOutlet />}</main>
       </div>
     </DispatcherLayoutContext.Provider>
   );

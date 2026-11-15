@@ -272,15 +272,35 @@ export const Drawer: React.FC<{ open: boolean; onClose: () => void; title: React
   );
 };
 
-/** Bảng đơn giản, responsive (cuộn ngang trên màn nhỏ) */
+/** Bảng responsive: màn < lg (1024px) mỗi dòng là một thẻ nhãn–giá trị; từ lg là bảng (cuộn ngang nếu vẫn chật). */
 export function Table<R>({ rows, cols, onRow, rowKey }: { rows: R[]; rowKey: (r: R) => React.Key; onRow?: (r: R) => void; cols: { head: string; cell: (r: R) => React.ReactNode; className?: string }[] }) {
   return (
-    <div className="overflow-x-auto -mx-4 sm:mx-0">
-      <table className="w-full text-xs min-w-[720px]">
+    <>
+      <ul className="lg:hidden divide-y divide-slate-100">
+        {rows.map((r) => (
+          <li key={rowKey(r)} onClick={() => onRow?.(r)} className={cx('py-3 space-y-1.5 text-xs', onRow && 'cursor-pointer active:bg-slate-50')}>
+            {cols.map((c, i) => (
+              <div key={c.head || i} className={c.head ? 'grid grid-cols-[minmax(84px,38%)_1fr] sm:grid-cols-[160px_1fr] gap-2' : ''}>
+                {c.head && <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{c.head}</span>}
+                <div className="min-w-0 break-words text-slate-800">{c.cell(r)}</div>
+              </div>
+            ))}
+          </li>
+        ))}
+      </ul>
+      <TableDesktop rows={rows} cols={cols} onRow={onRow} rowKey={rowKey} />
+    </>
+  );
+}
+
+function TableDesktop<R>({ rows, cols, onRow, rowKey }: { rows: R[]; rowKey: (r: R) => React.Key; onRow?: (r: R) => void; cols: { head: string; cell: (r: R) => React.ReactNode; className?: string }[] }) {
+  return (
+    <div className="hidden lg:block overflow-x-auto">
+      <table className="w-full text-xs min-w-[640px]">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-slate-200">
             {cols.map((c) => (
-              <th key={c.head} className={cx('px-3 py-2 font-bold', c.className)}>
+              <th key={c.head} className={cx('px-2.5 xl:px-3 py-2 font-bold', c.className)}>
                 {c.head}
               </th>
             ))}
@@ -290,7 +310,7 @@ export function Table<R>({ rows, cols, onRow, rowKey }: { rows: R[]; rowKey: (r:
           {rows.map((r) => (
             <tr key={rowKey(r)} onClick={() => onRow?.(r)} className={cx('border-b border-slate-100 last:border-0', onRow && 'cursor-pointer hover:bg-slate-50')}>
               {cols.map((c) => (
-                <td key={c.head} className={cx('px-3 py-2.5 align-top', c.className)}>
+                <td key={c.head} className={cx('px-2.5 xl:px-3 py-2.5 align-top', c.className)}>
                   {c.cell(r)}
                 </td>
               ))}
