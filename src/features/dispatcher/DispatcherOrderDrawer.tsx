@@ -1,9 +1,15 @@
-import React from 'react';
-import { ExternalLink, Phone } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, ExternalLink, Phone } from 'lucide-react';
+import type { IncidentType } from '../../api/types';
+import { Button } from '../../components/Button';
+import { Banner, toast } from '../../components/ui/feedback';
+import { Modal } from '../../components/ui/Modal';
+import { TextArea } from '../../components/ui/Field';
+import { errorMessage } from '../../services/mock/storage';
 import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PAYER_ROLE, PAYMENT_STATUS, PAYMENT_TX_STATUS, PROOF_STATUS, REFUND_SOURCE, REFUND_STATUS } from '../../api/labels';
-import { Card, DataState, Drawer, KV, PhotoGrid, Pill, SectionTitle, StatusPill, StatusTimeline } from '../../components/ui/kit';
+import { Card, DataState, Drawer, KV, PhotoGrid, Pill, SectionTitle, Select, StatusPill, StatusTimeline } from '../../components/ui/kit';
 import { MapEmbed, mapsLink } from '../../components/MapEmbed';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 
@@ -11,11 +17,21 @@ import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => void; onOpenIncident?: (id: number) => void }> = ({ orderId, onClose, onOpenIncident }) => {
   const q = useQuery(() => dispatcherApi.order(orderId), [orderId], { refreshMs: 30_000 });
   const o = q.data;
+  const [reporting, setReporting] = useState(false);
+  // Q6b: chỉ mở sự cố được khi đơn đang chạy (Đã nhận…Đang giao)
+  const running = !!o && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.orderStatus);
   return (
     <Drawer
       open
       onClose={onClose}
       width="max-w-3xl"
+      footer={
+        running && (
+          <Button size="sm" variant="outline" onClick={() => setReporting(true)}>
+            <AlertTriangle className="w-4 h-4 mr-1" /> Mở sự cố để đổi tài xế / huỷ đơn
+          </Button>
+        )
+      }
       title={
         o ? (
           <>
@@ -26,6 +42,18 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
         )
       }
     >
+      {reporting && o && (
+        <ReportIncidentModal
+          orderId={o.id}
+          orderCode={o.orderCode}
+          onClose={() => setReporting(false)}
+          onDone={(incidentId) => {
+            setReporting(false);
+            void q.reload();
+            onOpenIncident?.(incidentId);
+          }}
+        />
+      )}
       <DataState q={q}>
         {(o) => (
           <>
@@ -215,5 +243,50 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
         )}
       </DataState>
     </Drawer>
+  );
+};
+
+const INCIDENT_TYPES: { value: IncidentType; label: string }[] = (Object.keys(INCIDENT_TYPE) as IncidentType[]).map((k) => ({ value: k, label: INCIDENT_TYPE[k] }));
+
+/** Q6b: Dispatcher tự mở sự cố trên đơn đang chạy. Sự cố về tay người mở, không chặn chuyến; mô tả là ghi chú nội bộ. */
+const ReportIncidentModal: React.FC<{ orderId: number; orderCode: string; onClose: () => void; onDone: (incidentId: number) => void }> = ({ orderId, orderCode, onClose, onDone }) => {
+  const [type, setType] = useState<IncidentType>('Other');
+  const [description, setDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!description.trim()) return toast.error('Nhập ghi chú nội bộ.');
+    setBusy(true);
+    try {
+      const r = await dispatcherApi.reportOrderIncident(orderId, type, description.trim());
+      toast.success(`Đã mở sự cố #${r.incidentId} cho đơn ${orderCode}.`);
+      onDone(r.incidentId);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      title={`Mở sự cố – ${orderCode}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button size="sm" onClick={submit} isLoading={busy}>
+            Mở sự cố
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Banner kind="info">Sự cố về tay bạn ngay để đổi tài xế hoặc huỷ đơn. Chuyến không bị tạm dừng; ghi chú chỉ điều phối viên xem, khách và tài xế chỉ nhận thông báo chung.</Banner>
+        <Select aria-label="Loại sự cố" value={type} onChange={(e) => setType(e.target.value as IncidentType)} options={INCIDENT_TYPES} />
+        <TextArea label="Ghi chú nội bộ *" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
+      </div>
+    </Modal>
   );
 };

@@ -26,7 +26,7 @@ export const DispatcherHandledCasesPage: React.FC = () => {
   const q = useQuery(() => dispatcherApi.handledCases(tab === 'ALL' ? undefined : tab, page, 20), [tab, page]);
   return (
     <PageShell title="Lịch sử xử lý của tôi" subtitle="Các sự cố tôi đã quyết định và các đề xuất hoàn tiền tôi đã gửi" toolbar={<Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />}>
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ban, CheckCircle2, Phone, PlayCircle, Repeat, Send, XCircle } from 'lucide-react';
+import { Ban, CheckCircle2, Phone, PlayCircle, Repeat, Send, Undo2, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
@@ -8,7 +8,7 @@ import { Card, DataState, Drawer, KV, PhotoGrid, Pill, SectionTitle, StatusPill,
 import { MapEmbed } from '../../components/MapEmbed';
 import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
-import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PAYMENT_STATUS, PROOF_STATUS, REFUND_STATUS } from '../../api/labels';
+import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PAYMENT_STATUS, PROOF_STATUS, REFUND_STATUS, reporterLabel } from '../../api/labels';
 import type { CargoDisposition, IncidentDetailResponse } from '../../api/types';
 import { useAuthStore } from '../../store/useAuthStore';
 import { errorMessage } from '../../services/mock/storage';
@@ -30,11 +30,29 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
   const [busy, setBusy] = useState(false);
   const i = q.data;
 
-  const after = async (msg: string) => {
+  /** `finished`: quyết định cuối (tiếp tục, đổi tài xế, huỷ đơn, huỷ sự cố) → đóng ngăn chi tiết và tải lại danh sách. */
+  const after = async (msg: string, finished = false) => {
     toast.success(msg);
     setAction(null);
+    if (finished) {
+      onChanged();
+      onClose();
+      return;
+    }
     await q.reload();
     onChanged();
+  };
+  /** Q10: trả lại sự cố đang giữ (ví dụ hết ca) để điều phối viên khác nhận */
+  const release = async () => {
+    setBusy(true);
+    try {
+      await dispatcherApi.releaseIncident(incidentId);
+      await after('Đã trả lại sự cố. Điều phối viên khác có thể nhận xử lý.');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
   const start = async () => {
     setBusy(true);
@@ -86,20 +104,27 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
               </span>
             )}
             {i.resolutionStatus === 'InProgress' && !mine && <span className="text-xs text-amber-700 mr-auto self-center">Đang được {i.handledByName} xử lý.</span>}
+            {mine && (
+              <Button size="sm" variant="outline" onClick={release} isLoading={busy} title="Trả về Chờ xử lý cho điều phối viên khác">
+                <Undo2 className="w-4 h-4 mr-1" /> Trả lại
+              </Button>
+            )}
             {(mine || i.resolutionStatus === 'Open') && (
               <>
-                <Button size="sm" variant="outline" onClick={() => setAction('cancelIncident')}>
+                {/* Chưa "Nhận xử lý" thì chưa quyết định được: khoá sự cố cho mình trước để hai điều phối viên không xử lý cùng lúc. */}
+                {!mine && <span className="text-xs text-slate-500 mr-auto self-center">Bấm “Nhận xử lý” trước khi ra quyết định.</span>}
+                <Button size="sm" variant="outline" onClick={() => setAction('cancelIncident')} disabled={!mine} title={mine ? undefined : 'Bấm “Nhận xử lý” trước'}>
                   <Ban className="w-4 h-4 mr-1" /> Huỷ sự cố
                 </Button>
                 {tripActive && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setAction('continue')}>
+                    <Button size="sm" variant="outline" onClick={() => setAction('continue')} disabled={!mine} title={mine ? undefined : 'Bấm “Nhận xử lý” trước'}>
                       <CheckCircle2 className="w-4 h-4 mr-1" /> Cho tiếp tục chuyến
                     </Button>
-                    <Button size="sm" variant="secondary" onClick={() => setAction('reassign')}>
+                    <Button size="sm" variant="secondary" onClick={() => setAction('reassign')} disabled={!mine} title={mine ? undefined : 'Bấm “Nhận xử lý” trước'}>
                       <Repeat className="w-4 h-4 mr-1" /> Đổi tài xế
                     </Button>
-                    <Button size="sm" variant="danger" onClick={() => setAction('cancelOrder')}>
+                    <Button size="sm" variant="danger" onClick={() => setAction('cancelOrder')} disabled={!mine} title={mine ? undefined : 'Bấm “Nhận xử lý” trước'}>
                       <XCircle className="w-4 h-4 mr-1" /> Huỷ đơn
                     </Button>
                   </>
@@ -124,7 +149,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
 
             <Card title="Nội dung báo cáo">
               <div className="text-xs text-slate-500 mb-1">
-                {i.reporterName} ({i.reporterRole === 'Driver' ? 'Tài xế' : 'Khách hàng'}) • {formatDateTime(i.createdAt)}
+                {i.reporterName} ({reporterLabel(i.reporterRole)}) • {formatDateTime(i.createdAt)}
               </div>
               <p className="text-sm text-slate-800 mb-3">{i.description}</p>
               <PhotoGrid urls={i.photoUrls} emptyText="Không có ảnh" />
@@ -245,7 +270,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
             </Card>
 
             {action === 'continue' && (
-              <ReasonAction title="Cho tiếp tục chuyến" confirm="Xác nhận tiếp tục" onClose={() => setAction(null)} onSubmit={(r) => dispatcherApi.continueTrip(i.id, r).then(() => after('Đã cho chuyến tiếp tục. Khách và tài xế đã được thông báo.'))} />
+              <ReasonAction title="Cho tiếp tục chuyến" confirm="Xác nhận tiếp tục" onClose={() => setAction(null)} onSubmit={(r) => dispatcherApi.continueTrip(i.id, r).then(() => after('Đã cho chuyến tiếp tục. Khách và tài xế đã được thông báo.', true))} />
             )}
             {action === 'cancelIncident' && (
               <ReasonAction
@@ -254,7 +279,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
                 confirm="Huỷ sự cố"
                 danger
                 onClose={() => setAction(null)}
-                onSubmit={(r) => dispatcherApi.cancelIncident(i.id, r).then(() => after('Đã huỷ sự cố.'))}
+                onSubmit={(r) => dispatcherApi.cancelIncident(i.id, r).then(() => after('Đã huỷ sự cố.', true))}
               />
             )}
             {action === 'refundInfo' && (
@@ -269,8 +294,8 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
             {action === 'refundPropose' && i.refund && (
               <ProposeModal max={i.refund.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.incidentRefundProposal(i.id, a, r).then(() => after('Đã gửi đề xuất lên Admin duyệt.'))} />
             )}
-            {action === 'reassign' && <ReassignModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã đổi tài xế. Đơn quay về "Tài xế đã nhận", tài xế mới sẽ kiểm hàng lại.')} />}
-            {action === 'cancelOrder' && <CancelOrderModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã huỷ đơn do sự cố.')} />}
+            {action === 'reassign' && <ReassignModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã đổi tài xế. Đơn quay về "Tài xế đã nhận", tài xế mới sẽ kiểm hàng lại.', true)} />}
+            {action === 'cancelOrder' && <CancelOrderModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã huỷ đơn do sự cố.', true)} />}
           </>
         )}
       </DataState>

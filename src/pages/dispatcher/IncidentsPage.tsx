@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
-import { INCIDENT_STATUS, INCIDENT_TYPE } from '../../api/labels';
+import { INCIDENT_STATUS, INCIDENT_TYPE, reporterLabel } from '../../api/labels';
 import type { IncidentResolutionStatus, IncidentType } from '../../api/types';
 import { Card, DataState, PageShell, Pager, Pill, SearchBox, Select, StatusPill, Table, Tabs } from '../../components/ui/kit';
 import { IncidentDrawer } from '../../features/dispatcher/IncidentDrawer';
@@ -46,7 +46,7 @@ export const IncidentsPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         <Card padded>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -85,7 +85,7 @@ export const IncidentsPage: React.FC = () => {
                       cell: (r) => (
                         <div>
                           <div className="font-semibold">{r.reporterName}</div>
-                          <div className="text-[11px] text-slate-400">{r.reporterRole === 'Driver' ? 'Tài xế' : 'Khách hàng'}</div>
+                          <div className="text-[11px] text-slate-400">{reporterLabel(r.reporterRole)}</div>
                           {(r.resolutionStatus === 'Open' || r.resolutionStatus === 'InProgress') && (
                             <div className={`text-[10px] font-bold ${r.reporterRole === 'Driver' ? 'text-rose-600' : 'text-slate-400'}`}>
                               {r.reporterRole === 'Driver' ? 'Chặn chuyến' : 'Không chặn chuyến'}

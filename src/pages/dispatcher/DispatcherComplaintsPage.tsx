@@ -44,7 +44,7 @@ export const DispatcherComplaintsPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -97,9 +97,15 @@ const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: ()
   const [orderId, setOrderId] = useState<number | null>(null);
   const c = q.data;
   const editable = c && c.refundStatus === 'Requested' && ['NeedsReview', 'CustomerReplied', 'WaitingForCustomer'].includes(c.stage);
-  const after = async (msg: string) => {
+  /** `finished`: đã gửi đề xuất lên Admin thì phần việc của điều phối viên xong → đóng ngăn chi tiết. */
+  const after = async (msg: string, finished = false) => {
     toast.success(msg);
     setAction(null);
+    if (finished) {
+      onChanged();
+      onClose();
+      return;
+    }
     await q.reload();
     onChanged();
   };
@@ -252,7 +258,7 @@ const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: ()
 
             {action === 'info' && <InfoModal onClose={() => setAction(null)} onSubmit={(note) => dispatcherApi.complaintRequestInfo(c.id, note).then(() => after('Đã gửi câu hỏi cho khách.'))} />}
             {action === 'propose' && (
-              <ProposeModal max={c.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.complaintProposal(c.id, a, r).then(() => after('Đã gửi đề xuất lên Admin.'))} />
+              <ProposeModal max={c.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.complaintProposal(c.id, a, r).then(() => after('Đã gửi đề xuất lên Admin.', true))} />
             )}
           </>
         )}

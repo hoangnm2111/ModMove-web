@@ -56,7 +56,7 @@ export const LiveMapPage: React.FC = () => {
         </button>
       }
     >
-      <div className="max-w-7xl mx-auto space-y-4">
+      <div className="w-full space-y-4">
         <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
           {SUMMARY_KEYS.map(({ key, field }) => (
             <button
