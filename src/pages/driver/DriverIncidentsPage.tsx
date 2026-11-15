@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Phone } from 'lucide-react';
 import { Banner } from '../../components/ui/feedback';
 import { Card, DataState, Drawer, KV, PageShell, Pager, PhotoGrid, Pill, Table, Tabs } from '../../components/ui/kit';
 import { driverApi } from '../../api/endpoints';
@@ -32,16 +31,10 @@ export const DriverIncidentsPage: React.FC = () => {
       toolbar={
         <div className="flex flex-wrap items-center gap-3">
           <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
-          <a
-            href="tel:19006868"
-            className="ml-auto py-2 px-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition flex items-center gap-1.5"
-          >
-            <Phone className="w-3.5 h-3.5" /> Đường dây khẩn cấp: 1900 6868
-          </a>
         </div>
       }
     >
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className="w-full space-y-4">
         <Banner kind="warning">Sự cố do bạn báo đang chờ xử lý sẽ làm chuyến tạm dừng: bạn chưa thể xác nhận đến nơi, lấy hàng hay giao hàng cho tới khi điều phối viên xử lý xong.</Banner>
         <Card padded={false}>
           <DataState q={q} empty={(d) => d.items.length === 0}>

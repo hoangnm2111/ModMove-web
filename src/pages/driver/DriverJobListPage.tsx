@@ -14,8 +14,6 @@ import { useDriver } from '../../features/driver/DriverContext';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, timeAgo } from '../../utils/format';
 
-export const ACCEPTED_KEY = 'modmove:driver:accepted';
-
 /** UC-DRV-08/09/10 – Xem đơn gần và nhận đơn: GET /driver/Matching/orders, POST .../accept */
 export const DriverJobListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -49,7 +47,7 @@ export const DriverJobListPage: React.FC = () => {
         )
       }
     >
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className="w-full space-y-4">
         <div className="grid lg:grid-cols-3 gap-4">
           <Card title="Điều kiện nhận đơn" className="lg:col-span-2">
             <ul className="grid sm:grid-cols-2 gap-2">
@@ -66,7 +64,7 @@ export const DriverJobListPage: React.FC = () => {
               ))}
             </ul>
             <p className="text-[11px] text-slate-500 mt-3">
-              Đơn tiền mặt chỉ hiện khi ví cọc ≥ mức ký quỹ tối thiểu và ≥ hoa hồng của đơn. Ví cọc hiện tại: <b>{formatCurrency(s.depositBalance)}</b>.
+              Đơn tiền mặt chỉ hiện khi ví cọc ≥ mức tiền cọc tối thiểu và ≥ hoa hồng của đơn. Ví cọc hiện tại: <b>{formatCurrency(s.depositBalance)}</b>.
             </p>
           </Card>
           <Card title="Vị trí GPS">
@@ -147,11 +145,6 @@ export const DriverJobListPage: React.FC = () => {
           job={pick}
           onClose={() => setPick(null)}
           onAccepted={async () => {
-            try {
-              sessionStorage.setItem(ACCEPTED_KEY, JSON.stringify(pick));
-            } catch {
-              /* ignore */
-            }
             setPick(null);
             await reload();
             navigate('/driver/trip');
