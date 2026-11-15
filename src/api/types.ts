@@ -49,8 +49,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
 }
+/** BE 2026-11-12: chỉ gửi OTP, tài khoản được tạo khi verify-email thành công nên không còn userId. */
 export interface RegisterResponse {
-  userId: number;
   email: string;
 }
 export interface ProfileResponse {
@@ -294,6 +294,40 @@ export interface DriverIncidentResponse {
   createdAt: string;
   resolvedAt: string | null;
 }
+/** GET /driver/Trips/active, /driver/Trips/{id}: chi tiết chuyến của tài xế. */
+export interface DriverTripDetailResponse {
+  id: number;
+  orderCode: string;
+  orderStatus: OrderStatus;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  dropoffAddress: string;
+  dropoffLatitude: number;
+  dropoffLongitude: number;
+  /** Có giá trị khi đơn được chuyển cho tài xế này giữa đường: đến đây nhận hàng từ xe trước (7.2). */
+  handoverPoint: { latitude: number; longitude: number } | null;
+  vehicleTypeName: string;
+  estimatedDistanceKm: number;
+  estimatedDurationMin: number;
+  hasLoadingService: boolean;
+  customerName: string;
+  customerPhone: string;
+  receiverName: string;
+  receiverPhone: string;
+  totalFee: number;
+  commissionAmount: number;
+  driverEarning: number;
+  paymentMethod: PaymentMethod;
+  payerRole: PayerRole | null;
+  paymentStatus: PaymentStatus;
+  cashToCollect: number;
+  cargo: { cargoType: string; cargoTypeName: string | null; quantity: number; weightKg: number; lengthCm: number; widthCm: number; heightCm: number; photoUrls: string[]; specialNotes: string | null };
+  proof: { pickupPhotoUrls: string[]; proofStatus: ProofStatus; pickupSubmissionCount: number; remainingPickupSubmissions: number; rejectionReason: string | null; deliveryPhotoUrl: string | null } | null;
+  statusHistories: { fromStatus: OrderStatus | null; toStatus: OrderStatus; changedByRole: string; note: string | null; changedAt: string }[];
+  /** Sự cố trên đơn; sự cố không do tài xế báo chỉ có câu mô tả chung (8.3). */
+  incidents: { id: number; incidentType: IncidentType; description: string; reportedByYou: boolean; resolutionStatus: IncidentResolutionStatus }[];
+}
 export interface DriverIncidentsQuery {
   orderId?: number;
   status?: IncidentResolutionStatus;
@@ -385,14 +419,14 @@ export interface DriverStatusResponse {
   isGpsStale: boolean;
   canReceiveOrders: boolean;
 }
-/** GET /driver/wallet – hai ví: ký quỹ + thu nhập; rút được cả hai khi không có đơn đang chạy */
+/** GET /driver/wallet – hai ví: tiền cọc + thu nhập; rút được cả hai khi không có đơn đang chạy */
 export interface DriverWalletResponse {
   walletId: number;
   walletStatus: string;
   depositBalance: number;
   earningsBalance: number;
   walletTotal: number;
-  /** Phần ký quỹ còn thiếu so với mức tối thiểu (0 nếu đủ) */
+  /** Phần tiền cọc còn thiếu so với mức tối thiểu (0 nếu đủ) */
   missingDepositAmount: number;
   maxWithdrawableAmount: number;
   requiredDeposit: number;
@@ -825,6 +859,8 @@ export interface UserDetailResponse extends UserDto {
   licensePlate: string | null;
   totalOrders: number;
   completedOrders: number;
+  /** Q11: khoản hoàn còn mở (Requested/Approved/Failed) trên đơn của khách; vai trò khác = 0. */
+  openRefundCount?: number;
 }
 export interface CreateDispatcherRequest {
   fullName: string;
@@ -884,7 +920,7 @@ export interface VehicleTypePricingResponse {
 export interface PlatformSettingsResponse {
   commissionRate: number;
   loadingFee: number;
-  /** Ký quỹ tối thiểu để nhận đơn (BE đổi tên từ minCodDeposit) */
+  /** Tiền cọc tối thiểu để nhận đơn (BE đổi tên từ minCodDeposit) */
   requiredDeposit: number;
   matchingRadiusKm: number;
 }
@@ -948,6 +984,16 @@ export interface AdminRefundDto {
   decidedAt: string | null;
   processedAt: string | null;
   createdAt: string;
+  hasPayoutAccount: boolean;
+  payoutFailureReason: string | null;
+}
+/** Tài khoản nhận hoàn tiền đầy đủ (Admin chuyển khoản tay, R-01). */
+export interface AdminPayoutAccount {
+  bankCode: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  infoUpdatedAt: string | null;
 }
 export interface AdminRefundDetailResponse {
   id: number;
@@ -985,6 +1031,9 @@ export interface AdminRefundDetailResponse {
   driverName: string | null;
   driverPhone: string | null;
   licensePlate: string | null;
+  payoutAccount: AdminPayoutAccount | null;
+  hasPayoutAccount: boolean;
+  payoutFailureReason: string | null;
 }
 export interface AdminWithdrawalsQuery {
   page?: number;
@@ -1000,7 +1049,7 @@ export interface AdminWithdrawalSummary {
   driverName: string;
   driverPhone: string;
   amount: number;
-  /** Phần trừ từ ví thu nhập / ví ký quỹ khi rút (ưu tiên thu nhập trước) */
+  /** Phần trừ từ ví thu nhập / ví tiền cọc khi rút (ưu tiên thu nhập trước) */
   earningsAmount: number;
   depositAmount: number;
   balanceAfter: number;

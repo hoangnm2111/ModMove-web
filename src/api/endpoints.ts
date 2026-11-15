@@ -91,11 +91,21 @@ export const driverApi = {
   submitOnboarding: (body: T.SubmitDriverApplicationRequest) => call(() => apiClient.post<{ id: number }>('/driver/Onboarding', body)),
   nearbyOrders: () => call(() => apiClient.get<T.NearbyOrderDto[]>('/driver/Matching/orders')),
   acceptOrder: (id: number) => call(() => apiClient.post<void>(`/driver/Matching/orders/${id}/accept`)),
+  /** Chuyến đang chạy (Accepted…InTransit); đang rảnh thì BE trả 204 → null. */
+  activeTrip: async (): Promise<T.DriverTripDetailResponse | null> => (await call(() => apiClient.get<T.DriverTripDetailResponse | ''>('/driver/Trips/active'))) || null,
   incidents: (p: T.DriverIncidentsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.DriverIncidentResponse>>('/driver/Incidents', { params: q({ page: 1, pageSize: 20, ...p }) })),
   incident: (id: number) => call(() => apiClient.get<T.DriverIncidentResponse>(`/driver/Incidents/${id}`)),
   wallet: () => call(() => apiClient.get<T.DriverWalletResponse>('/driver/Wallet')),
   walletTransactions: (page = 1, pageSize = 20) =>
     call(() => apiClient.get<T.PagedResult<T.DriverWalletTransactionDto>>('/driver/Wallet/transactions', { params: { page, pageSize } })),
+  /** Ảnh giấy tờ hồ sơ, ảnh lấy hàng, POD, sự cố (JPG/PNG ≤ 5 MB) → URL Cloudinary của hệ thống. */
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return call(() => apiClient.post<{ url: string }>('/driver/Uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } }));
+  },
+  /** Q12: xoá (vô hiệu hoá) tài khoản tài xế. 422 ACCOUNT_HAS_OPEN_ORDERS / ACCOUNT_HAS_PENDING_WITHDRAWAL / ACCOUNT_HAS_WALLET_BALANCE. */
+  deleteAccount: () => call(() => apiClient.delete<void>('/driver/Account')),
 };
 
 /* ================================================================ DISPATCHER */
@@ -110,6 +120,11 @@ export const dispatcherApi = {
   incidents: (p: T.IncidentsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.IncidentListItemResponse>>('/dispatcher/Incidents', { params: q({ page: 1, pageSize: 20, ...p }) })),
   incident: (id: number) => call(() => apiClient.get<T.IncidentDetailResponse>(`/dispatcher/Incidents/${id}`)),
   startIncident: (id: number) => call(() => apiClient.post<void>(`/dispatcher/Incidents/${id}/start`)),
+  /** Q10: trả lại sự cố đang giữ (InProgress → Open), ví dụ khi hết ca. */
+  releaseIncident: (id: number) => call(() => apiClient.post<void>(`/dispatcher/Incidents/${id}/release`)),
+  /** Q6b: Dispatcher tự mở sự cố trên đơn Accepted…InTransit; sự cố về tay người mở, không chặn chuyến, mô tả là ghi chú nội bộ. */
+  reportOrderIncident: (orderId: number, incidentType: T.IncidentType, description: string) =>
+    call(() => apiClient.post<{ incidentId: number }>(`/dispatcher/Orders/${orderId}/incidents`, { incidentType, description })),
   continueTrip: (id: number, reason: string) => call(() => apiClient.post<void>(`/dispatcher/Incidents/${id}/resolve`, { reason })),
   replacementDrivers: (id: number) => call(() => apiClient.get<T.ReplacementDriverResponse[]>(`/dispatcher/Incidents/${id}/replacement-drivers`)),
   reassign: (id: number, newDriverProfileId: number, reason: string) => call(() => apiClient.post<void>(`/dispatcher/Incidents/${id}/reassign`, { newDriverProfileId, reason })),
@@ -158,6 +173,8 @@ export const adminApi = {
   approveRefund: (id: number, note?: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/approve`, { note: note || null })),
   rejectRefund: (id: number, note?: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/reject`, { note: note || null })),
   payoutRefund: (id: number, bankReferenceCode: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/payout`, { bankReferenceCode })),
+  /** UC-ADM-18 5a (R-01): chuyển khoản tay thất bại → Failed, khách khai lại tài khoản nhận. */
+  refundPayoutFailed: (id: number, reason: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/payout-failed`, { reason })),
 
   withdrawals: (p: T.AdminWithdrawalsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.AdminWithdrawalSummary>>('/admin/Withdrawals', { params: q({ page: 1, pageSize: 20, ...p }) })),
   withdrawal: (id: number) => call(() => apiClient.get<T.AdminWithdrawalDetailResponse>(`/admin/Withdrawals/${id}`)),

@@ -28,7 +28,7 @@ export const MESSAGES = {
   MSG23: 'Hồ sơ tài xế đã được gửi và đang chờ duyệt.',
   MSG24: 'Hồ sơ tài xế của bạn đã được {status}. {additional_information}',
   MSG25: 'Tài khoản tài xế phải được duyệt và giấy tờ còn hiệu lực trước khi nhận cuốc.',
-  MSG26: 'Số dư ký quỹ thấp hơn {required_balance}. Vui lòng nạp ký quỹ để nhận đơn tiền mặt.',
+  MSG26: 'Số dư tiền cọc thấp hơn {required_balance}. Vui lòng nạp tiền cọc để nhận đơn tiền mặt.',
   MSG28: 'Vui lòng chọn {location_type} hợp lệ.',
   MSG29: 'Bạn chưa ở trong phạm vi {radius} của {location_type}. Hãy di chuyển lại gần và thử lại.',
   MSG30: 'Loại xe đã chọn không chở được hàng này. Vui lòng chọn loại xe phù hợp.',

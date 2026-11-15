@@ -88,10 +88,10 @@ export const WITHDRAWAL_STATUS: Record<T.WalletTransactionStatus, Tone> = {
 };
 /** Loại biến động ví tài xế (api/driver/wallet/transactions) */
 export const WALLET_TX_TYPE: Record<string, string> = {
-  TopUpDeposit: 'Nạp ký quỹ',
+  TopUpDeposit: 'Nạp tiền cọc',
   TripEarning: 'Thu nhập chuyến đi',
   CommissionDeduction: 'Trừ hoa hồng đơn tiền mặt',
-  DepositRefill: 'Tự bù ký quỹ từ thu nhập',
+  DepositRefill: 'Tự bù tiền cọc từ thu nhập',
   Withdrawal: 'Rút tiền',
 };
 export const CHANGED_BY: Record<string, string> = { Customer: 'Khách hàng', Driver: 'Tài xế', Dispatcher: 'Điều phối', Administrator: 'Admin', System: 'Hệ thống' };
@@ -104,3 +104,6 @@ export const MASTER_CATEGORY: Record<T.MasterDataCategory, { label: string; hint
   INCIDENT_CATEGORY: { label: 'Nhóm sự cố', hint: 'Danh mục tham khảo cho sự cố' },
   BANK: { label: 'Ngân hàng', hint: 'Ngân hàng nhận hoàn tiền; mã là 6 chữ số (mã BIN), khách chọn khi khai tài khoản nhận hoàn tiền' },
 };
+
+/** Người báo sự cố (Q6b: Dispatcher tự mở sự cố trên đơn đang chạy) */
+export const reporterLabel = (role: string) => (role === 'Driver' ? 'Tài xế' : role === 'Dispatcher' ? 'Điều phối viên' : 'Khách hàng');
