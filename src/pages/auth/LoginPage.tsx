@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Lock, Mail, Phone, Truck, User as UserIcon } from 'lucide-react';
+import { Lock, Mail, Phone, User as UserIcon } from 'lucide-react';
+import { BrandLogo } from '../../components/BrandLogo';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
 import { Field } from '../../components/ui/Field';
@@ -153,10 +154,10 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-4xl grid md:grid-cols-2 bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
         <div className="hidden md:flex flex-col justify-between bg-slate-900 text-white p-8">
           <Link to="/" className="flex items-center gap-2 text-xl font-black">
-            <Truck className="w-6 h-6 text-blue-400" /> Mod<span className="text-blue-500">Move</span>
+            <BrandLogo className="w-8 h-8 rounded-lg" /> Mod<span className="text-blue-500">Move</span>
           </Link>
           <div className="space-y-2">
-            <h2 className="text-2xl font-black leading-tight">Chuyển đồ nhanh, giá minh bạch trong nội thành Hà Nội.</h2>
+            <h2 className="text-2xl font-black leading-tight">Chuyển đồ nhanh, giá minh bạch.</h2>
             <p className="text-sm text-slate-400">Tự lọc xe phù hợp tải trọng & kích thước, theo dõi tài xế trực tiếp, thanh toán PayOS hoặc tiền mặt.</p>
           </div>
           <p className="text-[11px] text-slate-500">Tài xế đăng ký qua ứng dụng ModMove Driver.</p>
