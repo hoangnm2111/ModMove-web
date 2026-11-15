@@ -196,26 +196,12 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
 };
 
 /* ------------------------------------------------------------ Báo sự cố (UC-CUS-15) */
-/** Lý do nhanh: bấm vào thì điền loại sự cố và câu mở đầu cho mô tả (trễ, sai tuyến, vắng mặt đều ghi là Other) */
-const QUICK_REASONS: { label: string; type: IncidentType; starter: string }[] = [
-  { label: 'Hàng hư hỏng', type: 'DamagedCargo', starter: 'Hàng bị hư hỏng: ' },
-  { label: 'Tài xế đến trễ', type: 'Other', starter: 'Tài xế đến trễ: ' },
-  { label: 'Đi sai tuyến', type: 'Other', starter: 'Tài xế đi sai tuyến: ' },
-  { label: 'Không liên lạc được tài xế / tài xế vắng mặt', type: 'Other', starter: 'Không liên lạc được với tài xế: ' },
-  { label: 'Tai nạn', type: 'Accident', starter: 'Tai nạn trên đường: ' },
-  { label: 'Khác', type: 'Other', starter: '' },
-];
 export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailResponse }> = ({ order, onClose, onDone }) => {
-  const [reason, setReason] = useState(QUICK_REASONS[QUICK_REASONS.length - 1]);
-  const type = reason.type;
+  // Khách chỉ mô tả sự việc: loại luôn là Other (DECISIONS 7.1), điều phối viên đọc mô tả để phân loại.
+  const type: IncidentType = 'Other';
   const [desc, setDesc] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [useGps, setUseGps] = useState(true);
-  const pick = (r: (typeof QUICK_REASONS)[number]) => {
-    // Chỉ thay câu mở đầu khi khách chưa tự viết gì thêm
-    if (!desc.trim() || QUICK_REASONS.some((x) => x.starter && desc.trim() === x.starter.trim())) setDesc(r.starter);
-    setReason(r);
-  };
   const [busy, setBusy] = useState(false);
   const getPos = () =>
     new Promise<{ latitude: number; longitude: number } | null>((res) => {
@@ -261,21 +247,6 @@ export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailRespo
         <Banner kind="info">
           Điều phối viên sẽ kiểm tra và có thể cho tiếp tục, đổi tài xế hoặc huỷ đơn. Tài xế chỉ nhận thông báo chung, không thấy nội dung bạn viết. Chuyến vẫn tiếp tục trong lúc chờ xử lý.
         </Banner>
-        <div>
-          <span className="block text-xs font-bold text-slate-700 mb-1">Lý do nhanh *</span>
-          <div className="grid sm:grid-cols-2 gap-2">
-            {QUICK_REASONS.map((r) => (
-              <button
-                key={r.label}
-                type="button"
-                onClick={() => pick(r)}
-                className={`px-3 py-2 rounded-xl border text-xs font-bold text-left ${reason.label === r.label ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
         <TextArea label="Mô tả *" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={1000} />
         <PhotoUploader label="Ảnh minh chứng" value={photos} onChange={setPhotos} max={5} upload={customerApi.upload} />
         <label className="flex items-center gap-2 text-xs text-slate-600">

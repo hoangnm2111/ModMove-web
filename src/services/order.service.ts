@@ -286,7 +286,7 @@ export const orderService = {
   /** UC-GST-13: POST /public/fareestimate */
   async estimate(draft: BookingDraft): Promise<{ vehicle: VehicleSnapshot; fare: FareBreakdown; couponError: string | null } | null> {
     if (!draft.vehicleTypeId || !draft.pickup.address || !draft.dropoff.address) return null;
-    try {
+    const call = async (couponCode: string | null) => {
       const { data } = await apiClient.post<{ distanceKm: number; durationMinutes: number; distanceFee: number; serviceFee: number; discountAmount: number; totalFee: number }>(
         '/public/FareEstimate',
         {
@@ -298,7 +298,7 @@ export const orderService = {
           widthCm: draft.cargo.largestItem.widthCm,
           heightCm: draft.cargo.largestItem.heightCm,
           hasLoadingService: draft.loadingService,
-          couponCode: draft.couponCode.trim() || null,
+          couponCode,
         }
       );
       const { catalogService } = await import('./catalog.service');
@@ -306,14 +306,23 @@ export const orderService = {
       return {
         vehicle,
         fare: { distanceKm: data.distanceKm, durationMins: data.durationMinutes, distanceFare: data.distanceFee, loadingFee: data.serviceFee, discount: data.discountAmount, total: data.totalFee },
-        couponError: null,
       };
+    };
+    const coupon = draft.couponCode.trim();
+    try {
+      return { ...(await call(coupon || null)), couponError: null };
     } catch (e) {
       const err = toServiceError(e);
       // Mã lỗi coupon → hiển thị cạnh ô mã giảm giá thay vì banner chung
-      const isCouponError = /COUPON_|đã hết hạn|chưa tới hạn|không tồn tại|đang tắt|hết lượt|tối thiểu/i.test(err.message) && draft.couponCode.trim();
-      if (isCouponError) return { vehicle: emptyVehicle(), fare: emptyFare(), couponError: err.message };
-      throw err;
+      const isCouponError = /COUPON_|đã hết hạn|chưa tới hạn|không tồn tại|đang tắt|hết lượt|tối thiểu/i.test(err.message) && coupon;
+      if (!isCouponError) throw err;
+      // Mã không dùng được (ví dụ chưa đủ giá trị tối thiểu): vẫn báo giá KHÔNG có mã để khách thấy số tiền và hiểu vì sao
+      // chưa đủ điều kiện, thay vì hiện 0 ₫. Nút gửi đơn vẫn bị khoá cho tới khi bỏ hoặc đổi mã.
+      try {
+        return { ...(await call(null)), couponError: err.message };
+      } catch {
+        return { vehicle: emptyVehicle(), fare: emptyFare(), couponError: err.message };
+      }
     }
   },
 
@@ -321,6 +330,7 @@ export const orderService = {
   async createOrder(draft: BookingDraft, _customer: User): Promise<ShippingOrder & { expectedTotalFee?: number }> {
     try {
       const est = await this.estimate(draft);
+      if (est?.couponError) throw new ServiceError(est.couponError, 'COUPON_INVALID');
       const { data } = await apiClient.post<{ orderId: number; orderCode: string; totalFee: number }>('/customer/Orders', {
         vehicleTypeId: Number(draft.vehicleTypeId),
         pickupAddress: draft.pickup.address,

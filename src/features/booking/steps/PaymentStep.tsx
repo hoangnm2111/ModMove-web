@@ -72,7 +72,7 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
         <span className="flex items-center gap-2.5">
           <input type="checkbox" checked={draft.loadingService} onChange={(e) => onChange({ loadingService: e.target.checked })} />
           <span>
-            <span className="font-bold text-slate-800">Tài xế hỗ trợ bốc xếp 2 đầu</span>
+            <span className="font-bold text-slate-800">Yêu cầu dịch vụ bốc xếp</span>
             <span className="block text-[11px] text-slate-500">Khuân vác tại điểm lấy và điểm giao.</span>
           </span>
         </span>
@@ -96,8 +96,8 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
       <h3 className="text-sm font-extrabold text-slate-900">Phương thức thanh toán</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <OptionCard active={draft.paymentMethod === 'PayOS'} onClick={() => onChange({ paymentMethod: 'PayOS' })} title="Chuyển khoản PayOS" desc="Quét VietQR, thanh toán trước khi tìm tài xế." icon={<QrCode className="w-5 h-5 text-blue-600" />} />
-        <OptionCard active={draft.paymentMethod === 'Cash'} onClick={() => onChange({ paymentMethod: 'Cash' })} title="Tiền mặt (COD)" desc="Trả tiền mặt cho tài xế." icon={<Banknote className="w-5 h-5 text-emerald-600" />} />
+        <OptionCard active={draft.paymentMethod === 'PayOS'} onClick={() => onChange({ paymentMethod: 'PayOS' })} title="Thanh Toán Chuyển Khoản" desc="Quét VietQR, thanh toán trước khi tìm tài xế." icon={<QrCode className="w-5 h-5 text-blue-600" />} />
+        <OptionCard active={draft.paymentMethod === 'Cash'} onClick={() => onChange({ paymentMethod: 'Cash' })} title="Thanh Toán Tiền Mặt" desc="Trả tiền mặt cho tài xế." icon={<Banknote className="w-5 h-5 text-emerald-600" />} />
       </div>
       {draft.paymentMethod === 'Cash' && (
         <div className="flex gap-4 text-xs font-semibold text-slate-700">

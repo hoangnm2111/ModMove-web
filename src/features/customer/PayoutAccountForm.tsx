@@ -96,12 +96,17 @@ export const PayoutAccountForm: React.FC<{ value: PayoutAccountValue; onChange: 
 export const PayoutAccountModal: React.FC<{ refund: MyRefundDetailResponse; onClose: () => void; onDone: () => void }> = ({ refund, onClose, onDone }) => {
   const [value, setValue] = useState<PayoutAccountValue>(emptyPayoutAccount);
   const [busy, setBusy] = useState(false);
+  // FE-07: BE gợi ý tài khoản đã dùng để thanh toán PayOS cho đơn; chọn thì gửi useSuggested, không gửi lại số tài khoản
+  const suggested = refund.suggestedPayoutAccount;
+  const [useSuggested, setUseSuggested] = useState(!!suggested && !refund.payoutFailureReason);
   const submit = async () => {
-    const error = validatePayoutAccount(value);
-    if (error) return toast.error(error);
+    if (!useSuggested) {
+      const error = validatePayoutAccount(value);
+      if (error) return toast.error(error);
+    }
     setBusy(true);
     try {
-      await customerApi.setRefundPayoutAccount(refund.id, toPayoutInput(value));
+      await customerApi.setRefundPayoutAccount(refund.id, useSuggested ? { useSuggested: true, bankCode: null, accountNumber: null, accountHolder: null } : toPayoutInput(value));
       toast.success('Đã lưu tài khoản nhận hoàn tiền.');
       onDone();
     } catch (e) {
@@ -133,7 +138,24 @@ export const PayoutAccountModal: React.FC<{ refund: MyRefundDetailResponse; onCl
             Lần chuyển khoản trước bị lỗi: {refund.payoutFailureReason}. Hãy nhập tài khoản khác hoặc kiểm tra lại thông tin.
           </div>
         )}
-        <PayoutAccountForm value={value} onChange={setValue} />
+        {suggested && (
+          <div className="space-y-2">
+            <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${useSuggested ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
+              <input type="radio" className="mt-1" checked={useSuggested} onChange={() => setUseSuggested(true)} />
+              <span className="text-sm">
+                <b>Dùng tài khoản đã thanh toán đơn này</b>
+                <span className="block text-xs text-slate-600">
+                  {suggested.bankName} • {suggested.maskedAccountNumber} • {suggested.accountHolder}
+                </span>
+              </span>
+            </label>
+            <label className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer ${!useSuggested ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
+              <input type="radio" checked={!useSuggested} onChange={() => setUseSuggested(false)} />
+              <span className="text-sm font-bold">Nhập tài khoản khác</span>
+            </label>
+          </div>
+        )}
+        {!useSuggested && <PayoutAccountForm value={value} onChange={setValue} />}
       </div>
     </Modal>
   );

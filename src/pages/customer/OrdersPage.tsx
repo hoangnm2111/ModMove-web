@@ -81,7 +81,7 @@ export const OrdersPage: React.FC = () => {
         </div>
       }
     >
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full">
         <DataState q={q} empty={(d) => d.items.length === 0}>
           {(d) => (
             <>

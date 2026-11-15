@@ -16,6 +16,18 @@ export interface PushNotification {
   body: string;
   data?: Record<string, unknown>;
 }
+/**
+ * BE không lưu bước "tài xế đã đến điểm giao" (không đổi trạng thái đơn, chỉ gửi thông báo `DRIVER_ARRIVED_DROPOFF`).
+ * Nhớ lại lúc nhận thông báo để trang chi tiết đơn hiện được dù khách chưa mở trang đúng lúc đó.
+ */
+const ARRIVAL_KEY = (orderId: number) => `modmove:dropoffArrived:${orderId}`;
+export const getDropoffArrival = (orderId: number): string | null => {
+  try {
+    return localStorage.getItem(ARRIVAL_KEY(orderId));
+  } catch {
+    return null;
+  }
+};
 export interface OrderStatusEvent {
   orderId: number;
   orderStatus: string;
@@ -31,6 +43,8 @@ const hubUrl = (): string => {
 /** Mức toast theo loại thông báo; loại lạ hiện dạng thông tin */
 const TOAST_KIND: Record<string, 'success' | 'info' | 'warning' | 'error'> = {
   ORDER_ACCEPTED: 'success',
+  DRIVER_ARRIVED: 'info',
+  DRIVER_ARRIVED_DROPOFF: 'success',
   ORDER_DELIVERED: 'success',
   ORDER_COMPLETED: 'success',
   PICKUP_APPROVED: 'success',
@@ -38,6 +52,9 @@ const TOAST_KIND: Record<string, 'success' | 'info' | 'warning' | 'error'> = {
   REFUND_DECIDED: 'success',
   INCIDENT_RESOLVED: 'success',
   INCIDENT_REPORTED: 'warning',
+  INCIDENT_IN_PROGRESS: 'info',
+  /** Q10: điều phối viên trả lại sự cố (hoặc bị khoá) → sự cố về Chờ xử lý cho người khác nhận */
+  INCIDENT_RELEASED: 'warning',
   INCIDENT_REFUND_REQUESTED: 'warning',
   PICKUP_REJECTED: 'warning',
   PICKUP_PHOTOS_TO_REVIEW: 'info',
@@ -65,6 +82,8 @@ class RealtimeService {
   private connection: HubConnection | null = null;
   private starting = false;
   private wanted = false;
+  /** Tài khoản mà kết nối hiện tại được dựng cho (hub gắn danh tính lúc kết nối) */
+  private connectedFor: string | number | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly joinedOrders = new Set<number>();
   private readonly orderListeners = new Set<Listener<OrderStatusEvent>>();
@@ -86,9 +105,13 @@ class RealtimeService {
   /** Bắt đầu (hoặc tiếp tục) kết nối khi đã đăng nhập. Gọi nhiều lần vẫn an toàn. */
   async start(): Promise<void> {
     this.wanted = true;
+    const userId = useAuthStore.getState().user?.id ?? null;
+    // Đổi tài khoản mà không qua đăng xuất: kết nối cũ mang danh tính người trước, phải dựng lại.
+    if (this.connection && this.connectedFor !== userId) await this.teardown();
     if (this.starting || (this.connection && this.connection.state !== HubConnectionState.Disconnected)) return;
     if (!useAuthStore.getState().token) return;
     this.starting = true;
+    this.connectedFor = userId;
     try {
       const connection = new HubConnectionBuilder()
         .withUrl(hubUrl(), { accessTokenFactory: () => this.freshToken() })
@@ -114,14 +137,25 @@ class RealtimeService {
     }
   }
 
-  /** Ngắt kết nối khi đăng xuất hoặc hết phiên */
+  /**
+   * Ngắt kết nối khi đăng xuất hoặc hết phiên. Việc ngắt lùi lại một nhịp: nếu `start()` được gọi lại ngay
+   * (React gỡ rồi gắn lại effect trong cùng một lượt) thì giữ nguyên kết nối đang dựng, không ngắt giữa lúc
+   * bắt tay rồi phải chờ 5 giây mới nối lại.
+   */
   async stop(): Promise<void> {
     this.wanted = false;
+    await Promise.resolve();
+    if (this.wanted) return;
+    await this.teardown();
+  }
+
+  private async teardown(): Promise<void> {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     this.joinedOrders.clear();
     const connection = this.connection;
     this.connection = null;
+    this.connectedFor = null;
     if (connection) {
       try {
         await connection.stop();
@@ -140,6 +174,16 @@ class RealtimeService {
   }
 
   private handleNotification(n: PushNotification) {
+    if (n.type === 'DRIVER_ARRIVED_DROPOFF') {
+      const orderId = Number(n.data?.orderId);
+      if (orderId > 0) {
+        try {
+          localStorage.setItem(ARRIVAL_KEY(orderId), new Date().toISOString());
+        } catch {
+          /* trình duyệt chặn lưu: vẫn hiện toast */
+        }
+      }
+    }
     const text = n.body ? `${n.title}: ${n.body}` : n.title;
     if (text) toast[TOAST_KIND[n.type] ?? 'info'](text);
     this.notificationListeners.forEach((l) => l(n));

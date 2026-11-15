@@ -8,7 +8,6 @@ import {
   ExternalLink,
   MessageSquareWarning,
   Navigation,
-  Phone,
   RefreshCw,
   Repeat,
   Star,
@@ -31,7 +30,7 @@ import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
-import { useOrderRealtime } from '../../hooks/useRealtime';
+import { useDropoffArrival, useOrderRealtime } from '../../hooks/useRealtime';
 
 const H = 3_600_000;
 const ACTIVE_TRACK = ['Accepted', 'Arrived', 'PickedUp', 'InTransit'];
@@ -61,6 +60,13 @@ export const OrderDetailPage: React.FC = () => {
   const refunds = useQuery(() => customerApi.refunds(1, 50), [orderId]);
   const ratings = useQuery(() => customerApi.ratings(1, 50), [orderId]);
   const o = order.data;
+  // Tài xế báo đã đến điểm giao (chỉ có ý nghĩa khi đơn còn đang giao)
+  const dropoffArrival = useDropoffArrival(orderId);
+  const arrivedAtDropoff = o?.orderStatus === 'InTransit' ? dropoffArrival : null;
+  // Danh sách tóm tắt không có `incidentId`: tải chi tiết từng khoản hoàn của đơn để gộp vào đúng thẻ sự cố.
+  const refundSummaries = (refunds.data?.items ?? []).filter((r) => r.orderId === orderId);
+  const refundSignature = refundSummaries.map((r) => `${r.id}:${r.refundStatus}:${r.needsPayoutAccount}:${r.waitingForYourReply}`).join(',');
+  const refundDetails = useQuery(() => Promise.all(refundSummaries.map((r) => customerApi.refund(r.id))), [refundSignature], { enabled: refunds.data !== undefined });
   const tracking = useQuery(() => customerApi.tracking(orderId), [orderId, o?.orderStatus], {
     enabled: !!o && ACTIVE_TRACK.includes(o.orderStatus),
     refreshMs: 60_000, // BE: mỗi lần gọi tốn 1 lượt Google Maps, giới hạn 10 lần/phút
@@ -68,6 +74,7 @@ export const OrderDetailPage: React.FC = () => {
 
   const reloadAll = async () => {
     await Promise.all([order.reload(), incidents.reload(), refunds.reload(), ratings.reload()]);
+    await refundDetails.reload();
   };
   const done = () => {
     setModal(null);
@@ -91,7 +98,8 @@ export const OrderDetailPage: React.FC = () => {
   if (!o) return null;
 
   const myIncidents = (incidents.data?.items ?? []).filter((i) => i.orderId === o.id);
-  const myRefunds = (refunds.data?.items ?? []).filter((r) => r.orderId === o.id);
+  const myRefunds = refundSummaries;
+  const orderRefunds = refundDetails.data ?? [];
   const myRating = (ratings.data?.items ?? []).find((r) => r.orderId === o.id);
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden min-w-0">
@@ -109,8 +117,8 @@ export const OrderDetailPage: React.FC = () => {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-6xl mx-auto space-y-4">
-          <Progress order={o} />
+        <div className="w-full space-y-4">
+          <Progress order={o} dropoffArrivedAt={arrivedAtDropoff} />
           {o.pendingDriverIncidentId ? (
             <button
               type="button"
@@ -126,6 +134,7 @@ export const OrderDetailPage: React.FC = () => {
           ) : null}
           <NextAction
             order={o}
+            dropoffArrivedAt={arrivedAtDropoff}
             hasOpenComplaint={myRefunds.some((r) => r.sourceType === 'Complaint' && ['Requested', 'Approved'].includes(r.refundStatus))}
             rated={!!myRating}
             onModal={(kind) => setModal({ kind })}
@@ -140,11 +149,19 @@ export const OrderDetailPage: React.FC = () => {
               <IncidentsCard
                 order={o}
                 incidents={myIncidents}
-                refunds={myRefunds}
+                refunds={orderRefunds}
                 onReport={() => setModal({ kind: 'incident' })}
                 onRefund={(incident) => setModal({ kind: 'incidentRefund', incident })}
+                onReply={(refund) => setModal({ kind: 'reply', refund })}
+                onPayout={(refund) => setModal({ kind: 'payout', refund })}
+                onChanged={reloadAll}
               />
-              <RefundsCard refunds={myRefunds} onReply={(refund) => setModal({ kind: 'reply', refund })} onPayout={(refund) => setModal({ kind: 'payout', refund })} onChanged={reloadAll} />
+              <RefundsCard
+                refunds={orderRefunds.filter((r) => !(r.incidentId != null && myIncidents.some((i) => i.id === r.incidentId)))}
+                onReply={(refund) => setModal({ kind: 'reply', refund })}
+                onPayout={(refund) => setModal({ kind: 'payout', refund })}
+                onChanged={reloadAll}
+              />
               <Card title="Lịch sử trạng thái">
                 <StatusTimeline items={o.history.map((h) => ({ ...h, at: h.changedAt }))} />
               </Card>
@@ -213,7 +230,7 @@ const fmtLeft = (ms: number) => {
 };
 
 /* ------------------------------------------------------------------ Tiến trình */
-const Progress: React.FC<{ order: OrderDetailResponse }> = ({ order }) => {
+const Progress: React.FC<{ order: OrderDetailResponse; dropoffArrivedAt?: string | null }> = ({ order, dropoffArrivedAt }) => {
   if (order.orderStatus === 'Cancelled') {
     const note = [...order.history].reverse().find((h) => h.toStatus === 'Cancelled');
     return (
@@ -225,25 +242,33 @@ const Progress: React.FC<{ order: OrderDetailResponse }> = ({ order }) => {
   }
   const idx = ORDER_FLOW.indexOf(order.orderStatus);
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 overflow-x-auto">
-      <ol className="flex items-start min-w-[640px]">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      {/* Màn hẹp: tiến trình dọc; từ md: tiến trình ngang */}
+      <ol className="flex flex-col md:flex-row md:items-start gap-3 md:gap-0">
         {ORDER_FLOW.map((s, i) => {
           const at = historyAt(order, s) ?? (s === 'Pending' ? order.createdAt : null);
+          const label = s === 'Pending' && isAwaitingPayment(order.orderStatus, order.paymentMethod, order.paymentStatus) ? 'Chờ thanh toán' : ORDER_STATUS[s].label;
           return (
-            <li key={s} className="flex-1 flex flex-col items-center text-center relative">
-              {i > 0 && <span className={cx('absolute top-3 right-1/2 w-full h-0.5', i <= idx ? 'bg-blue-600' : 'bg-slate-200')} />}
+            <li key={s} className="md:flex-1 flex md:flex-col items-center gap-3 md:gap-0 md:text-center relative">
+              {i > 0 && <span className={cx('hidden md:block absolute top-3 right-1/2 w-full h-0.5', i <= idx ? 'bg-blue-600' : 'bg-slate-200')} />}
+              {i > 0 && <span className={cx('md:hidden absolute left-[11px] -top-3 h-3 w-0.5', i <= idx ? 'bg-blue-600' : 'bg-slate-200')} />}
               <span
                 className={cx(
-                  'relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black border-2',
+                  'relative z-10 w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-[11px] font-black border-2',
                   i < idx ? 'bg-blue-600 border-blue-600 text-white' : i === idx ? 'bg-white border-blue-600 text-blue-700' : 'bg-white border-slate-200 text-slate-400'
                 )}
               >
                 {i < idx ? '✓' : i + 1}
               </span>
-              <span className={cx('mt-1 text-[11px] font-bold', i <= idx ? 'text-slate-900' : 'text-slate-400')}>
-                {s === 'Pending' && isAwaitingPayment(order.orderStatus, order.paymentMethod, order.paymentStatus) ? 'Chờ thanh toán' : ORDER_STATUS[s].label}
+              <span className="min-w-0 flex md:flex-col items-baseline md:items-center gap-2 md:gap-0 flex-wrap">
+                <span className={cx('md:mt-1 text-xs md:text-[11px] font-bold', i <= idx ? 'text-slate-900' : 'text-slate-400')}>{label}</span>
+                {at && i <= idx && <span className="text-[10px] text-slate-400">{formatDateTime(at)}</span>}
+                {s === 'InTransit' && dropoffArrivedAt && (
+                  <span className="text-[10px] font-bold text-emerald-700" data-testid="progress-dropoff">
+                    ✓ Đã đến điểm giao · {formatDateTime(dropoffArrivedAt)}
+                  </span>
+                )}
               </span>
-              {at && i <= idx && <span className="text-[10px] text-slate-400">{formatDateTime(at)}</span>}
             </li>
           );
         })}
@@ -255,11 +280,12 @@ const Progress: React.FC<{ order: OrderDetailResponse }> = ({ order }) => {
 /* ------------------------------------------------------------------ Việc cần làm tiếp theo */
 const NextAction: React.FC<{
   order: OrderDetailResponse;
+  dropoffArrivedAt?: string | null;
   hasOpenComplaint: boolean;
   rated: boolean;
   onModal: (k: 'cancel' | 'rejectPickup' | 'complaint' | 'incident' | 'rate' | 'pay') => void;
   onReload: () => Promise<void>;
-}> = ({ order: o, hasOpenComplaint, rated, onModal, onReload }) => {
+}> = ({ order: o, dropoffArrivedAt, hasOpenComplaint, rated, onModal, onReload }) => {
   // Tài xế có sự cố mở: khách chưa duyệt được ảnh lấy hàng (BE trả INCIDENT_PENDING), vẫn từ chối được
   const driverIncidentPending = !!o.pendingDriverIncidentId;
   const [busy, setBusy] = useState(false);
@@ -382,6 +408,21 @@ const NextAction: React.FC<{
       );
     }
     case 'InTransit':
+      if (dropoffArrivedAt) {
+        const payCash = o.paymentMethod === 'Cash' && o.payerRole === 'Receiver' && o.paymentStatus !== 'Paid';
+        return box(
+          'bg-emerald-50 border-emerald-200',
+          <CheckCircle2 className="w-5 h-5 text-emerald-600" />,
+          'Tài xế đã đến điểm giao',
+          <>
+            Tài xế báo đã tới điểm giao lúc <b>{new Date(dropoffArrivedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</b>.
+            {payCash && <> Người nhận thanh toán <b>{formatCurrency(o.totalFee)}</b> tiền mặt cho tài xế.</>} Tài xế sẽ chụp ảnh giao hàng để hoàn tất; sau đó bạn xác nhận nhận hàng hoặc khiếu nại trong 24 giờ. Có vấn đề với hàng, hãy báo sự cố ngay.
+          </>,
+          <Button size="sm" variant="outline" onClick={() => onModal('incident')}>
+            <AlertTriangle className="w-4 h-4 mr-1" /> Báo sự cố
+          </Button>
+        );
+      }
       return box(
         'bg-sky-50 border-sky-200',
         <Truck className="w-5 h-5 text-sky-600" />,
@@ -591,9 +632,7 @@ const DriverCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => (
             </div>
           </div>
         </div>
-        <a href={`tel:${o.driver.phoneNumber}`} className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-700 hover:bg-slate-50">
-          <Phone className="w-4 h-4" /> Gọi {o.driver.phoneNumber}
-        </a>
+        <div className="text-sm font-bold text-slate-700">{o.driver.phoneNumber}</div>
       </div>
     ) : (
       <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -640,10 +679,13 @@ const FareCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => (
 const IncidentsCard: React.FC<{
   order: OrderDetailResponse;
   incidents: MyIncidentResponse[];
-  refunds: { sourceType: string; refundStatus: string }[];
+  refunds: MyRefundDetailResponse[];
   onReport: () => void;
   onRefund: (i: MyIncidentResponse) => void;
-}> = ({ order: o, incidents, onReport, onRefund }) => {
+  onReply: (r: MyRefundDetailResponse) => void;
+  onPayout: (r: MyRefundDetailResponse) => void;
+  onChanged: () => Promise<void>;
+}> = ({ order: o, incidents, refunds, onReport, onRefund, onReply, onPayout, onChanged }) => {
   const canReport = ['Arrived', 'PickedUp', 'InTransit'].includes(o.orderStatus);
   const canRefund = o.paymentMethod === 'PayOS' && o.paymentStatus === 'Paid';
   if (incidents.length === 0 && !canReport) return null;
@@ -672,7 +714,13 @@ const IncidentsCard: React.FC<{
               <div key={g.title}>
                 <div className="text-[11px] font-black uppercase tracking-wide text-slate-400 mb-1.5">{g.title}</div>
                 <ul className="space-y-3">
-                  {g.items.map((i) => (
+                  {g.items.map((i) => {
+                    // Khoản hoàn của riêng sự cố này nằm ngay trong thẻ; khoản còn mở thì không cho gửi thêm (mỗi sự cố một yêu cầu mở).
+                    // Gồm cả hoàn do "huỷ đơn vì sự cố" (BE ghi sourceType=Cancellation nhưng vẫn gắn incidentId) và hoàn do sự cố.
+                    const linked = refunds.filter((r) => r.incidentId === i.id);
+                    // Huỷ đơn vì sự cố đã tự tạo khoản hoàn: không cho khách yêu cầu thêm.
+                    const hasOpenRefund = linked.some((r) => r.sourceType === 'Cancellation' || ['Requested', 'Approved', 'Failed'].includes(r.refundStatus));
+                    return (
                     <li key={i.id} className="border border-slate-200 rounded-xl p-3 text-xs space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <b className="text-slate-900">#{i.id} – {INCIDENT_TYPE[i.incidentType]}</b>
@@ -694,13 +742,21 @@ const IncidentsCard: React.FC<{
                           Báo cáo đã bị hủy{i.resolutionNote ? `: ${i.resolutionNote}` : ''}
                         </p>
                       )}
-                      {canRefund && (
+                      {linked.length > 0 && (
+                        <ul className="space-y-2 pt-1">
+                          {linked.map((r) => (
+                            <RefundItem key={r.id} refund={r} onReply={onReply} onPayout={onPayout} onChanged={onChanged} />
+                          ))}
+                        </ul>
+                      )}
+                      {canRefund && !hasOpenRefund && (
                         <Button size="sm" variant="outline" onClick={() => onRefund(i)}>
                           Yêu cầu hoàn tiền cho sự cố này
                         </Button>
                       )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -711,32 +767,29 @@ const IncidentsCard: React.FC<{
 };
 
 /* ------------------------------------------------------------------ Hoàn tiền / khiếu nại */
-const RefundsCard: React.FC<{ refunds: { id: number }[]; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ refunds, onReply, onPayout, onChanged }) => {
+const RefundsCard: React.FC<{ refunds: MyRefundDetailResponse[]; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ refunds, onReply, onPayout, onChanged }) => {
   if (refunds.length === 0) return null;
   return (
-    <Card title={`Khiếu nại & hoàn tiền (${refunds.length})`}>
+    <Card title={`Hoàn tiền & khiếu nại (${refunds.length})`}>
       <ul className="space-y-3">
         {refunds.map((r) => (
-          <RefundItem key={r.id} id={r.id} onReply={onReply} onPayout={onPayout} onChanged={onChanged} />
+          <RefundItem key={r.id} refund={r} onReply={onReply} onPayout={onPayout} onChanged={onChanged} />
         ))}
       </ul>
     </Card>
   );
 };
 
-const RefundItem: React.FC<{ id: number; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ id, onReply, onPayout, onChanged }) => {
-  const q = useQuery(() => customerApi.refund(id), [id]);
+const RefundItem: React.FC<{ refund: MyRefundDetailResponse; onReply: (r: MyRefundDetailResponse) => void; onPayout: (r: MyRefundDetailResponse) => void; onChanged: () => Promise<void> }> = ({ refund: r, onReply, onPayout, onChanged }) => {
   const [busy, setBusy] = useState(false);
-  const r = q.data;
-  const canWithdraw = useMemo(() => !!r && r.refundStatus === 'Requested' && r.sourceType !== 'Cancellation', [r]);
-  if (!r) return <li className="text-xs text-slate-400">Đang tải khoản hoàn #{id}…</li>;
+  const canWithdraw = r.refundStatus === 'Requested' && r.sourceType !== 'Cancellation';
   const withdraw = async () => {
     if (!(await confirm({ title: 'Rút yêu cầu', message: 'Bạn chắc chắn muốn rút yêu cầu này? Không thể hoàn tác.', danger: true }))) return;
     setBusy(true);
     try {
       await customerApi.withdrawRefund(r.id);
       toast.success('Đã rút yêu cầu.');
-      await Promise.all([q.reload(), onChanged()]);
+      await onChanged();
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {

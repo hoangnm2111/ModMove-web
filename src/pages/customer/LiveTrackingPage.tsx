@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MapPin, Phone, Truck } from 'lucide-react';
+import { MapPin, Truck } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Card, DataState, Empty, KV, PageShell, StatusPill, cx } from '../../components/ui/kit';
 import { customerApi } from '../../api/endpoints';
@@ -37,7 +37,7 @@ export const LiveTrackingPage: React.FC = () => {
               }
             />
           ) : (
-            <div className="max-w-6xl mx-auto grid lg:grid-cols-3 gap-4">
+            <div className="w-full grid lg:grid-cols-3 gap-4">
               <div className="space-y-2">
                 {items.map((o) => (
                   <button
@@ -106,10 +106,8 @@ const Tracked: React.FC<{ id: number }> = ({ id }) => {
                 <div className="min-w-0 flex-1">
                   <div className="font-black text-sm truncate">{o.driver.fullName}</div>
                   <div className="text-[11px] text-slate-500 font-mono">{o.driver.licensePlate}</div>
+                  <div className="text-xs text-slate-700 font-semibold mt-0.5">{o.driver.phoneNumber}</div>
                 </div>
-                <a href={`tel:${o.driver.phoneNumber}`} className="p-2 rounded-xl bg-blue-600 text-white" aria-label="Gọi tài xế">
-                  <Phone className="w-4 h-4" />
-                </a>
               </div>
             ) : (
               <p className="text-xs text-slate-400">Chưa có tài xế.</p>

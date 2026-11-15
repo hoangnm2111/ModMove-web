@@ -152,7 +152,7 @@ export const BookingPage: React.FC = () => {
       </header>
 
       <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex-shrink-0" aria-label="Các bước đặt xe">
-        <ol className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <ol className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2">
           {STEPS.map((s) => {
             const active = s.num === step;
             const done = s.num < step;
@@ -180,7 +180,7 @@ export const BookingPage: React.FC = () => {
         </ol>
       </nav>
 
-      <div className="max-w-6xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-[1fr,340px] gap-5">
+      <div className="w-full p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-[1fr,340px] gap-5">
         <div className="space-y-4 min-w-0">
           {step === 1 && <RouteStep pickup={draft.pickup} dropoff={draft.dropoff} errors={errors} onPickup={setPickup} onDropoff={setDropoff} />}
           {step === 2 && (

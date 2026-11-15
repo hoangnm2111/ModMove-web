@@ -16,7 +16,7 @@ export const FareSummary: React.FC<{ fare: FareBreakdown | null; vehicle?: Vehic
         <dl className="space-y-1.5 text-xs">
           <div className="flex justify-between">
             <dt className="text-slate-500">
-              Cước quãng đường
+              Phí vận chuyển
               <span className="block text-[10px]">
                 max({formatCurrency(vehicle.minimumFare)}, {formatCurrency(vehicle.baseFare)} + {formatCurrency(vehicle.pricePerKm)} × {fare.distanceKm} km)
               </span>

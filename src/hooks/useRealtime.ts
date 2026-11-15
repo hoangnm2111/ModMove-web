@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { realtime } from '../services/realtime.service';
+import { useState } from 'react';
+import { getDropoffArrival, realtime } from '../services/realtime.service';
 import { useAuthStore } from '../store/useAuthStore';
 
 /**
@@ -44,4 +45,16 @@ export const useNotificationRefresh = (onChange: () => void) => {
   const callback = useRef(onChange);
   callback.current = onChange;
   useEffect(() => realtime.onNotification(() => callback.current()), []);
+};
+
+/** Lúc tài xế báo "đã đến điểm giao" của đơn (ISO) hoặc null; tự cập nhật khi thông báo tới. */
+export const useDropoffArrival = (orderId: number): string | null => {
+  const [at, setAt] = useState<string | null>(() => getDropoffArrival(orderId));
+  useEffect(() => {
+    setAt(getDropoffArrival(orderId));
+    return realtime.onNotification((n) => {
+      if (n.type === 'DRIVER_ARRIVED_DROPOFF' && Number(n.data?.orderId) === orderId) setAt(getDropoffArrival(orderId));
+    });
+  }, [orderId]);
+  return at;
 };
