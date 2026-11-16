@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from '../../components/ui/Modal';
 import { useCargoTypes, usePlatformSettings, usePolicies, useVehicleTypes } from '../../hooks/useDomainData';
 import { formatCurrency } from '../../utils/format';
+import { PolicyAccordion } from '../policy/PolicyAccordion';
 
 interface Props {
   open: boolean;
@@ -14,8 +15,9 @@ const Empty: React.FC<{ text: string }> = ({ text }) => <p className="text-slate
 export const VehiclePriceModal: React.FC<Props> = ({ open, onClose }) => {
   const vehicles = useVehicleTypes().filter((v) => v.isActive);
   const { loadingFee } = usePlatformSettings();
+  const cargo = useCargoTypes();
   return (
-    <Modal open={open} onClose={onClose} title="Bảng giá theo loại xe" size="lg">
+    <Modal open={open} onClose={onClose} title="Bảng giá theo loại xe và loại hàng hoá" size="lg">
       {vehicles.length === 0 ? (
         <Empty text="Chưa có bảng giá." />
       ) : (
@@ -44,24 +46,14 @@ export const VehiclePriceModal: React.FC<Props> = ({ open, onClose }) => {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-slate-500">
-            Phí bốc xếp {formatCurrency(loadingFee)} khi chọn dịch vụ bốc xếp. Giá cuối cùng được tính theo quãng đường thực tế khi đặt xe.
-          </p>
+          <p className="mt-3 text-xs text-slate-500">Phí bốc xếp {formatCurrency(loadingFee)}.</p>
         </>
       )}
-    </Modal>
-  );
-};
-
-/** Loại hàng hoá nhận vận chuyển: `master_data_items` CARGO_TYPE (GET /public/Lookups/cargo-types). */
-export const CargoTypesModal: React.FC<Props> = ({ open, onClose }) => {
-  const cargo = useCargoTypes();
-  return (
-    <Modal open={open} onClose={onClose} title="Loại hàng hoá" size="md">
+      <h3 className="mt-5 mb-2 font-extrabold text-slate-900">Loại hàng hoá</h3>
       {cargo.length === 0 ? (
         <Empty text="Chưa có danh mục loại hàng hoá." />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid sm:grid-cols-2 gap-2">
           {cargo.map((c) => (
             <li key={c.code} className="rounded-xl border border-slate-100 px-3 py-2.5">
               <div className="font-bold text-slate-900">{c.name}</div>
@@ -79,22 +71,7 @@ export const PolicyListModal: React.FC<Props> = ({ open, onClose }) => {
   const policies = usePolicies();
   return (
     <Modal open={open} onClose={onClose} title="Chính sách" size="lg">
-      {policies.length === 0 ? (
-        <Empty text="Chưa có chính sách nào." />
-      ) : (
-        <div className="space-y-3">
-          {policies.map((p) => (
-            <section key={p.code} className="rounded-xl border border-slate-100 p-3.5">
-              <h3 className="font-extrabold text-slate-900">{p.name}</h3>
-              {p.description?.trim() ? (
-                <p className="text-sm text-slate-600 mt-1 whitespace-pre-line">{p.description}</p>
-              ) : (
-                <p className="text-xs text-slate-400 mt-1">Nội dung đang được cập nhật.</p>
-              )}
-            </section>
-          ))}
-        </div>
-      )}
+      <PolicyAccordion items={policies} />
     </Modal>
   );
 };

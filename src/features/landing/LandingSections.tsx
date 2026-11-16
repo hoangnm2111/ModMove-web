@@ -25,7 +25,7 @@ const DEFAULT_ABOUT = [
 ];
 
 const ABOUT_HIGHLIGHTS = [
-  { icon: Wallet, title: 'Dành cho khách hàng', text: 'Giá rõ ràng trước khi đặt, theo dõi xe trực tiếp, thanh toán PayOS hoặc tiền mặt.' },
+  { icon: Wallet, title: 'Dành cho khách hàng', text: 'Giá rõ ràng trước khi đặt, theo dõi xe trực tiếp, thanh toán Online hoặc tiền mặt.' },
   { icon: UserCheck, title: 'Dành cho tài xế', text: 'Nhận đơn gần vị trí, thống kê thu nhập theo ngày, tuần, tháng.' },
   { icon: ShieldCheck, title: 'Điều phối và hỗ trợ', text: 'Có đội điều phối theo dõi chuyến và xử lý sự cố, khiếu nại, hoàn tiền.' },
 ];
@@ -114,7 +114,7 @@ export const VehicleCardsSection: React.FC<{ onPick: (vehicleTypeId: string) => 
   if (vehicles.length === 0) return null;
   return (
     <section className={SECTION} id="vehicles">
-      <Heading title="Các loại xe" hint="Chọn xe phù hợp với khối lượng hàng của bạn." />
+      <Heading title="Các loại xe" />
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {vehicles.map((v) => (
           <div key={v.id} className={`${CARD} p-5 flex flex-col`}>
@@ -146,7 +146,7 @@ export const VehicleCardsSection: React.FC<{ onPick: (vehicleTypeId: string) => 
 
 const STEPS = [
   { icon: MapPin, title: 'Nhập điểm nhận và giao', text: 'Chọn địa chỉ, loại hàng và loại xe.' },
-  { icon: CalendarCheck, title: 'Đặt xe', text: 'Xác nhận giá và thanh toán PayOS hoặc tiền mặt.' },
+  { icon: CalendarCheck, title: 'Đặt xe', text: 'Xác nhận giá và thanh toán Online hoặc tiền mặt.' },
   { icon: UserCheck, title: 'Ghép tài xế', text: 'Hệ thống gửi đơn tới tài xế gần bạn.' },
   { icon: Truck, title: 'Vận chuyển', text: 'Theo dõi hành trình và xác nhận khi nhận hàng.' },
 ];
