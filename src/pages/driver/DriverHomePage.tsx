@@ -2,32 +2,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, ShieldAlert } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner } from '../../components/ui/feedback';
 import { Card, DataState, Empty, KV, PageShell, PhotoGrid, Pill, StatusPill, StatusTimeline } from '../../components/ui/kit';
 import { MapEmbed } from '../../components/MapEmbed';
 import { driverApi } from '../../api/endpoints';
 import { INCIDENT_STATUS, INCIDENT_TYPE, PAYER_ROLE, PROOF_STATUS } from '../../api/labels';
-import type { DriverTripDetailResponse } from '../../api/types';
 import { useQuery } from '../../api/useQuery';
 import { useNotificationRefresh, useOrderRealtime } from '../../hooks/useRealtime';
 import { formatCurrency } from '../../utils/format';
-
-/** Việc tài xế cần làm tiếp theo trên app, theo trạng thái đơn. */
-const nextStep = (t: DriverTripDetailResponse): string => {
-  if (t.incidents.some((i) => i.reportedByYou && (i.resolutionStatus === 'Open' || i.resolutionStatus === 'InProgress'))) return 'Chuyến đang tạm dừng: chờ điều phối viên xử lý sự cố bạn đã báo.';
-  switch (t.orderStatus) {
-    case 'Accepted':
-      return t.handoverPoint ? 'Đến điểm bàn giao để nhận hàng từ xe trước, rồi xác nhận đã đến.' : 'Đến điểm lấy hàng rồi xác nhận đã đến.';
-    case 'Arrived':
-      return 'Kiểm hàng và gửi 2–5 ảnh lấy hàng để khách duyệt.';
-    case 'PickedUp':
-      return t.proof?.proofStatus === 'Rejected' ? 'Khách đã từ chối ảnh: chụp lại và gửi ảnh mới.' : 'Chờ khách duyệt ảnh lấy hàng.';
-    case 'InTransit':
-      return t.cashToCollect > 0 && t.paymentStatus !== 'Paid' ? 'Giao hàng, thu tiền mặt rồi chụp ảnh giao hàng để hoàn tất.' : 'Giao hàng rồi chụp ảnh giao hàng để hoàn tất.';
-    default:
-      return '';
-  }
-};
 
 /** Chuyến đang chạy của tài xế (GET /driver/Trips/active). Web chỉ xem; các bước thực hiện làm trên app (DECISIONS C11). */
 export const DriverHomePage: React.FC = () => {
@@ -53,10 +34,6 @@ export const DriverHomePage: React.FC = () => {
               />
             ) : (
               <>
-                <Banner kind="info">
-                  Xác nhận đã đến, gửi ảnh lấy hàng, thu tiền mặt, giao hàng và báo sự cố được thực hiện trên <b>app ModMove cho tài xế</b>. Trang này hiển thị trạng thái chuyến và tự cập nhật.
-                  {nextStep(trip) && <span className="block mt-1 font-semibold">Việc tiếp theo: {nextStep(trip)}</span>}
-                </Banner>
                 <div className="grid lg:grid-cols-2 gap-4">
                   <Card title={`Đơn ${trip.orderCode}`} actions={<StatusPill status={trip.orderStatus} />}>
                     <KV label="Điểm lấy">{trip.pickupAddress}</KV>

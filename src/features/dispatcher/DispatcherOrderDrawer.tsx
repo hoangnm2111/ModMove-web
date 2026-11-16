@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ExternalLink, Phone } from 'lucide-react';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import type { IncidentType } from '../../api/types';
 import { Button } from '../../components/Button';
-import { Banner, toast } from '../../components/ui/feedback';
+import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { TextArea } from '../../components/ui/Field';
 import { errorMessage } from '../../services/mock/storage';
@@ -61,28 +61,16 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
             <div className="grid sm:grid-cols-2 gap-4">
               <Card title="Khách hàng & người nhận">
                 <KV label="Khách">{o.customer.fullName}</KV>
-                <KV label="Số điện thoại khách">
-                  <a className="text-blue-600" href={`tel:${o.customer.phoneNumber}`}>
-                    {o.customer.phoneNumber}
-                  </a>
-                </KV>
+                <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600" href={`tel:${o.customer.phoneNumber}`}> {o.customer.phoneNumber} </a></div>
                 <KV label="Email">{o.customer.email}</KV>
                 <KV label="Người nhận">{o.receiver.name}</KV>
-                <KV label="Số điện thoại người nhận">
-                  <a className="text-blue-600" href={`tel:${o.receiver.phoneNumber}`}>
-                    {o.receiver.phoneNumber}
-                  </a>
-                </KV>
+                <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600" href={`tel:${o.receiver.phoneNumber}`}> {o.receiver.phoneNumber} </a></div>
               </Card>
               <Card title="Tài xế">
                 {o.driver ? (
                   <>
                     <KV label="Họ tên">{o.driver.fullName}</KV>
-                    <KV label="Số điện thoại">
-                      <a className="text-blue-600 inline-flex items-center gap-1" href={`tel:${o.driver.phoneNumber}`}>
-                        <Phone className="w-3 h-3" /> {o.driver.phoneNumber}
-                      </a>
-                    </KV>
+                    <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600 inline-flex items-center gap-1" href={`tel:${o.driver.phoneNumber}`}> {o.driver.phoneNumber} </a></div>
                     <KV label="Biển số / Loại xe">
                       <span className="font-mono">{o.driver.licensePlate ?? '—'}</span> • {o.vehicleTypeName}
                     </KV>
@@ -283,7 +271,6 @@ const ReportIncidentModal: React.FC<{ orderId: number; orderCode: string; onClos
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Sự cố về tay bạn ngay để đổi tài xế hoặc huỷ đơn. Chuyến không bị tạm dừng; ghi chú chỉ điều phối viên xem, khách và tài xế chỉ nhận thông báo chung.</Banner>
         <Select aria-label="Loại sự cố" value={type} onChange={(e) => setType(e.target.value as IncidentType)} options={INCIDENT_TYPES} />
         <TextArea label="Ghi chú nội bộ *" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
       </div>

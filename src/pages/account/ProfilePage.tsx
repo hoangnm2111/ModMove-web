@@ -6,7 +6,6 @@ import { Banner, confirm, toast } from '../../components/ui/feedback';
 import { Field } from '../../components/ui/Field';
 import { PageShell } from '../../components/ui/kit';
 import { ROLE_LABEL } from '../../api/labels';
-import { BUSINESS } from '../../config/business';
 import { msg } from '../../constants/messages';
 import { confirmPassword, password, phone, required, validate } from '../../domain/validators';
 import { authService } from '../../services/auth.service';
@@ -97,7 +96,7 @@ export const ProfilePage: React.FC = () => {
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Họ và tên" required value={fullName} error={profileErr.fullName} onChange={(e) => setFullName(e.target.value)} />
             <Field label="Số điện thoại" required value={phoneNumber} error={profileErr.phone} onChange={(e) => setPhoneNumber(e.target.value)} />
-            <Field label="Email" value={user.email} disabled hint="Email dùng để nhận OTP, không thay đổi được." />
+            <Field label="Email" value={user.email} disabled />
             <Field label="Vai trò" value={ROLE_LABEL[user.role] ?? user.role} disabled />
           </div>
           {profileErr.form && <Banner kind="error">{profileErr.form}</Banner>}
@@ -114,11 +113,10 @@ export const ProfilePage: React.FC = () => {
           </h2>
           <Field label="Mật khẩu hiện tại" type="password" autoComplete="current-password" value={oldPwd} error={pwdErr.old} onChange={(e) => setOldPwd(e.target.value)} />
           <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Mật khẩu mới" type="password" autoComplete="new-password" value={newPwd} error={pwdErr.next} hint={`${BUSINESS.PASSWORD_MIN}–${BUSINESS.PASSWORD_MAX} ký tự`} onChange={(e) => setNewPwd(e.target.value)} />
+            <Field label="Mật khẩu mới" type="password" autoComplete="new-password" value={newPwd} error={pwdErr.next} onChange={(e) => setNewPwd(e.target.value)} />
             <Field label="Nhập lại mật khẩu mới" type="password" autoComplete="new-password" value={newPwd2} error={pwdErr.confirm} onChange={(e) => setNewPwd2(e.target.value)} />
           </div>
           {pwdErr.form && <Banner kind="error">{pwdErr.form}</Banner>}
-          <p className="text-[11px] text-slate-500">Sau khi đổi mật khẩu, mọi phiên đăng nhập sẽ bị đăng xuất.</p>
           <div className="flex justify-end">
             <Button type="submit" size="sm" isLoading={savingPwd}>
               Cập nhật mật khẩu

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, toast } from '../../components/ui/feedback';
+import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { Field } from '../../components/ui/Field';
 import { Card, DataState, PageShell, Pager, Pill, Table, Tabs } from '../../components/ui/kit';
@@ -151,15 +151,14 @@ const CreateModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ on
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Giảm giá không vượt cước của đơn. Mã chỉ áp dụng trong thời hạn, khi đơn đạt giá trị tối thiểu và chưa hết tổng lượt.</Banner>
         <Field label="Mã" required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VD: MODMOVE30" />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Số tiền giảm (VND)" type="number" required value={f.value} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />
-          <Field label="Giá trị đơn tối thiểu (VND)" type="number" value={f.min} onChange={(e) => setF({ ...f, min: Number(e.target.value) })} />
+          <Field label="Số tiền giảm VND" type="number" required value={f.value} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />
+          <Field label="Giá trị đơn tối thiểu VND" type="number" value={f.min} onChange={(e) => setF({ ...f, min: Number(e.target.value) })} />
           <Field label="Bắt đầu" type="datetime-local" required value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} />
           <Field label="Hết hạn" type="datetime-local" required value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} />
         </div>
-        <Field label="Tổng lượt dùng" type="number" value={f.limit} onChange={(e) => setF({ ...f, limit: e.target.value })} hint="Để trống = không giới hạn" />
+        <Field label="Tổng lượt dùng" type="number" value={f.limit} onChange={(e) => setF({ ...f, limit: e.target.value })} />
       </div>
     </Modal>
   );

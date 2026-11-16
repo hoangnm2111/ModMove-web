@@ -123,7 +123,7 @@ export const DriverProfilePage: React.FC = () => {
             <div>
               <KV label="Họ tên">{user?.fullName}</KV>
               <KV label="Email">{user?.email}</KV>
-              <KV label="Số điện thoại">{user?.phoneNumber}</KV>
+              <div className="py-1 text-sm font-bold text-slate-800">{user?.phoneNumber}</div>
             </div>
             <div>
               <KV label="Phiên bản mới nhất">{ob.latestVersionNumber ? `v${ob.latestVersionNumber}` : '—'}</KV>
@@ -131,7 +131,6 @@ export const DriverProfilePage: React.FC = () => {
               <KV label="Xét duyệt lúc">{ob.reviewedAt ? formatDateTime(ob.reviewedAt) : '—'}</KV>
             </div>
           </div>
-          {st === 'Pending' && <Banner kind="info" className="mt-3">Hồ sơ đang chờ thẩm định – không chỉnh sửa được trong lúc chờ (MSG07).</Banner>}
           {st === 'Approved' && <Banner kind="success" className="mt-3">Hồ sơ đã được duyệt. Bạn có thể bật nhận đơn.</Banner>}
           {st === 'Rejected' && ob.rejectionReasons && (
             <div className="mt-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">
@@ -175,13 +174,12 @@ export const DriverProfilePage: React.FC = () => {
                 )}
               </div>
               <Field label="Biển số xe" required value={f.plate} onChange={(e) => setF({ ...f, plate: e.target.value.toUpperCase() })} placeholder="29C-874.12" />
-              <Field label="Tải trọng tối đa (kg)" type="number" required value={f.maxLoad || ''} onChange={(e) => setF({ ...f, maxLoad: Number(e.target.value) })} />
-              <Field label="Số CCCD" required value={f.citizenId} onChange={(e) => setF({ ...f, citizenId: e.target.value.replace(/\D/g, '') })} hint="9–12 chữ số" />
-              <Field label="Số giấy phép lái xe" required value={f.license} onChange={(e) => setF({ ...f, license: e.target.value })} hint="8–20 chữ/số" />
+              <Field label="Tải trọng tối đa kg" type="number" required value={f.maxLoad || ''} onChange={(e) => setF({ ...f, maxLoad: Number(e.target.value) })} />
+              <Field label="Số CCCD" required value={f.citizenId} onChange={(e) => setF({ ...f, citizenId: e.target.value.replace(/\D/g, '') })} />
+              <Field label="Số giấy phép lái xe" required value={f.license} onChange={(e) => setF({ ...f, license: e.target.value })} />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">Giấy tờ & ảnh xe (đủ 7 ảnh)</div>
-              <p className="text-[11px] text-slate-500 mb-2">Mỗi ảnh JPG/PNG tối đa 5 MB, chụp rõ nét và đủ 4 góc.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
                 {DOCS.map((label, i) => (
                   <div key={label} className="space-y-1.5">

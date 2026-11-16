@@ -81,7 +81,7 @@ const IncidentDetail: React.FC<{ i: DriverIncidentResponse }> = ({ i }) => (
         {i.orderCode} • {ORDER_STATUS[i.orderStatus].label}
       </KV>
       <KV label="Loại sự cố">{INCIDENT_TYPE[i.incidentType]}</KV>
-      <KV label="Ai báo">{i.reportedByYou ? 'Bạn báo' : 'Khách báo (bạn chỉ thấy câu chung)'}</KV>
+      <KV label="Ai báo">{i.reportedByYou ? 'Bạn báo' : 'Khách báo'}</KV>
       <KV label="Báo lúc">{formatDateTime(i.createdAt)}</KV>
       <KV label="Vị trí">{i.latitude !== null && i.longitude !== null ? `${i.latitude.toFixed(5)}, ${i.longitude.toFixed(5)}` : '—'}</KV>
     </Card>

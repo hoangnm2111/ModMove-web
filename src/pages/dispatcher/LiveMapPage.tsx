@@ -71,7 +71,7 @@ export const LiveMapPage: React.FC = () => {
         </div>
 
         <div className="grid sm:grid-cols-3 gap-3">
-          <StatCard label="Tài xế online (GPS ≤ 5')" value={driverList.length} icon={<Users className="w-5 h-5" />} />
+          <StatCard label="Tài xế trực tuyến" value={driverList.length} icon={<Users className="w-5 h-5" />} />
           <StatCard label="Đang chạy đơn" value={busyCount} icon={<Truck className="w-5 h-5" />} accent="bg-sky-50 text-sky-600" />
           <StatCard label="Rảnh, chờ đơn" value={driverList.length - busyCount} icon={<Navigation className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
         </div>

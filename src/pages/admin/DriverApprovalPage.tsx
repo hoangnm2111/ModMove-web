@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, confirm, toast } from '../../components/ui/feedback';
+import { confirm, toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { inputClass } from '../../components/ui/Field';
 import { Card, DataState, Empty, KV, PageShell, Pager, Pill, cx } from '../../components/ui/kit';
@@ -111,9 +111,7 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
             <div className="grid sm:grid-cols-2 gap-x-6">
               <div>
                 <KV label="Email">{a.email}</KV>
-                <KV label="Số điện thoại">
-                  <PhoneLink phone={a.phoneNumber} />
-                </KV>
+                <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={a.phoneNumber} /></div>
                 <KV label="Số CCCD">{a.citizenIdNumber}</KV>
                 <KV label="Số GPLX">{a.driverLicenseNumber}</KV>
               </div>
@@ -220,14 +218,13 @@ const RejectModal: React.FC<{ app: DriverApplicationDetailsResponse; onClose: ()
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Chọn từng mục cần tài xế sửa và ghi lý do cụ thể. Tài xế nộp lại sẽ tạo phiên bản mới.</Banner>
         <ul className="space-y-2">
           {CHECK_ITEMS.map((k) => (
             <li key={k} className="text-xs">
               <label className="flex items-center gap-2 font-bold text-slate-700">
                 <input type="checkbox" checked={k in items} onChange={() => toggle(k)} /> {k}
               </label>
-              {k in items && <input className={`${inputClass()} mt-1`} placeholder="Lý do (VD: ảnh mờ, hết hạn, không khớp…)" value={items[k]} onChange={(e) => setItems({ ...items, [k]: e.target.value })} />}
+              {k in items && <input className={`${inputClass()} mt-1`} placeholder="Lý do" value={items[k]} onChange={(e) => setItems({ ...items, [k]: e.target.value })} />}
             </li>
           ))}
         </ul>

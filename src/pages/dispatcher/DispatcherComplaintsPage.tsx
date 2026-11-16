@@ -160,7 +160,7 @@ const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: ()
                   </div>
                 </div>
               )}
-              {c.proposalReason && <p className="text-[11px] text-slate-500 mt-2">Ghi chú đề xuất (nội bộ): {c.proposalReason}</p>}
+              {c.proposalReason && <p className="text-[11px] text-slate-500 mt-2">Ghi chú đề xuất: {c.proposalReason}</p>}
             </Card>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -302,7 +302,6 @@ const InfoModal: React.FC<{ onClose: () => void; onSubmit: (note: string) => Pro
       }
     >
       <TextArea label="Câu hỏi / thông tin cần bổ sung *" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
-      <p className="text-[11px] text-slate-400 mt-2">Khách trả lời bằng một đoạn chữ và có thể thêm ảnh (tổng tối đa 5 ảnh).</p>
     </Modal>
   );
 };

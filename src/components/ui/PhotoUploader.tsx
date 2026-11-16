@@ -95,7 +95,6 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, m
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/jpeg,image/png" multiple hidden disabled={uploading} onChange={(e) => handleFiles(e.target.files)} />
-      <p className="mt-1.5 text-[11px] text-slate-400">{hint ?? `JPG/PNG, tối đa ${BUSINESS.MAX_PHOTO_SIZE_MB}MB mỗi ảnh.`}</p>
       {error && <p className="mt-1 text-[11px] font-semibold text-rose-600">{error}</p>}
     </div>
   );

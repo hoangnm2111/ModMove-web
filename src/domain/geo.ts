@@ -1,4 +1,4 @@
-/** Khoảng cách đường chim bay (km) */
+/** Khoảng cách đường chim bay km */
 export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
