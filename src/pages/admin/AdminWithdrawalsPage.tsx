@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, toast } from '../../components/ui/feedback';
+import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { Field, TextArea } from '../../components/ui/Field';
 import { Card, DataState, Drawer, KV, PageShell, Pager, Pill, SearchBox, Table, Tabs } from '../../components/ui/kit';
@@ -12,6 +12,7 @@ import type { AdminWithdrawalDetailResponse, WalletTransactionStatus } from '../
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
+import { ExportPayoutsButton } from '../../features/admin/ExportPayoutsButton';
 
 type Tab = WalletTransactionStatus | 'ALL';
 const TABS: { key: Tab; label: string }[] = [
@@ -32,7 +33,8 @@ export const AdminWithdrawalsPage: React.FC = () => {
   return (
     <PageShell
       title="Duyệt rút tiền tài xế"
-      subtitle="Chuyển khoản thủ công tới tài khoản tài xế rồi ghi mã tham chiếu "
+      subtitle="Chuyển khoản tới tài khoản tài xế rồi ghi mã tham chiếu"
+      actions={<ExportPayoutsButton defaultRole="Driver" />}
       toolbar={
         <div className="w-full flex flex-wrap items-center gap-2">
           <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
@@ -41,9 +43,6 @@ export const AdminWithdrawalsPage: React.FC = () => {
       }
     >
       <div className="w-full">
-        <Banner kind="info" className="mb-4">
-          Yêu cầu rút tiền do tài xế tạo trên app. Số tiền rút được trừ từ ví thu nhập trước, thiếu thì trừ tiếp từ ví tiền cọc; từ chối thì hoàn đúng từng phần về hai ví. Mỗi tài xế chỉ có một yêu cầu chờ tại một thời điểm, không có mức tối thiểu.
-        </Banner>
         <Card>
           <DataState q={q} empty={(d) => d.items.length === 0}>
             {(d) => (
@@ -76,7 +75,7 @@ export const AdminWithdrawalsPage: React.FC = () => {
 
 const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () => void }> = ({ id, onClose, onChanged }) => {
   const q = useQuery(() => adminApi.withdrawal(id), [id]);
-  const [act, setAct] = useState<'approve' | 'reject' | null>(null);
+  const [act, setAct] = useState<'approve' | 'reject' | 'wrongAccount' | null>(null);
   const w = q.data;
   return (
     <Drawer
@@ -86,6 +85,9 @@ const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: (
       footer={
         w?.transactionStatus === 'Pending' && (
           <>
+            <Button size="sm" variant="outline" onClick={() => setAct('wrongAccount')}>
+              <XCircle className="w-4 h-4 mr-1" /> Sai số tài khoản
+            </Button>
             <Button size="sm" variant="danger" onClick={() => setAct('reject')}>
               <XCircle className="w-4 h-4 mr-1" /> Từ chối
             </Button>
@@ -108,9 +110,7 @@ const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: (
             </div>
             <Card title="Tài xế">
               <KV label="Họ tên">{w.driverName}</KV>
-              <KV label="Số điện thoại / Email">
-                <PhoneLink phone={w.driverPhone} /> • {w.driverEmail}
-              </KV>
+              <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={w.driverPhone} /> • {w.driverEmail}</div>
               <KV label="Ví">{w.walletStatus === 'Active' ? 'Hoạt động' : 'Đang khoá'}</KV>
               <KV label="Thu nhập hiện tại">{formatCurrency(w.currentEarningsBalance)}</KV>
               <KV label="Ví cọc hiện tại">{formatCurrency(w.currentDepositBalance)}</KV>
@@ -138,10 +138,11 @@ const WithdrawalDrawer: React.FC<{ id: number; onClose: () => void; onChanged: (
   );
 };
 
-const ActModal: React.FC<{ act: 'approve' | 'reject'; w: AdminWithdrawalDetailResponse; onClose: () => void; onDone: () => void }> = ({ act, w, onClose, onDone }) => {
-  const [text, setText] = useState('');
+const ActModal: React.FC<{ act: 'approve' | 'reject' | 'wrongAccount'; w: AdminWithdrawalDetailResponse; onClose: () => void; onDone: () => void }> = ({ act, w, onClose, onDone }) => {
+  const [text, setText] = useState(act === 'wrongAccount' ? 'Sai số tài khoản' : '');
   const [busy, setBusy] = useState(false);
   const submit = async () => {
+    if (act === 'wrongAccount' && !text.trim()) return toast.error('Nhập lý do.');
     if (act === 'approve' && !text.trim()) return toast.error('Nhập mã giao dịch ngân hàng.');
     setBusy(true);
     try {
@@ -158,14 +159,14 @@ const ActModal: React.FC<{ act: 'approve' | 'reject'; w: AdminWithdrawalDetailRe
   return (
     <Modal
       open
-      title={act === 'approve' ? 'Xác nhận đã chuyển khoản' : 'Từ chối yêu cầu rút tiền'}
+      title={act === 'approve' ? 'Xác nhận đã chuyển khoản' : act === 'wrongAccount' ? 'Sai số tài khoản' : 'Từ chối yêu cầu rút tiền'}
       onClose={onClose}
       footer={
         <>
           <Button size="sm" variant="outline" onClick={onClose}>
             Đóng
           </Button>
-          <Button size="sm" variant={act === 'reject' ? 'danger' : 'primary'} onClick={submit} isLoading={busy}>
+          <Button size="sm" variant={act === 'approve' ? 'primary' : 'danger'} onClick={submit} isLoading={busy}>
             Xác nhận
           </Button>
         </>
@@ -174,7 +175,7 @@ const ActModal: React.FC<{ act: 'approve' | 'reject'; w: AdminWithdrawalDetailRe
       {act === 'approve' ? (
         <Field label="Mã giao dịch ngân hàng" required value={text} onChange={(e) => setText(e.target.value)} maxLength={50} />
       ) : (
-        <TextArea label="Lý do (gửi cho tài xế)" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
+        <TextArea label="Lý do gửi cho tài xế" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
       )}
     </Modal>
   );

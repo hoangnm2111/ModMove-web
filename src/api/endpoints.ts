@@ -182,6 +182,35 @@ export const adminApi = {
   rejectWithdrawal: (id: number, reason?: string) => call(() => apiClient.post<void>(`/admin/Withdrawals/${id}/reject`, { reason: reason || null })),
 
   revenue: (fromDate: string, toDate: string) => call(() => apiClient.get<T.RevenueReportResponse>('/admin/Reports/revenue', { params: { fromDate, toDate } })),
+  /**
+   * UC-ADM-20/24 (BE 2026-11-15): bảng kê lệnh chi hộ (rút tiền tài xế đang chờ chuyển + hoàn tiền khách đã duyệt) dạng Excel.
+   * role: All | Driver | Customer. Tên file lấy từ Content-Disposition của BE.
+   */
+  exportPayouts: async (p: { role?: 'All' | 'Driver' | 'Customer'; fromDate?: string; toDate?: string } = {}) => {
+    try {
+      const res = await apiClient.get<Blob>('/admin/Reports/payouts/export', { params: q({ role: p.role ?? 'All', fromDate: p.fromDate, toDate: p.toDate }), responseType: 'blob' });
+      const disposition = String(res.headers['content-disposition'] ?? '');
+      const name = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name ? decodeURIComponent(name) : 'BangKeChiHo.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Lỗi trả về dạng blob JSON (400 VALIDATION...): đọc lại để lấy đúng `code`/câu lỗi
+      const blob = (e as { response?: { data?: unknown } })?.response?.data;
+      if (blob instanceof Blob) {
+        try {
+          const body = JSON.parse(await blob.text());
+          (e as { response: { data: unknown } }).response.data = body;
+        } catch {
+          /* giữ nguyên lỗi gốc */
+        }
+      }
+      throw toServiceError(e);
+    }
+  },
   exportRevenue: async (fromDate: string, toDate: string) => {
     const blob = await call(() => apiClient.get<Blob>('/admin/Reports/revenue/export', { params: { fromDate, toDate }, responseType: 'blob' }));
     const url = URL.createObjectURL(blob);
