@@ -33,7 +33,6 @@ export const publicApi = {
   cancellationReasons: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/cancellation-reasons')),
   /** Ngân hàng nhận hoàn tiền: `code` là mã BIN 6 số, gửi làm payoutAccount.bankCode */
   banks: () => call(() => apiClient.get<T.ContentResponse[]>('/public/Lookups/banks')),
-  supportRequest: (body: T.SupportRequestBody) => call(() => apiClient.post<void>('/public/SupportRequests', body)),
   fareEstimate: (body: T.FareEstimateRequest) => call(() => apiClient.post<T.FareEstimateResponse>('/public/FareEstimate', body)),
 };
 

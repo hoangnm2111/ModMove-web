@@ -98,11 +98,6 @@ export interface FareEstimateResponse {
   discountAmount: number;
   totalFee: number;
 }
-export interface SupportRequestBody {
-  fullName: string;
-  contact: string;
-  content: string;
-}
 
 /* ============================================================ Customer: đơn hàng */
 export interface CargoInput {

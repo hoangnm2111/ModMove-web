@@ -15,7 +15,6 @@ Lớp API mới `ModMove-web/src/api/` (`types.ts` khớp 1-1 DTO BE, `endpoints
 
 | Mục | Trước | Nay |
 |---|---|---|
-| GST-05 gửi yêu cầu hỗ trợ | 🟡 | ✅ form ở trang chủ |
 | GST-14 chọn coupon | nhập tay | ✅ danh sách mã khả dụng ở bước thanh toán |
 | CUS-10 chi tiết đơn (tài xế, ảnh, timeline, payment) | thiếu tài xế | ✅ trang `/orders/:id` dùng `GET customer/Orders/{id}` |
 | CUS-12/19/21 duyệt ảnh, xác nhận nhận hàng **hoặc** khiếu nại (đếm ngược 24h) | thiếu nhánh khiếu nại cạnh xác nhận | ✅ |
@@ -128,7 +127,7 @@ Kênh: Web (React). Đặt nháp đơn được, submit phải đăng nhập (GB
 | GST-02 | Xem loại xe (tải trọng, kích thước thùng) | `GET public/VehicleTypes` | Landing, Booking | ✅ |
 | GST-03 | Xem giới thiệu dịch vụ | `GET public/ServiceInfo` | Landing | ✅ |
 | GST-04 | Xem chính sách (bảo hành, hoàn tiền, điều khoản, riêng tư) | `GET public/Policies` | `PolicyModals` | ✅ |
-| GST-05 | Gửi yêu cầu hỗ trợ (rate limit 10/phút/IP, GB-49; không có màn hình xử lý, B14) | `POST public/SupportRequests` | **Không có form gọi API** | 🟡 |
+| GST-05 | Gửi yêu cầu hỗ trợ | — | — | ⛔ Bỏ (BE DECISIONS 2.9, B14, 2026-11-18) |
 | GST-06 | Tạo nháp đơn (1 điểm lấy, 1 điểm giao — GB-05) | — (client) | `BookingPage` + `useBookingDraftStore` | ✅ |
 | GST-07 | Chọn điểm lấy | `IMapService` (BE) | `AddressInput` — **gợi ý địa chỉ mock** | 🟡 |
 | GST-08 | Chọn điểm giao | như trên | như trên | 🟡 (gộp với GST-07) |
@@ -282,7 +281,6 @@ Kênh: Web. Chỉ Dispatcher được đổi tài xế / hủy đơn sau sự c�
 | DIS-15 | Đề xuất giải quyết khiếu nại gửi Admin | `POST dispatcher/Complaints/{id}/proposal` | `DispatcherComplaintsPage` | ✅ |
 | DIS-16 | Ca đã xử lý của tôi | `GET dispatcher/handled-cases` | `DispatcherHandledCasesPage` | ✅ |
 | DIS-17 | Gửi đề xuất lên Admin | (chính là DIS-09/15) | | ✅ (complaint) / 🟡 (incident) |
-| — | Xử lý yêu cầu hỗ trợ | — | — | ⛔ (2.9, B14: xử lý ngoài hệ thống) |
 
 ---
 
@@ -392,7 +390,7 @@ Các rule còn lại (GB-01..06, 08..10, 13, 14, 16..34, 36..39, 41..50, 53) đ�
 6. Dispatcher: UI hoàn tiền **sự cố** (request-info + proposal, DIS-08/09/14/17).
 7. Tích hợp **Google Maps** phía client vào `map.service.ts` (Places autocomplete, hiển thị bản đồ/tuyến).
 8. Tích hợp **SignalR** (`@microsoft/signalr`): `LiveTrackingPage` (JoinOrder, LocationUpdated, OrderStatusChanged), `LiveMapPage` (group dispatchers), toast `NotificationReceived`.
-9. Customer: màn "Đánh giá của tôi" (CUS-26); form gửi yêu cầu hỗ trợ (GST-05); dùng `useCustomerCoupons` để chọn coupon (GST-14).
+9. Customer: màn "Đánh giá của tôi" (CUS-26); dùng `useCustomerCoupons` để chọn coupon (GST-14).
 10. Admin: chi tiết user (ADM-05); từ chối hồ sơ tài xế với lý do theo từng mục (ADM-09).
 11. Dispatcher: dùng `Orders/{id}` và `Orders/summary` (DIS-01).
 12. Nối các trang driver web (`DriverHomePage`, `DriverTripHistoryPage`, `DriverIncidentsPage`, `DriverEarningsPage`) sau khi có API ở P0.
