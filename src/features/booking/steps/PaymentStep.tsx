@@ -38,7 +38,6 @@ const AvailableCoupons: React.FC<{ selected: string; onPick: (code: string) => v
   const isCustomer = useAuthStore((s) => s.activeRole === 'Customer');
   const q = useQuery(() => customerApi.coupons(1, 20), [], { enabled: isCustomer });
   const items = q.data?.items ?? [];
-  if (!isCustomer) return <p className="mt-2 text-[11px] text-slate-400">Đăng nhập để xem các mã giảm giá đang có.</p>;
   if (items.length === 0) return q.loading ? null : <p className="mt-2 text-[11px] text-slate-400">Hiện chưa có mã giảm giá khả dụng.</p>;
   return (
     <div className="mt-3 grid sm:grid-cols-2 gap-2">
@@ -54,7 +53,7 @@ const AvailableCoupons: React.FC<{ selected: string; onPick: (code: string) => v
             <span className="ml-auto text-emerald-700">-{formatCurrency(c.discountValue)}</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-0.5">
-            Đơn từ {formatCurrency(c.minimumOrderValue)} • HSD {new Date(c.expiresAt).toLocaleDateString('vi-VN')}
+            Đơn từ {formatCurrency(c.minimumOrderValue)} • Hạn {new Date(c.expiresAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
             {c.remainingUses !== null && ` • còn ${c.remainingUses} lượt`}
           </div>
         </button>
@@ -83,7 +82,7 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
     <section className="bg-white border border-slate-200 rounded-2xl p-4">
       <h3 className="text-sm font-extrabold text-slate-900 mb-2">Mã giảm giá</h3>
       <Field
-        label="Nhập mã (mỗi đơn 1 mã)"
+        label="Nhập mã giảm giá"
         placeholder="VD: MODMOVE30"
         value={draft.couponCode}
         onChange={(e) => onChange({ couponCode: e.target.value.toUpperCase() })}

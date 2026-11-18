@@ -8,7 +8,7 @@ import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
 import { BUSINESS, IS_DEMO } from '../../config/business';
 import { msg } from '../../constants/messages';
-import { confirmPassword, email as emailRule, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
+import { confirmPassword, email as emailRule, isEmail, isPhone, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
 import { useCountdown } from '../../hooks/useLiveData';
 import { authService, DEMO_PASSWORD, OtpPurpose } from '../../services/auth.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -42,6 +42,16 @@ export const LoginPage: React.FC = () => {
   const [pwd, setPwd] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [loginErr, setLoginErr] = useState<{ id?: string; pwd?: string }>({});
+
+  const submitLogin = () => {
+    const err: { id?: string; pwd?: string } = {};
+    const id = identifier.trim();
+    if (!isEmail(id) && !isPhone(id)) err.id = 'Vui lòng nhập email hoặc số điện thoại hợp lệ.';
+    if (pwd.length < 8 || pwd.length > 100) err.pwd = 'Mật khẩu phải dài từ 8 đến 100 ký tự.';
+    setLoginErr(err);
+    if (!err.id && !err.pwd) doLogin(id, pwd);
+  };
 
   const doLogin = async (id: string, pass: string) => {
     setLoggingIn(true);
@@ -160,7 +170,6 @@ export const LoginPage: React.FC = () => {
             <h2 className="text-2xl font-black leading-tight">Chuyển đồ nhanh, giá minh bạch.</h2>
             <p className="text-sm text-slate-400">Tự lọc xe phù hợp tải trọng & kích thước, theo dõi tài xế trực tiếp, thanh toán PayOS hoặc tiền mặt.</p>
           </div>
-          <p className="text-[11px] text-slate-500">Tài xế đăng ký qua ứng dụng ModMove Driver.</p>
         </div>
 
         <div className="p-6 sm:p-8">
@@ -172,19 +181,18 @@ export const LoginPage: React.FC = () => {
             ))}
           </div>
 
-          {redirect && <Banner kind="info" className="mb-4">{msg('MSG14')} Đơn nháp của bạn vẫn được giữ lại.</Banner>}
 
           {tab === 'login' ? (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                doLogin(identifier, pwd);
+                submitLogin();
               }}
               className="space-y-3"
               noValidate
             >
-              <Field label="Email hoặc số điện thoại" icon={<Mail className="w-4 h-4" />} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
-              <Field label="Mật khẩu" type="password" icon={<Lock className="w-4 h-4" />} autoComplete="current-password" value={pwd} onChange={(e) => setPwd(e.target.value)} />
+              <Field label="Email hoặc số điện thoại" icon={<Mail className="w-4 h-4" />} autoComplete="username" value={identifier} error={loginErr.id} onChange={(e) => setIdentifier(e.target.value)} />
+              <Field label="Mật khẩu" type="password" icon={<Lock className="w-4 h-4" />} autoComplete="current-password" value={pwd} error={loginErr.pwd} onChange={(e) => setPwd(e.target.value)} />
               <div className="flex justify-end">
                 <button type="button" className="text-xs font-bold text-blue-600" onClick={() => { setForgotEmail(identifier.includes('@') ? identifier : ''); setForgotOpen(true); }}>
                   Quên mật khẩu?
@@ -197,7 +205,7 @@ export const LoginPage: React.FC = () => {
 
               {IS_DEMO && (
                 <div className="pt-4 mt-2 border-t border-slate-100">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Tài khoản demo (mật khẩu {DEMO_PASSWORD})</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Tài khoản demo</p>
                   <div className="grid grid-cols-2 gap-2">
                     {DEMO_ACCOUNTS.map((a) => (
                       <button key={a.role} type="button" onClick={() => doLogin(a.email, DEMO_PASSWORD)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 text-left">
@@ -217,7 +225,7 @@ export const LoginPage: React.FC = () => {
                 <Field label="Email" required type="email" icon={<Mail className="w-4 h-4" />} value={reg.email} error={regErr.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} />
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
-                <Field label="Mật khẩu" required type="password" autoComplete="new-password" value={reg.password} error={regErr.password} hint={`${BUSINESS.PASSWORD_MIN}–${BUSINESS.PASSWORD_MAX} ký tự`} onChange={(e) => setReg({ ...reg, password: e.target.value })} />
+                <Field label="Mật khẩu" required type="password" autoComplete="new-password" value={reg.password} error={regErr.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} />
                 <Field label="Nhập lại mật khẩu" required type="password" autoComplete="new-password" value={reg.confirm} error={regErr.confirm} onChange={(e) => setReg({ ...reg, confirm: e.target.value })} />
               </div>
               {regErr.form && <Banner kind="error">{regErr.form}</Banner>}
@@ -257,17 +265,16 @@ export const LoginPage: React.FC = () => {
         {otp && (
           <div className="space-y-3">
             <p className="text-xs text-slate-600">{msg('MSG15', { masked_email: otp.masked })}</p>
-            {IS_DEMO && <Banner kind="info">Chế độ phát triển: email chưa cấu hình SMTP – xem mã OTP trong log console của backend.</Banner>}
             <Field
               label={`Mã OTP (${BUSINESS.OTP_LENGTH} số)`}
               inputMode="numeric"
               maxLength={BUSINESS.OTP_LENGTH}
               value={otpCode}
               onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-              hint={otpLeft > 0 ? `Hết hạn sau ${Math.floor(otpLeft / 60)}:${String(otpLeft % 60).padStart(2, '0')}` : undefined}
+              hint={otpLeft > 0 ? `Còn ${Math.floor(otpLeft / 60)}:${String(otpLeft % 60).padStart(2, '0')}` : undefined}
             />
             {otp.purpose === 'reset' && (
-              <Field label="Mật khẩu mới" type="password" autoComplete="new-password" value={resetPwd} hint={`${BUSINESS.PASSWORD_MIN}–${BUSINESS.PASSWORD_MAX} ký tự`} onChange={(e) => setResetPwd(e.target.value)} />
+              <Field label="Mật khẩu mới" type="password" autoComplete="new-password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} />
             )}
             {otpLeft === 0 && <Banner kind="warning">{msg('MSG16')}</Banner>}
             {otpError && <Banner kind="error">{otpError}</Banner>}

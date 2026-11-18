@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -174,9 +174,7 @@ export const OrderDetailPage: React.FC = () => {
               <DriverCard order={o} />
               <Card title="Người nhận">
                 <KV label="Họ tên">{o.receiverName}</KV>
-                <KV label="Số điện thoại">
-                  <PhoneLink phone={o.receiverPhone} />
-                </KV>
+                <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={o.receiverPhone} /></div>
               </Card>
               <FareCard order={o} />
               {myRating && (
@@ -419,7 +417,7 @@ const NextAction: React.FC<{
           <CheckCircle2 className="w-5 h-5 text-emerald-600" />,
           'Tài xế đã đến điểm giao',
           <>
-            Tài xế báo đã tới điểm giao lúc <b>{new Date(dropoffArrivedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</b>.
+            Tài xế báo đã tới điểm giao lúc <b>{new Date(dropoffArrivedAt).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}</b>.
             {payCash && <> Người nhận thanh toán <b>{formatCurrency(o.totalFee)}</b> tiền mặt cho tài xế.</>} Tài xế sẽ chụp ảnh giao hàng để hoàn tất; sau đó bạn xác nhận nhận hàng hoặc khiếu nại trong 24 giờ. Có vấn đề với hàng, hãy báo sự cố ngay.
           </>,
           <Button size="sm" variant="outline" onClick={() => onModal('incident')}>
@@ -525,7 +523,7 @@ export const TrackingCard: React.FC<{ tracking?: import('../../api/types').Order
               {tracking.driver ? (
                 <>
                   <div className={cx('font-black', tracking.driver.isStale ? 'text-amber-600' : 'text-emerald-600')}>
-                    {tracking.driver.isStale ? 'Mất tín hiệu GPS (quá 5 phút)' : 'Đang cập nhật trực tiếp'}
+                    {tracking.driver.isStale ? 'Mất tín hiệu GPS' : 'Đang cập nhật trực tiếp'}
                   </div>
                   <div className="text-slate-400">Cập nhật {timeAgo(tracking.driver.at)}</div>
                 </>
@@ -548,7 +546,7 @@ export const TrackingCard: React.FC<{ tracking?: import('../../api/types').Order
                   {d
                     ? target
                       ? `Tuyến từ vị trí tài xế tới ${target === pickup ? 'điểm lấy hàng' : 'điểm giao hàng'}.`
-                      : 'Vị trí hiện tại của tài xế (đang tới chỗ nhận bàn giao hàng).'
+                      : 'Vị trí hiện tại của tài xế.'
                     : 'Tài xế chưa gửi vị trí – hiển thị tuyến từ điểm lấy tới điểm giao.'}
                 </p>
               </>
@@ -574,7 +572,7 @@ const ProofCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => {
           {p.rejectionReason && <p className="text-[11px] text-rose-600 mt-2">Lý do từ chối gần nhất: {p.rejectionReason}</p>}
         </div>
         <div>
-          <SectionTitle>Ảnh giao hàng (POD)</SectionTitle>
+          <SectionTitle>Ảnh giao hàng</SectionTitle>
           <PhotoGrid urls={[p.deliveryPhotoUrl]} emptyText="Chưa giao hàng" />
           {p.deliveredAt && <p className="text-[11px] text-slate-500 mt-2">Giao lúc {formatDateTime(p.deliveredAt)}</p>}
         </div>
@@ -611,7 +609,7 @@ const CargoCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => (
         <KV label="Số lượng / Tổng KL">
           {o.cargo.quantity} kiện • {o.cargo.weightKg} kg
         </KV>
-        <KV label="Món lớn nhất (D×R×C)">
+        <KV label="Món lớn nhất">
           {o.cargo.lengthCm}×{o.cargo.widthCm}×{o.cargo.heightCm} cm
         </KV>
         {o.cargo.specialNotes && <KV label="Ghi chú">{o.cargo.specialNotes}</KV>}

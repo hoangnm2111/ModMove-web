@@ -16,7 +16,7 @@ const VIEWS: { key: OrderView; label: string }[] = [
   { key: 'Active', label: 'Đang thực hiện' },
   { key: 'Completed', label: 'Hoàn thành' },
   { key: 'Cancelled', label: 'Đã huỷ' },
-  { key: 'History', label: 'Lịch sử (xong + huỷ)' },
+  { key: 'History', label: 'Lịch sử' },
 ];
 const STATUS_OPTS = [{ value: '', label: 'Mọi trạng thái' }, ...(Object.keys(ORDER_STATUS) as OrderStatus[]).map((s) => ({ value: s, label: ORDER_STATUS[s].label }))];
 const PAGE_SIZE = 10;

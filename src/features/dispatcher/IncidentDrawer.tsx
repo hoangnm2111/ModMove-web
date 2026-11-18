@@ -138,7 +138,6 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
       <DataState q={q}>
         {(i) => (
           <>
-            {i.resolutionStatus === 'Open' && <Banner kind="info">Bấm “Nhận xử lý” để khoá sự cố cho bạn trước khi ra quyết định (tránh hai điều phối viên xử lý cùng lúc).</Banner>}
             {i.resolutionDecision && (
               <Banner kind="success">
                 Đã quyết định: <b>{INCIDENT_DECISION[i.resolutionDecision]}</b> {i.handledByName ? `bởi ${i.handledByName}` : ''} {i.resolvedAt ? `lúc ${formatDateTime(i.resolvedAt)}` : ''}
@@ -251,7 +250,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
                     </div>
                   </div>
                 )}
-                {i.refund.proposalReason && <p className="text-[11px] text-slate-500 mt-2">Ghi chú đề xuất (nội bộ): {i.refund.proposalReason}</p>}
+                {i.refund.proposalReason && <p className="text-[11px] text-slate-500 mt-2">Ghi chú đề xuất: {i.refund.proposalReason}</p>}
                 {refundOpen && i.refund.sourceType === 'Incident' && i.refund.proposedAmount === null && (
                   <div className="flex gap-2 mt-3">
                     <Button size="sm" variant="outline" onClick={() => setAction('refundInfo')}>
@@ -275,7 +274,6 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
             {action === 'cancelIncident' && (
               <ReasonAction
                 title="Huỷ báo cáo sự cố"
-                hint="Dùng khi báo cáo không có lý do hợp lệ. Yêu cầu hoàn tiền đang mở (nếu có) sẽ tự đề xuất 0đ lên Admin."
                 confirm="Huỷ sự cố"
                 danger
                 onClose={() => setAction(null)}
@@ -343,7 +341,6 @@ const ReasonAction: React.FC<{ title: string; label?: string; hint?: string; con
       }
     >
       <div className="space-y-3">
-        {hint && <Banner kind="info">{hint}</Banner>}
         <TextArea label={`${label} *`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
       </div>
     </Modal>
@@ -383,7 +380,6 @@ export const ProposeModal: React.FC<{ max: number; onClose: () => void; onSubmit
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Số đề xuất không vượt số khách yêu cầu ({formatCurrency(max)}). Đề xuất 0đ = không hoàn. Admin là người duyệt cuối.</Banner>
         <div className="flex gap-2">
           {[1, 0.5, 0].map((r) => (
             <button key={r} type="button" onClick={() => setAmount(Math.round(max * r))} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50">
@@ -395,7 +391,7 @@ export const ProposeModal: React.FC<{ max: number; onClose: () => void; onSubmit
           <label className="block text-xs font-bold text-slate-700 mb-1">Số tiền đề xuất *</label>
           <input type="number" min={0} max={max} value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputClass()} />
         </div>
-        <TextArea label="Lý do (ghi chú nội bộ, khách không thấy) *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
+        <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
       </div>
     </Modal>
   );
@@ -437,10 +433,6 @@ const ReassignModal: React.FC<{ incident: IncidentDetailResponse; onClose: () =>
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">
-          Chỉ hiện tài xế Online, đã duyệt, GPS ≤ 5 phút, không có đơn, đúng loại xe, trong bán kính{incident.order.paymentMethod === 'Cash' ? ', đủ ví cọc COD' : ''}. Tài xế mới nhận toàn bộ thu nhập
-          chuyến, kiểm hàng và gửi lại ảnh với lượt đếm mới.
-        </Banner>
         <DataState q={drivers} empty={(d) => d.length === 0}>
           {(list) => (
             <ul className="space-y-2 max-h-72 overflow-y-auto">
@@ -529,7 +521,7 @@ const CancelOrderModal: React.FC<{ incident: IncidentDetailResponse; onClose: ()
               {(
                 [
                   ['ReturnToPickup', 'Trả về điểm lấy'],
-                  ['Keep', 'Giữ lại (tại kho / chờ hướng dẫn)'],
+                  ['Keep', 'Giữ lại'],
                 ] as const
               ).map(([v, l]) => (
                 <button key={v} type="button" onClick={() => setDisposition(v)} className={cx('p-2.5 rounded-xl border font-bold', disposition === v ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200')}>

@@ -200,13 +200,13 @@ const ReportBody: React.FC<{ r: RevenueReportResponse }> = ({ r }) => {
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Doanh thu nền tảng (hoa hồng)" value={formatCurrency(r.totalRevenue)} hint={`Tỷ lệ thu ${pct(r.totalRevenue, gmv)} trên cước`} icon={<TrendingUp className="w-5 h-5" />} />
-        <StatCard label="Chuyến hoàn thành" value={r.totalCompletedOrders.toLocaleString('vi-VN')} hint={`TB ${formatCurrency(avg)}/chuyến`} icon={<CheckCircle2 className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
-        <StatCard label="Tổng cước thực thu (GMV)" value={formatCurrency(gmv)} hint="Cước + bốc xếp − giảm giá" icon={<CircleDollarSign className="w-5 h-5" />} accent="bg-sky-50 text-sky-600" />
-        <StatCard label="Thu nhập trả tài xế" value={formatCurrency(r.totalDriverEarnings)} hint="Cước sau giảm − hoa hồng" icon={<Wallet className="w-5 h-5" />} accent="bg-indigo-50 text-indigo-600" />
+        <StatCard label="Doanh thu nền tảng" value={formatCurrency(r.totalRevenue)} hint={`Tỷ lệ thu ${pct(r.totalRevenue, gmv)} trên cước`} icon={<TrendingUp className="w-5 h-5" />} />
+        <StatCard label="Chuyến hoàn thành" value={r.totalCompletedOrders.toLocaleString('vi-VN')} hint={`Trung bình ${formatCurrency(avg)}/chuyến`} icon={<CheckCircle2 className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
+        <StatCard label="Tổng cước thực thu" value={formatCurrency(gmv)} icon={<CircleDollarSign className="w-5 h-5" />} accent="bg-sky-50 text-sky-600" />
+        <StatCard label="Thu nhập trả tài xế" value={formatCurrency(r.totalDriverEarnings)} icon={<Wallet className="w-5 h-5" />} accent="bg-indigo-50 text-indigo-600" />
         <StatCard label="Cước quãng đường" value={formatCurrency(r.totalDeliveryFees)} icon={<Truck className="w-5 h-5" />} accent="bg-slate-100 text-slate-600" />
         <StatCard label="Phí bốc xếp" value={formatCurrency(r.totalLoadingFees)} icon={<Package className="w-5 h-5" />} accent="bg-slate-100 text-slate-600" />
-        <StatCard label="Giảm giá coupon (tài xế chịu)" value={formatCurrency(r.totalDiscountAmount)} hint="M1: hoa hồng tính trên cước sau giảm" icon={<BadgePercent className="w-5 h-5" />} accent="bg-rose-50 text-rose-600" />
+        <StatCard label="Giảm giá mã giảm giá" value={formatCurrency(r.totalDiscountAmount)} icon={<BadgePercent className="w-5 h-5" />} accent="bg-rose-50 text-rose-600" />
         <StatCard label="Đơn PayOS / tiền mặt" value={`${r.orders.filter((o) => o.paymentMethod === 'PayOS').length} / ${r.orders.filter((o) => o.paymentMethod === 'Cash').length}`} icon={<Receipt className="w-5 h-5" />} accent="bg-amber-50 text-amber-600" />
       </div>
 
@@ -263,8 +263,7 @@ const ReportBody: React.FC<{ r: RevenueReportResponse }> = ({ r }) => {
             ]}
           />
         )}
-        {r.orders.length > 50 && <p className="text-[11px] text-slate-400 mt-2">Hiển thị 50 đơn mới nhất – xuất Excel để xem đầy đủ.</p>}
-      </Card>
+              </Card>
     </>
   );
 };

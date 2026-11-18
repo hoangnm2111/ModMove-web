@@ -1,5 +1,7 @@
 import React from 'react';
 import { Modal } from '../../components/ui/Modal';
+import { usePolicies } from '../../hooks/useDomainData';
+import { PolicyAccordion } from '../policy/PolicyAccordion';
 
 /** EX-01 / GB-07 */
 export const ProhibitedCargoModal: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => (
@@ -18,26 +20,12 @@ export const ProhibitedCargoModal: React.FC<{ open: boolean; onClose: () => void
   </Modal>
 );
 
-/** UC-GST-16 / GB-22, GB-41, GB-42 */
-export const WarrantyPolicyModal: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => (
-  <Modal open={open} title="Chính sách vận chuyển, huỷ đơn & bồi thường" onClose={onClose} size="lg">
-    <div className="space-y-3">
-      <section>
-        <h4 className="font-bold text-slate-900">1. Huỷ đơn</h4>
-        <p>Khách được huỷ miễn phí khi đơn ở trạng thái Đang tìm tài xế hoặc Đã nhận đơn. Đơn PayOS đã thanh toán được hoàn 100%. Từ khi tài xế đến điểm lấy hàng, khách không thể tự huỷ mà cần báo sự cố.</p>
-      </section>
-      <section>
-        <h4 className="font-bold text-slate-900">2. Kiểm hàng trước khi chạy</h4>
-        <p>Tài xế chụp 2–5 ảnh hàng hoá khi lấy hàng; xe chỉ khởi hành khi khách duyệt ảnh.</p>
-      </section>
-      <section>
-        <h4 className="font-bold text-slate-900">3. Khiếu nại & bồi thường</h4>
-        <p>Khách được khiếu nại trong 24 giờ sau khi giao và trước khi xác nhận đã nhận hàng. Số tiền hoàn không vượt quá số tiền đã thanh toán; điều phối viên đề xuất, quản trị viên phê duyệt và chuyển khoản trong 3 ngày làm việc. Đơn tiền mặt được giải quyết ngoài hệ thống.</p>
-      </section>
-      <section>
-        <h4 className="font-bold text-slate-900">4. Hoàn tất đơn</h4>
-        <p>Đơn đã giao sẽ tự động hoàn thành sau 24 giờ nếu khách không xác nhận.</p>
-      </section>
-    </div>
-  </Modal>
-);
+/** Chính sách bảo hành và hoàn tiền lấy từ BE (GET /public/Policies). */
+export const WarrantyPolicyModal: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
+  const policies = usePolicies().filter((p) => p.code === 'WARRANTY' || p.code === 'REFUND');
+  return (
+    <Modal open={open} title="Chính sách bảo hành và hoàn tiền" onClose={onClose} size="lg">
+      <PolicyAccordion items={policies} />
+    </Modal>
+  );
+};

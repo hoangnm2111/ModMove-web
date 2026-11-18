@@ -61,7 +61,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
           onChange={(e) => onChange({ quantity: num(e.target.value) })}
         />
         <Field
-          label="Tổng khối lượng (kg)"
+          label="Tổng khối lượng kg"
           required
           type="number"
           min={1}
@@ -71,7 +71,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
         />
       </div>
       <div>
-        <span className="block text-xs font-bold text-slate-700 mb-1">Kích thước kiện lớn nhất (cm) * – dùng để kiểm tra thùng xe</span>
+        <span className="block text-xs font-bold text-slate-700 mb-1">Kích thước kiện lớn nhất cm *</span>
         <div className="grid grid-cols-3 gap-2">
           {(['lengthCm', 'widthCm', 'heightCm'] as const).map((k, i) => (
             <Field

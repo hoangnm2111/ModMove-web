@@ -87,7 +87,6 @@ export const PayoutAccountForm: React.FC<{ value: PayoutAccountValue; onChange: 
           />
         </div>
       </div>
-      <p className="text-[11px] text-slate-500">Hệ thống chỉ hiển thị lại 4 số cuối của tài khoản. Quản trị viên dùng thông tin này để chuyển khoản hoàn tiền.</p>
     </div>
   );
 };

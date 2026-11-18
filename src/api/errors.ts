@@ -60,6 +60,12 @@ export const ERROR_MESSAGES: Record<string, string> = {
   DRIVER_NOT_ELIGIBLE: 'Tài xế không đủ điều kiện (Online, đã duyệt, đúng loại xe, GPS mới, trong bán kính, ví cọc).',
   CARGO_DISPOSITION_REQUIRED: 'Hàng đang trên xe: phải chọn trả về điểm lấy hay giữ lại.',
   REFUND_NOT_ALLOWED: 'Chỉ hoàn tiền cho đơn PayOS đã thanh toán.',
+  WRONG_BANK_ACCOUNT: 'Số tài khoản ngân hàng không đúng hoặc chưa được khai.',
+  COLLECT_CASH_WRONG_LOCATION: 'Cần ở trong bán kính 500 m quanh điểm thu tiền.',
+  RESUBMIT_MISSING_REJECTED_ITEMS: 'Hãy cập nhật đủ các mục đã bị từ chối rồi nộp lại.',
+  FILE_TOO_LARGE: 'Ảnh vượt quá 5 MB. Vui lòng chọn ảnh nhỏ hơn.',
+  UNSUPPORTED_FILE_TYPE: 'Chỉ nhận ảnh JPG hoặc PNG hợp lệ.',
+  UPLOAD_FAILED: 'Không tải được ảnh lên. Vui lòng thử lại.',
   SERVER_ERROR: 'Lỗi máy chủ. Vui lòng thử lại sau.',
 };
 

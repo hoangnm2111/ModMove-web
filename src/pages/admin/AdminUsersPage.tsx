@@ -125,11 +125,11 @@ const UserDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () => v
       <DataState q={q}>
         {(u) => (
           <>
-            {self && <Banner kind="info">Đây là tài khoản của bạn – không thể tự khoá/vô hiệu hoá (MSG65).</Banner>}
+            {self && <Banner kind="info">Đây là tài khoản của bạn – không thể tự khoá/vô hiệu hoá.</Banner>}
             <Card title="Hồ sơ">
               <KV label="Vai trò">{ROLE_LABEL[u.role]}</KV>
               <KV label="Email">{u.email}</KV>
-              <KV label="Số điện thoại">{u.phoneNumber}</KV>
+              <div className="py-1 text-sm font-bold text-slate-800">{u.phoneNumber}</div>
               <KV label="Xác minh email">{u.emailVerified ? 'Đã xác minh' : 'Chưa xác minh'}</KV>
               <KV label="Tạo lúc">{formatDateTime(u.createdAt)}</KV>
               {u.updatedAt && <KV label="Cập nhật">{formatDateTime(u.updatedAt)}</KV>}
@@ -165,7 +165,7 @@ const StatusModal: React.FC<{ user: UserDetailResponse; status: AccountStatus; o
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!reason.trim()) return toast.error('Vui lòng nhập lý do (bắt buộc).');
+    if (!reason.trim()) return toast.error('Vui lòng nhập lý do.');
     setBusy(true);
     try {
       await adminApi.setUserStatus(user.id, status, reason.trim());
@@ -195,18 +195,12 @@ const StatusModal: React.FC<{ user: UserDetailResponse; status: AccountStatus; o
     >
       <div className="space-y-3">
         {status !== 'Active' && <Banner kind="warning">Người dùng sẽ bị đăng xuất khỏi mọi thiết bị và không thể đăng nhập.</Banner>}
-        {/* B8 (2026-11-12): luật khi khoá/vô hiệu hoá theo vai trò */}
-        {status !== 'Active' && user.role === 'Customer' && (
-          <Banner kind="info">Đơn đang tìm tài xế của khách sẽ bị huỷ tự động (đơn PayOS đã trả được tạo hoàn 100%). Khách còn đơn đã có tài xế thì chưa khoá được.</Banner>
-        )}
         {status !== 'Active' && user.role === 'Customer' && (user.openRefundCount ?? 0) > 0 && (
           <Banner kind="error">
             Khách còn {user.openRefundCount} khoản hoàn tiền đang mở. Khoá vẫn được, nhưng khách sẽ không khai được tài khoản nhận hay trả lời điều phối viên: hãy xử lý các khoản này ngoài hệ thống
             (đã có tài khoản nhận thì chuyển khoản như bình thường; chưa có thì từ chối với ghi chú "Xử lý ngoài hệ thống").
           </Banner>
         )}
-        {status !== 'Active' && user.role === 'Driver' && <Banner kind="info">Tài xế còn đơn đang chạy thì chưa khoá được: điều phối viên cần mở sự cố rồi đổi tài xế hoặc huỷ đơn trước.</Banner>}
-        {status !== 'Active' && user.role === 'Dispatcher' && <Banner kind="info">Các sự cố người này đang xử lý sẽ tự trả về "Chờ xử lý" để điều phối viên khác nhận.</Banner>}
         <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
     </Modal>
@@ -250,7 +244,7 @@ const CreateDispatcherModal: React.FC<{ onClose: () => void; onDone: () => void 
         <Field label="Họ tên" required value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} />
         <Field label="Số điện thoại" required value={f.phoneNumber} onChange={(e) => setF({ ...f, phoneNumber: e.target.value })} />
         <Field label="Email" type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-        <Field label="Mật khẩu ban đầu" type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} hint="8–100 ký tự. Gửi cho điều phối viên qua kênh riêng." />
+        <Field label="Mật khẩu ban đầu" type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
       </div>
     </Modal>
   );

@@ -83,7 +83,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
             </div>
             {!expired ? (
               <a href={session.checkoutUrl} target="_blank" rel="noreferrer" className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">
-                <ExternalLink className="w-4 h-4" /> Mở trang thanh toán PayOS (QR / chuyển khoản)
+                <ExternalLink className="w-4 h-4" /> Mở trang thanh toán PayOS
               </a>
             ) : (
               <Banner kind="warning">Mã thanh toán cũ không còn nhận chuyển khoản. Hãy tạo mã mới cho cùng đơn.</Banner>

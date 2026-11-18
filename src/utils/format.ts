@@ -1,16 +1,32 @@
+/** Giờ Việt Nam cho mọi thời điểm hiển thị, không phụ thuộc múi giờ của máy (DECISIONS 9.5: lưu UTC). */
+export const VN_TZ = 'Asia/Ho_Chi_Minh';
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
 }
 
 export function formatDate(dateString?: string): string {
   if (!dateString) return '';
-  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(dateString));
+  return new Intl.DateTimeFormat('vi-VN', { timeZone: VN_TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(dateString));
 }
 
 export const formatDateTime = formatDate;
 
 export function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+/** Quãng đường trong ô Ước tính cước phí: làm tròn LÊN (không bao giờ thấp hơn thực tế), không hiện số lẻ. */
+export function formatDistanceCeil(km: number): string {
+  return `${Math.ceil(km)} km`;
+}
+
+/**
+ * Tiền trong ô Ước tính cước phí: làm tròn LÊN bội số 1.000đ cho "chẵn" (chỉ hiển thị ước tính; số tiền
+ * thật khi đặt đơn/thanh toán vẫn lấy nguyên giá trị BE trả về, không dùng hàm này).
+ */
+export function formatCurrencyCeil1000(amount: number): string {
+  return formatCurrency(Math.ceil(amount / 1000) * 1000);
 }
 
 export function timeAgo(iso?: string): string {

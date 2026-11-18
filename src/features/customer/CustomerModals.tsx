@@ -8,7 +8,6 @@ import { TextArea, inputClass } from '../../components/ui/Field';
 import { PhotoUploader } from '../../components/ui/PhotoUploader';
 import { customerApi, publicApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
-import { INCIDENT_TYPE } from '../../api/labels';
 import type { IncidentType, MyIncidentResponse, MyRefundDetailResponse, OrderDetailResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency } from '../../utils/format';
@@ -77,10 +76,6 @@ export const CancelOrderModal: React.FC<BaseProps & { order: OrderDetailResponse
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">
-          Huỷ miễn phí khi đơn đang <b>Đang tìm tài xế</b> hoặc <b>Tài xế đã nhận</b>.{' '}
-          {paid ? `Đơn đã thanh toán PayOS sẽ được hoàn 100% (${formatCurrency(order.totalFee)}) sau khi Admin duyệt.` : ''} Lượt dùng mã giảm giá không được hoàn.
-        </Banner>
         <ReasonPicker load={publicApi.cancellationReasons} value={code} onChange={setCode} />
         <TextArea label={code === 'OTHER' ? 'Ghi rõ lý do *' : 'Ghi chú thêm'} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
@@ -140,7 +135,6 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
   const [photos, setPhotos] = useState<string[]>([]);
   const [payout, setPayout] = useState<PayoutAccountValue>(emptyPayoutAccount);
   const [busy, setBusy] = useState(false);
-  const isCash = order.paymentMethod === 'Cash';
   const submit = async () => {
     if (!code) return toast.error('Vui lòng chọn lý do khiếu nại.');
     if (code === 'OTHER' && !reason.trim()) return toast.error('Vui lòng mô tả lý do khi chọn "Khác".');
@@ -176,10 +170,6 @@ export const ComplaintModal: React.FC<BaseProps & { order: OrderDetailResponse }
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">
-          Khiếu nại trong vòng 24 giờ sau khi giao. Khi khiếu nại đang mở, đơn chưa hoàn tất và tài xế chưa được tất toán.
-          {isCash && ' Đơn tiền mặt: tranh chấp tiền được xử lý ngoài hệ thống, nhưng bạn vẫn có thể gửi khiếu nại để ghi nhận.'}
-        </Banner>
         <ReasonPicker load={publicApi.complaintReasons} value={code} onChange={setCode} />
         <TextArea label={code === 'OTHER' ? 'Mô tả chi tiết *' : 'Mô tả chi tiết'} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
         <div>
@@ -244,9 +234,6 @@ export const ReportIncidentModal: React.FC<BaseProps & { order: OrderDetailRespo
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">
-          Điều phối viên sẽ kiểm tra và có thể cho tiếp tục, đổi tài xế hoặc huỷ đơn. Tài xế chỉ nhận thông báo chung, không thấy nội dung bạn viết. Chuyến vẫn tiếp tục trong lúc chờ xử lý.
-        </Banner>
         <TextArea label="Mô tả *" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={1000} />
         <PhotoUploader label="Ảnh minh chứng" value={photos} onChange={setPhotos} max={5} upload={customerApi.upload} />
         <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -298,7 +285,6 @@ export const IncidentRefundModal: React.FC<BaseProps & { order: OrderDetailRespo
       }
     >
       <div className="space-y-3">
-        <Banner kind="info">Chỉ áp dụng cho đơn PayOS đã thanh toán. Số tiền được Điều phối viên đề xuất và Admin duyệt không vượt số bạn yêu cầu.</Banner>
         <TextArea label="Lý do *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Số tiền yêu cầu (tối đa {formatCurrency(order.totalFee)}) *</label>
@@ -409,7 +395,6 @@ export const RatingModal: React.FC<BaseProps & { orderId: number; orderCode: str
         <div className="text-left">
           <TextArea label="Nhận xét" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} />
         </div>
-        <p className="text-[11px] text-slate-400">Mỗi đơn đánh giá một lần, không sửa được, trong vòng 1 ngày sau khi hoàn thành.</p>
       </div>
     </Modal>
   );

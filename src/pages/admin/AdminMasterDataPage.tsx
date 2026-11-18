@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pencil, Plus } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, toast } from '../../components/ui/feedback';
+import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { Field, TextArea } from '../../components/ui/Field';
 import { Card, DataState, PageShell, Pill, SearchBox, Table, Tabs } from '../../components/ui/kit';
@@ -52,9 +52,6 @@ export const AdminMasterDataPage: React.FC = () => {
       }
     >
       <div className="w-full space-y-3">
-        <Banner kind="info">
-          <b>{MASTER_CATEGORY[cat].label}:</b> {MASTER_CATEGORY[cat].hint}. Mục bị tắt không hiển thị cho khách; mã đã tắt gửi lên sẽ bị từ chối.
-        </Banner>
         <Card>
           <DataState q={all}>
             {() =>
@@ -96,6 +93,8 @@ export const AdminMasterDataPage: React.FC = () => {
   );
 };
 
+const DESC_MAX = 65535;
+
 const EditModal: React.FC<{ category: MasterDataCategory; item: MasterDataItemDto | null; onClose: () => void; onDone: () => void }> = ({ category, item, onClose, onDone }) => {
   const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
@@ -105,6 +104,8 @@ const EditModal: React.FC<{ category: MasterDataCategory; item: MasterDataItemDt
   const submit = async () => {
     if (!item && !/^[A-Z0-9_-]{1,50}$/.test(code)) return toast.error('Mã tối đa 50 ký tự, chữ IN HOA, số, gạch dưới.');
     if (!name.trim()) return toast.error('Nhập tên.');
+    if (name.trim().length > 100) return toast.error('Tên tối đa 100 ký tự.');
+    if (desc.length > DESC_MAX) return toast.error(`Nội dung tối đa ${DESC_MAX.toLocaleString('vi-VN')} ký tự.`);
     setBusy(true);
     try {
       if (item) await adminApi.updateMasterData(item.id, name.trim(), desc.trim() || null);
@@ -135,9 +136,14 @@ const EditModal: React.FC<{ category: MasterDataCategory; item: MasterDataItemDt
       }
     >
       <div className="space-y-3">
-        <Field label="Mã" required value={code} disabled={!!item} onChange={(e) => setCode(e.target.value.toUpperCase())} hint={item ? 'Mã không đổi được sau khi tạo' : 'VD: FURNITURE, OTHER'} />
-        <Field label="Tên hiển thị" required value={name} onChange={(e) => setName(e.target.value)} />
-        <TextArea label={long ? 'Nội dung (hiển thị cho khách)' : 'Mô tả'} rows={long ? 10 : 3} value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <Field label="Mã" required value={code} disabled={!!item} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+        <Field label="Tên hiển thị" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
+        <div>
+          <TextArea label={long ? 'Nội dung' : 'Mô tả'} rows={long ? 14 : 3} maxLength={DESC_MAX} error={desc.length > DESC_MAX ? `Tối đa ${DESC_MAX.toLocaleString('vi-VN')} ký tự.` : null} value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <div className="mt-1 text-right text-[11px] text-slate-400">
+            {desc.length.toLocaleString('vi-VN')} / {DESC_MAX.toLocaleString('vi-VN')}
+          </div>
+        </div>
       </div>
     </Modal>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Info, PiggyBank, ShieldCheck, Wallet } from 'lucide-react';
+import { PiggyBank, ShieldCheck, Wallet } from 'lucide-react';
 import { Banner } from '../../components/ui/feedback';
 import { Card, DataState, KV, PageShell, Pager, StatCard, Table } from '../../components/ui/kit';
 import { driverApi } from '../../api/endpoints';
@@ -20,24 +20,22 @@ export const DriverEarningsPage: React.FC = () => {
           {(w) => (
             <>
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <StatCard label="Ví thu nhập" value={formatCurrency(w.earningsBalance)} hint="Cước trừ hoa hồng của đơn thanh toán qua PayOS" icon={<Wallet className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
+                <StatCard label="Ví thu nhập" value={formatCurrency(w.earningsBalance)} icon={<Wallet className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600" />
                 <StatCard
                   label="Ví tiền cọc"
                   value={<span className={w.depositBalance < 0 ? 'text-rose-600' : ''}>{formatCurrency(w.depositBalance)}</span>}
-                  hint="Bị trừ hoa hồng của đơn tiền mặt"
                   icon={<PiggyBank className="w-5 h-5" />}
                 />
-                <StatCard label="Tổng số dư" value={formatCurrency(w.walletTotal)} hint="Ví thu nhập + ví tiền cọc" icon={<Wallet className="w-5 h-5" />} />
+                <StatCard label="Tổng số dư" value={formatCurrency(w.walletTotal)} icon={<Wallet className="w-5 h-5" />} />
                 <StatCard
                   label="Có thể rút tối đa"
                   value={formatCurrency(w.maxWithdrawableAmount)}
-                  hint={w.hasActiveOrder ? 'Đang có đơn chạy: chỉ rút được phần thu nhập' : 'Không có đơn chạy: rút được cả hai ví'}
                   icon={<ShieldCheck className="w-5 h-5" />}
                   accent="bg-indigo-50 text-indigo-600"
                 />
               </div>
 
-              {w.walletStatus !== 'Active' && <Banner kind="warning">Ví đang bị khoá ({w.walletStatus}). Liên hệ quản trị viên.</Banner>}
+              {w.walletStatus !== 'Active' && <Banner kind="warning">Ví đang bị khoá.</Banner>}
               {w.missingDepositAmount > 0 && (
                 <Banner kind="error">
                   Ví tiền cọc thiếu {formatCurrency(w.missingDepositAmount)} so với mức tối thiểu {formatCurrency(w.requiredDeposit)} – bạn chưa nhận được đơn mới cho tới khi nạp đủ. Nạp ít nhất phần thiếu.
@@ -88,11 +86,6 @@ export const DriverEarningsPage: React.FC = () => {
           </DataState>
         </Card>
 
-        <Banner kind="info">
-          <span className="inline-flex gap-1.5">
-            <Info className="w-4 h-4 flex-shrink-0" /> Nạp tiền cọc, yêu cầu rút tiền và báo cáo thu nhập theo ngày, tuần, tháng thực hiện trên app tài xế.
-          </span>
-        </Banner>
       </div>
     </PageShell>
   );

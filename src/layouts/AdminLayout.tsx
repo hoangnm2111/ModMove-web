@@ -16,13 +16,6 @@ interface AdminLayoutContextType {
 export const AdminLayoutContext = createContext<AdminLayoutContextType>({ isSidebarOpen: false, setIsSidebarOpen: () => {}, toggleSidebar: () => {} });
 export const useAdminLayout = () => useContext(AdminLayoutContext);
 
-interface NavItem {
-  path: string;
-  label: string;
-  Icon: React.FC<{ className?: string }>;
-  badge?: number;
-}
-
 /** Layout Admin – cùng khuôn sáng với Customer/Driver (header tối, thân menu trắng) */
 export const AdminLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();

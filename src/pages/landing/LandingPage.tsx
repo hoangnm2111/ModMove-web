@@ -1,31 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ChevronDown,
-  Truck,
-  ChevronLeft,
-  ChevronRight,
-  ShieldCheck,
-  Clock,
-  MapPin,
-  Home,
-  User,
-  LogOut,
-  Menu,
-  Package,
-  Layers,
-  CheckCircle2,
-  X,
-} from 'lucide-react';
+import { Truck, ChevronLeft, ChevronRight, User, LogOut, Menu, CheckCircle2, X } from 'lucide-react';
 import { publicApi } from '../../api/endpoints';
 import { useAuthStore, getRoleHomePath } from '../../store/useAuthStore';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
-import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
+import { useVehicleTypes } from '../../hooks/useDomainData';
 import { AddressInput } from '../../features/booking/AddressInput';
 import { GeoPoint } from '../../services/map.service';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatDistanceCeil } from '../../utils/format';
 import { BrandLogo } from '../../components/BrandLogo';
-import { CargoTypesModal, PolicyListModal, VehiclePriceModal } from '../../features/landing/LandingInfoModals';
+import { PolicyListModal, VehiclePriceModal } from '../../features/landing/LandingInfoModals';
 import { AboutSection, BenefitsSection, CoverageSection, LandingFooter, ProcessSection, VehicleCardsSection } from '../../features/landing/LandingSections';
 
 export const LandingPage: React.FC = () => {
@@ -33,12 +17,10 @@ export const LandingPage: React.FC = () => {
   const { isAuthenticated, activeRole, user, logout } = useAuthStore();
   const { setPickup, setDropoff, update } = useBookingDraftStore();
   const vehicleTypes = useVehicleTypes().filter((v) => v.isActive);
-  const { loadingFee } = usePlatformSettings();
 
   // Menu giữa: dropdown "Bảng giá" và các modal thông tin lấy từ DB
-  const [priceMenu, setPriceMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [infoModal, setInfoModal] = useState<'prices' | 'cargo' | 'policies' | null>(null);
+  const [infoModal, setInfoModal] = useState<'prices' | 'policies' | null>(null);
 
   // Carousel Slide State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -165,47 +147,14 @@ export const LandingPage: React.FC = () => {
 
           {/* Menu giữa: dữ liệu công khai từ DB (vehicle_types, master_data_items). Không có nút Tài xế vì tài xế đăng ký trên app mobile. */}
           <nav className="hidden lg:flex items-center gap-3 text-xs sm:text-sm font-bold text-slate-700">
-            <div className="relative" onMouseLeave={() => setPriceMenu(false)}>
-              <button
-                type="button"
-                id="nav-prices"
-                aria-haspopup="menu"
-                aria-expanded={priceMenu}
-                onClick={() => setPriceMenu((v) => !v)}
-                className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
-              >
-                <span>Bảng giá</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-              {priceMenu && (
-                <div role="menu" className="absolute top-full left-0 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-fadeIn">
-                  <button
-                    role="menuitem"
-                    type="button"
-                    onClick={() => {
-                      setPriceMenu(false);
-                      setInfoModal('prices');
-                    }}
-                    className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 transition"
-                  >
-                    <div className="text-xs font-bold text-slate-900">Giá theo loại xe</div>
-                    <div className="text-[10px] text-slate-500">Giá mở cửa, giá mỗi km, giá tối thiểu</div>
-                  </button>
-                  <button
-                    role="menuitem"
-                    type="button"
-                    onClick={() => {
-                      setPriceMenu(false);
-                      setInfoModal('cargo');
-                    }}
-                    className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 transition"
-                  >
-                    <div className="text-xs font-bold text-slate-900">Loại hàng hoá</div>
-                    <div className="text-[10px] text-slate-500">Các loại hàng nhận vận chuyển</div>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              id="nav-prices"
+              onClick={() => setInfoModal('prices')}
+              className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer"
+            >
+              <span>Bảng giá</span>
+            </button>
             <button type="button" id="nav-policies" onClick={() => setInfoModal('policies')} className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-xs sm:text-sm font-bold text-slate-700 transition cursor-pointer">
               <span>Chính sách</span>
             </button>
@@ -256,7 +205,7 @@ export const LandingPage: React.FC = () => {
               <span>Giao hàng ngay</span>
             </button>
 
-            {/* Màn < lg: menu gom Bảng giá, Loại hàng hoá, Chính sách và (khách vãng lai) Đăng ký/Đăng nhập */}
+            {/* Màn < lg: menu gom Bảng giá, Chính sách và (khách vãng lai) Đăng ký/Đăng nhập */}
             <button
               type="button"
               aria-label="Mở menu"
@@ -271,8 +220,7 @@ export const LandingPage: React.FC = () => {
           {mobileMenu && (
             <div className="lg:hidden absolute top-full right-3 left-3 sm:left-auto sm:w-72 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50">
               {[
-                { label: 'Giá theo loại xe', run: () => setInfoModal('prices') },
-                { label: 'Loại hàng hoá', run: () => setInfoModal('cargo') },
+                { label: 'Bảng giá', run: () => setInfoModal('prices') },
                 { label: 'Chính sách', run: () => setInfoModal('policies') },
                 ...(isAuthenticated && user
                   ? [
@@ -451,7 +399,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Box 3: Ước tính từ (Read-only price) */}
             <div className="md:col-span-2 bg-blue-50/60 border border-blue-100 rounded-xl h-12 px-3 flex flex-col justify-center text-center">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">{quote ? `ƯỚC TÍNH • ${quote.km} KM` : 'ƯỚC TÍNH TỪ'}</div>
+              <div className="text-[10px] font-bold text-slate-500 uppercase">{quote ? `ƯỚC TÍNH • ${formatDistanceCeil(quote.km).toUpperCase()}` : 'ƯỚC TÍNH TỪ'}</div>
               <div className="text-base sm:text-lg font-black text-blue-600 leading-tight">
                 {quoting ? 'Đang tính…' : formatCurrency(getEstimatedPrice())}
               </div>
@@ -479,7 +427,6 @@ export const LandingPage: React.FC = () => {
       <LandingFooter onPolicies={() => setInfoModal('policies')} />
 
       <VehiclePriceModal open={infoModal === 'prices'} onClose={() => setInfoModal(null)} />
-      <CargoTypesModal open={infoModal === 'cargo'} onClose={() => setInfoModal(null)} />
       <PolicyListModal open={infoModal === 'policies'} onClose={() => setInfoModal(null)} />
     </div>
   );

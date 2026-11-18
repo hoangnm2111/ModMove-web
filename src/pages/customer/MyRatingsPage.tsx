@@ -56,7 +56,6 @@ const Summary: React.FC<{ items: MyRatingResponse[]; total: number }> = ({ items
           );
         })}
       </div>
-      {total > items.length && <p className="text-[11px] text-slate-400 mt-3">Thống kê theo {items.length} đánh giá của trang này.</p>}
     </aside>
   );
 };
@@ -67,7 +66,7 @@ export const MyRatingsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const q = useQuery(() => customerApi.ratings(page, PAGE_SIZE), [page]);
   return (
-    <PageShell title="Đánh giá của tôi" subtitle="Các đánh giá bạn đã gửi cho tài xế (mỗi đơn một lần, không sửa được)">
+    <PageShell title="Đánh giá của tôi" subtitle="Các đánh giá bạn đã gửi cho tài xế">
       <div className="w-full">
         <DataState q={q} empty={(d) => d.items.length === 0}>
           {(d) => (

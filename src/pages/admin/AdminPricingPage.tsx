@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, Save } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { Banner, toast } from '../../components/ui/feedback';
+import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { Field } from '../../components/ui/Field';
 import { Card, DataState, PageShell, Pill, Table } from '../../components/ui/kit';
@@ -30,9 +30,6 @@ export const AdminPricingPage: React.FC = () => {
   return (
     <PageShell title="Bảng cước & hoa hồng" subtitle="Giá mới áp dụng cho đơn đặt sau thời điểm thay đổi; đơn đã đặt giữ nguyên giá">
       <div className="w-full space-y-4">
-        <Banner kind="info">
-          Công thức: <b>Tổng cước = max(Giá tối thiểu, Giá mở cửa + Giá/km × km) + Phí bốc xếp (nếu chọn) − Giảm giá</b>. Không có phụ phí giờ cao điểm hay hàng cồng kềnh.
-        </Banner>
         <DataState q={q}>
           {(p) => (
             <>
@@ -109,14 +106,11 @@ const SettingsCard: React.FC<{ s: PlatformSettingsResponse; onSaved: () => Promi
       }
     >
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Field label="Hoa hồng nền tảng (%)" type="number" step="0.1" value={f.commission} onChange={(e) => setF({ ...f, commission: Number(e.target.value) })} hint="Trừ trên cước sau giảm giá; chốt khi tài xế nhận đơn" />
-        <Field label="Phí bốc xếp (VND)" type="number" value={f.loadingFee} onChange={(e) => setF({ ...f, loadingFee: Number(e.target.value) })} hint="Cộng vào cước khi khách chọn bốc xếp" />
-        <Field label="Tiền cọc tối thiểu để nhận đơn (VND)" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} hint="Tài xế cần ví cọc ≥ mức này để nhận mọi đơn; đơn tiền mặt cần thêm ≥ hoa hồng của đơn" />
-        <Field label="Bán kính ghép đơn (km)" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} hint="Tài xế thấy đơn trong bán kính này" />
+        <Field label="Hoa hồng nền tảng %" type="number" step="0.1" value={f.commission} onChange={(e) => setF({ ...f, commission: Number(e.target.value) })} />
+        <Field label="Phí bốc xếp VND" type="number" value={f.loadingFee} onChange={(e) => setF({ ...f, loadingFee: Number(e.target.value) })} />
+        <Field label="Tiền cọc tối thiểu để nhận đơn VND" type="number" value={f.minCod} onChange={(e) => setF({ ...f, minCod: Number(e.target.value) })} />
+        <Field label="Bán kính ghép đơn km" type="number" step="0.5" value={f.radius} onChange={(e) => setF({ ...f, radius: Number(e.target.value) })} />
       </div>
-      <p className="text-[11px] text-amber-700 mt-3">
-        Không đổi được hoa hồng khi còn đơn đang chạy (từ “Tài xế đã nhận” tới trước “Đã giao”) – hệ thống sẽ từ chối thay đổi.
-      </p>
     </Card>
   );
 };
@@ -154,9 +148,9 @@ const FareModal: React.FC<{ v: VehicleTypePricingResponse; onClose: () => void; 
       }
     >
       <div className="space-y-3">
-        <Field label="Giá mở cửa (VND)" type="number" value={f.baseFare} onChange={(e) => setF({ ...f, baseFare: Number(e.target.value) })} />
-        <Field label="Giá mỗi km (VND)" type="number" value={f.pricePerKm} onChange={(e) => setF({ ...f, pricePerKm: Number(e.target.value) })} />
-        <Field label="Giá tối thiểu (VND)" type="number" value={f.minimumFare} onChange={(e) => setF({ ...f, minimumFare: Number(e.target.value) })} />
+        <Field label="Giá mở cửa VND" type="number" value={f.baseFare} onChange={(e) => setF({ ...f, baseFare: Number(e.target.value) })} />
+        <Field label="Giá mỗi km VND" type="number" value={f.pricePerKm} onChange={(e) => setF({ ...f, pricePerKm: Number(e.target.value) })} />
+        <Field label="Giá tối thiểu VND" type="number" value={f.minimumFare} onChange={(e) => setF({ ...f, minimumFare: Number(e.target.value) })} />
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs space-y-0.5">
           {[3, 10, 25].map((km) => (
             <div key={km} className="flex justify-between">

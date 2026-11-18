@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, MapPin, Navigation, Power, RefreshCw, Satellite, XCircle } from 'lucide-react';
+import { CheckCircle2, MapPin, Navigation, Power, RefreshCw, Satellite, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
@@ -30,7 +30,7 @@ export const DriverJobListPage: React.FC = () => {
 
   const checks = [
     { ok: s.hasProfile && s.approvalStatus === 'Approved', label: 'Hồ sơ đã được duyệt', fix: () => navigate('/driver/profile'), fixLabel: 'Xem hồ sơ' },
-    { ok: s.isOnline, label: 'Đang bật nhận đơn (Online)' },
+    { ok: s.isOnline, label: 'Đang bật nhận đơn' },
     { ok: !s.isGpsStale, label: s.lastLocationAt ? `GPS mới (cập nhật ${timeAgo(s.lastLocationAt)})` : 'Đã gửi vị trí GPS' },
     { ok: !s.activeOrderId, label: 'Không có đơn đang chạy', fix: () => navigate('/driver/trip'), fixLabel: 'Xem chuyến' },
   ];
@@ -63,9 +63,6 @@ export const DriverJobListPage: React.FC = () => {
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-slate-500 mt-3">
-              Đơn tiền mặt chỉ hiện khi ví cọc ≥ mức tiền cọc tối thiểu và ≥ hoa hồng của đơn. Ví cọc hiện tại: <b>{formatCurrency(s.depositBalance)}</b>.
-            </p>
           </Card>
           <Card title="Vị trí GPS">
             <div className={cx('flex items-center gap-2 text-xs font-bold', gps.error ? 'text-rose-600' : gps.sharing ? 'text-emerald-600' : 'text-slate-500')}>
@@ -75,18 +72,8 @@ export const DriverJobListPage: React.FC = () => {
             <label className="flex items-center gap-2 text-xs text-slate-600 mt-2">
               <input type="checkbox" checked={gps.enabled} onChange={(e) => gps.setSharing(e.target.checked)} /> Gửi vị trí từ trình duyệt này khi Online / đang có đơn
             </label>
-            <p className="text-[11px] text-slate-400 mt-2">Quá 5 phút không có GPS sẽ không thấy đơn mới và bị ẩn khỏi bản đồ điều phối.</p>
           </Card>
         </div>
-
-        {s.activeOrderId && (
-          <Banner kind="info">
-            Bạn đang có đơn #{s.activeOrderId}.{' '}
-            <button className="underline font-bold" onClick={() => navigate('/driver/trip')}>
-              Xem chuyến hiện tại
-            </button>
-          </Banner>
-        )}
 
         <Card
           title={`Đơn đang chờ (${jobs.data?.length ?? 0})`}
@@ -222,9 +209,6 @@ const JobModal: React.FC<{ job: NearbyOrderDto; onClose: () => void; onAccepted:
             Đơn tiền mặt: hoa hồng {formatCurrency(j.commissionAmount)} sẽ trừ vào ví cọc khi đơn hoàn tất.
           </Banner>
         )}
-        <p className="text-[11px] text-slate-400 flex gap-1">
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Đã nhận thì không tự huỷ được; gặp sự cố phải báo để Điều phối xử lý.
-        </p>
         <a className="text-xs font-bold text-blue-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${j.pickupLatitude},${j.pickupLongitude}`}>
           <Navigation className="w-3.5 h-3.5" /> Xem đường tới điểm lấy
         </a>
