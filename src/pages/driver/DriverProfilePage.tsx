@@ -23,7 +23,7 @@ export const DriverProfilePage: React.FC = () => {
   const { onboarding: ob, reload } = useDriver();
   const user = useAuthStore((s) => s.user);
   const vehicles = useQuery(() => publicApi.vehicleTypes(), []);
-  const [f, setF] = useState({ vehicleTypeId: 0, citizenId: '', license: '', plate: '', maxLoad: 0, docs: DOCS.map(() => '') });
+  const [f, setF] = useState({ vehicleTypeId: 0, plate: '', maxLoad: 0, docs: DOCS.map(() => '') });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -70,8 +70,6 @@ export const DriverProfilePage: React.FC = () => {
     if (!ob) return;
     setF({
       vehicleTypeId: ob.vehicleTypeId ?? 0,
-      citizenId: ob.citizenIdNumber ?? '',
-      license: ob.driverLicenseNumber ?? '',
       plate: ob.licensePlate ?? '',
       maxLoad: ob.maxLoadWeightKg ?? 0,
       docs: DOCS.map((_, i) => ob.documentUrls[i] ?? ''),
@@ -87,8 +85,6 @@ export const DriverProfilePage: React.FC = () => {
 
   const submit = async () => {
     if (!f.vehicleTypeId) return toast.error('Chọn loại xe.');
-    if (!/^[0-9]{9,12}$/.test(f.citizenId)) return toast.error('Số CCCD gồm 9–12 chữ số.');
-    if (!/^[0-9A-Za-z]{8,20}$/.test(f.license)) return toast.error('Số GPLX gồm 8–20 chữ/số.');
     if (!/^[0-9A-Za-z.\- ]{5,15}$/.test(f.plate)) return toast.error('Biển số không hợp lệ (5–15 ký tự).');
     if (!(f.maxLoad > 0)) return toast.error('Nhập tải trọng tối đa của xe.');
     const bad = f.docs.findIndex((d) => !isUrl(d.trim()));
@@ -97,8 +93,6 @@ export const DriverProfilePage: React.FC = () => {
     try {
       await driverApi.submitOnboarding({
         vehicleTypeId: f.vehicleTypeId,
-        citizenIdNumber: f.citizenId,
-        driverLicenseNumber: f.license,
         licensePlate: f.plate.toUpperCase(),
         maxLoadWeightKg: f.maxLoad,
         documentUrls: f.docs.map((d) => d.trim()),
@@ -176,8 +170,6 @@ export const DriverProfilePage: React.FC = () => {
               </div>
               <Field label="Biển số xe" required value={f.plate} onChange={(e) => setF({ ...f, plate: e.target.value.toUpperCase() })} placeholder="29C-874.12" />
               <Field label="Tải trọng tối đa (kg)" type="number" required value={f.maxLoad || ''} onChange={(e) => setF({ ...f, maxLoad: Number(e.target.value) })} />
-              <Field label="Số CCCD" required value={f.citizenId} onChange={(e) => setF({ ...f, citizenId: e.target.value.replace(/\D/g, '') })} hint="9–12 chữ số" />
-              <Field label="Số giấy phép lái xe" required value={f.license} onChange={(e) => setF({ ...f, license: e.target.value })} hint="8–20 chữ/số" />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">Giấy tờ & ảnh xe (đủ 7 ảnh)</div>

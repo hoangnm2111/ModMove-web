@@ -15,7 +15,7 @@ import { PhoneLink } from '../../components/ui/PhoneLink';
 
 /** Thứ tự cố định của documentUrls (DECISIONS D2): 7 ảnh, CCCD ở cuối; hồ sơ nộp trước 2026-11-12 chỉ có 5 ảnh đầu. */
 const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe', 'CCCD – mặt trước', 'CCCD – mặt sau'];
-const CHECK_ITEMS = ['Số CCCD', 'Số giấy phép lái xe', 'Biển số xe', 'Tải trọng khai báo', ...DOCS];
+const CHECK_ITEMS = ['Biển số xe', 'Tải trọng khai báo', ...DOCS];
 
 /** UC-ADM-08/09 – Thẩm định hồ sơ tài xế */
 export const DriverApprovalPage: React.FC = () => {
@@ -114,8 +114,6 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
                 <KV label="Số điện thoại">
                   <PhoneLink phone={a.phoneNumber} />
                 </KV>
-                <KV label="Số CCCD">{a.citizenIdNumber}</KV>
-                <KV label="Số GPLX">{a.driverLicenseNumber}</KV>
               </div>
               <div>
                 <KV label="Loại xe">{a.vehicleTypeName}</KV>
