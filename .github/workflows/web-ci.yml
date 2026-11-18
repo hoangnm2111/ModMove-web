@@ -51,7 +51,7 @@ jobs:
       - name: Run React Unit Tests
         run: |
           if [ -f package.json ] && grep -q '"test"' package.json; then
-            npm test -- --watchAll=false
+            npm test
           else
             echo "Test script not configured yet. Test runner ready."
           fi
