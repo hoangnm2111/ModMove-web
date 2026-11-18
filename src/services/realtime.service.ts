@@ -2,6 +2,7 @@
  * Thông báo thời gian thực qua SignalR (hub `/hubs/tracking`): web không dùng Firebase.
  *  - `NotificationReceived` `{ type, title, body, data }`: hiện toast cho người dùng đang đăng nhập.
  *  - `OrderStatusChanged` `{ orderId, orderStatus }`: các trang đơn hàng tự tải lại (khách phải JoinOrder đơn đang xem).
+ *  - `LocationUpdated` `{ driverProfileId, orderId, latitude, longitude, at }`: vị trí tài xế (khách theo đơn, Dispatcher mọi tài xế).
  * Token JWT gửi qua query `access_token`; luôn đọc token mới nhất từ store mỗi lần (kết nối lại) và tự làm mới
  * khi sắp hết hạn, vì hub đóng kết nối ngay khi token hết hạn.
  */
@@ -31,6 +32,15 @@ export const getDropoffArrival = (orderId: number): string | null => {
 export interface OrderStatusEvent {
   orderId: number;
   orderStatus: string;
+}
+
+/** `orderId` null khi tài xế đang không có đơn */
+export interface LocationUpdatedEvent {
+  driverProfileId: number;
+  orderId: number | null;
+  latitude: number;
+  longitude: number;
+  at: string;
 }
 
 const hubUrl = (): string => {
@@ -88,6 +98,7 @@ class RealtimeService {
   private readonly joinedOrders = new Set<number>();
   private readonly orderListeners = new Set<Listener<OrderStatusEvent>>();
   private readonly notificationListeners = new Set<Listener<PushNotification>>();
+  private readonly locationListeners = new Set<Listener<LocationUpdatedEvent>>();
 
   /** Token còn hạn: gần hết thì gọi một API nhẹ để interceptor tự refresh rồi đọc lại từ store */
   private async freshToken(): Promise<string> {
@@ -120,6 +131,7 @@ class RealtimeService {
         .build();
       connection.on('NotificationReceived', (n: PushNotification) => this.handleNotification(n));
       connection.on('OrderStatusChanged', (e: OrderStatusEvent) => this.orderListeners.forEach((l) => l(e)));
+      connection.on('LocationUpdated', (e: LocationUpdatedEvent) => this.locationListeners.forEach((l) => l(e)));
       connection.onreconnected(() => void this.rejoinOrders());
       connection.onclose(() => {
         // Đóng hẳn (hết lượt kết nối lại, token hết hạn…): thử dựng lại sau 5 giây nếu còn phiên.
@@ -215,6 +227,11 @@ class RealtimeService {
   onOrderStatusChanged(listener: Listener<OrderStatusEvent>): () => void {
     this.orderListeners.add(listener);
     return () => this.orderListeners.delete(listener);
+  }
+
+  onLocationUpdated(listener: Listener<LocationUpdatedEvent>): () => void {
+    this.locationListeners.add(listener);
+    return () => this.locationListeners.delete(listener);
   }
 
   onNotification(listener: Listener<PushNotification>): () => void {
