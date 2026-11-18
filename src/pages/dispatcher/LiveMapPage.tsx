@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AlertTriangle, Camera, Clock, Navigation, RefreshCw, Truck, Users } from 'lucide-react';
 import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
@@ -10,7 +10,7 @@ import { DispatcherOrderDrawer } from '../../features/dispatcher/DispatcherOrder
 import { IncidentDrawer } from '../../features/dispatcher/IncidentDrawer';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
-import { useNotificationRefresh } from '../../hooks/useRealtime';
+import { useDriverLocations, useNotificationRefresh } from '../../hooks/useRealtime';
 
 const SUMMARY_KEYS: { key: OrderStatus | 'ALL'; field: keyof import('../../api/types').DispatcherOrdersSummaryResponse }[] = [
   { key: 'ALL', field: 'total' },
@@ -41,6 +41,16 @@ export const LiveMapPage: React.FC = () => {
   const drivers = useQuery(() => dispatcherApi.onlineDrivers(), [], { refreshMs: 30_000 });
   // Thông báo mới (đơn, sự cố, khiếu nại) → tải lại bảng giám sát ngay, không chờ 30 giây
   useNotificationRefresh(() => (void summary.reload(), void orders.reload()));
+  // GPS tài xế realtime: đổi tọa độ ngay; tài xế chưa có trong danh sách thì tải lại (tối đa mỗi 10 giây)
+  const lastReload = useRef(0);
+  useDriverLocations((e) => {
+    if (drivers.data?.some((d) => d.driverProfileId === e.driverProfileId)) {
+      drivers.setData((list) => list?.map((d) => (d.driverProfileId === e.driverProfileId ? { ...d, latitude: e.latitude, longitude: e.longitude, lastLocationAt: e.at } : d)));
+    } else if (Date.now() - lastReload.current > 10_000) {
+      lastReload.current = Date.now();
+      void drivers.reload();
+    }
+  });
 
   const driverList = drivers.data ?? [];
   const selDriver = driverList.find((d) => d.driverProfileId === driverId) ?? driverList[0];

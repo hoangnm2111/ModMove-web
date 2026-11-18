@@ -6,7 +6,8 @@ export interface QueryState<T> {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
-  setData: (d: T) => void;
+  /** Nhận hàm (prev) => next để nhiều cập nhật liền nhau (SignalR) không ghi đè nhau */
+  setData: (d: T | ((prev: T | undefined) => T | undefined)) => void;
 }
 
 /**
