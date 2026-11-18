@@ -15,7 +15,10 @@ import { PhoneLink } from '../../components/ui/PhoneLink';
 
 /** Thứ tự cố định của documentUrls (DECISIONS D2): 7 ảnh, CCCD ở cuối; hồ sơ nộp trước 2026-11-12 chỉ có 5 ảnh đầu. */
 const DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe', 'CCCD – mặt trước', 'CCCD – mặt sau'];
-const CHECK_ITEMS = ['Số CCCD', 'Số giấy phép lái xe', 'Biển số xe', 'Tải trọng khai báo', ...DOCS];
+const DOC_KEYS = ['LicenseFront', 'LicenseBack', 'VehicleRegistration', 'VehicleInspection', 'VehiclePhoto', 'CitizenIdFront', 'CitizenIdBack'];
+/** Mục Admin có thể từ chối: khoá cố định của BE kèm tên hiển thị */
+const CHECK_ITEMS: { key: string; label: string }[] = [{ key: 'VehicleInfo', label: 'Thông tin xe' }, ...DOCS.map((label, i) => ({ key: DOC_KEYS[i], label }))];
+const ITEM_LABEL: Record<string, string> = { ...Object.fromEntries(CHECK_ITEMS.map((c) => [c.key, c.label])), Portrait: 'Ảnh chân dung', PersonalInfo: 'Thông tin cá nhân' };
 
 /** UC-ADM-08/09 – Thẩm định hồ sơ tài xế */
 export const DriverApprovalPage: React.FC = () => {
@@ -112,8 +115,8 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
               <div>
                 <KV label="Email">{a.email}</KV>
                 <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={a.phoneNumber} /></div>
-                <KV label="Số CCCD">{a.citizenIdNumber}</KV>
-                <KV label="Số GPLX">{a.driverLicenseNumber}</KV>
+                {a.citizenIdNumber && <KV label="Số CCCD">{a.citizenIdNumber}</KV>}
+                {a.driverLicenseNumber && <KV label="Số GPLX">{a.driverLicenseNumber}</KV>}
               </div>
               <div>
                 <KV label="Loại xe">{a.vehicleTypeName}</KV>
@@ -157,11 +160,15 @@ const ApplicationDetail: React.FC<{ id: number; onDone: () => void }> = ({ id, o
                         {h.reviewedAt ? ` • Xét ${formatDateTime(h.reviewedAt)}` : ''}
                       </span>
                     </div>
-                    {h.rejectionReasons && h.rejectionReasons.length > 0 && (
+                    {(h.rejectedItems?.length || h.rejectionReasons?.length) && (
                       <ul className="list-disc ml-5 mt-1 text-rose-700">
-                        {h.rejectionReasons.map((r, i) => (
-                          <li key={i}>{r}</li>
-                        ))}
+                        {h.rejectedItems?.length
+                          ? h.rejectedItems.map((r, i) => (
+                              <li key={i}>
+                                {ITEM_LABEL[r.key] ?? r.key}: {r.reason}
+                              </li>
+                            ))
+                          : h.rejectionReasons?.map((r, i) => <li key={i}>{r}</li>)}
                       </ul>
                     )}
                   </li>
@@ -187,11 +194,12 @@ const RejectModal: React.FC<{ app: DriverApplicationDetailsResponse; onClose: ()
   const [busy, setBusy] = useState(false);
   const toggle = (k: string) => setItems((s) => (k in s ? Object.fromEntries(Object.entries(s).filter(([x]) => x !== k)) : { ...s, [k]: '' }));
   const submit = async () => {
-    const reasons = [...Object.entries(items).map(([k, v]) => `${k}: ${v.trim() || 'không hợp lệ, cần bổ sung'}`), ...(other.trim() ? [other.trim()] : [])];
-    if (reasons.length === 0) return toast.error('Chọn ít nhất một mục cần sửa hoặc ghi lý do khác.');
+    const rejectedItems = Object.entries(items).map(([key, v]) => ({ key, reason: v.trim() || 'Không hợp lệ, cần bổ sung.' }));
+    const reasons = other.trim() ? [other.trim()] : [];
+    if (rejectedItems.length === 0 && reasons.length === 0) return toast.error('Chọn ít nhất một mục cần sửa hoặc ghi lý do khác.');
     setBusy(true);
     try {
-      await adminApi.rejectApplication(app.applicationId, reasons);
+      await adminApi.rejectApplication(app.applicationId, { ...(rejectedItems.length ? { rejectedItems } : {}), ...(reasons.length ? { reasons } : {}) });
       toast.success('Đã từ chối hồ sơ. Tài xế sẽ nhận danh sách mục cần sửa.');
       onDone();
     } catch (e) {
@@ -219,12 +227,12 @@ const RejectModal: React.FC<{ app: DriverApplicationDetailsResponse; onClose: ()
     >
       <div className="space-y-3">
         <ul className="space-y-2">
-          {CHECK_ITEMS.map((k) => (
-            <li key={k} className="text-xs">
+          {CHECK_ITEMS.map((c) => (
+            <li key={c.key} className="text-xs">
               <label className="flex items-center gap-2 font-bold text-slate-700">
-                <input type="checkbox" checked={k in items} onChange={() => toggle(k)} /> {k}
+                <input type="checkbox" checked={c.key in items} onChange={() => toggle(c.key)} /> {c.label}
               </label>
-              {k in items && <input className={`${inputClass()} mt-1`} placeholder="Lý do" value={items[k]} onChange={(e) => setItems({ ...items, [k]: e.target.value })} />}
+              {c.key in items && <input className={`${inputClass()} mt-1`} placeholder="Lý do" maxLength={500} value={items[c.key]} onChange={(e) => setItems({ ...items, [c.key]: e.target.value })} />}
             </li>
           ))}
         </ul>

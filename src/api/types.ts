@@ -465,15 +465,36 @@ export interface DriverOnboardingStatusResponse {
   driverLicenseNumber: string | null;
   documentUrls: string[];
   rejectionReasons: string[] | null;
+  /** Mục bị từ chối theo khoá cố định của BE (xem RejectedItemKey) */
+  rejectedItems: RejectedApplicationItem[] | null;
+}
+/** Khoá mục hồ sơ tài xế dùng khi từ chối và nộp lại */
+export type RejectedItemKey =
+  | 'LicenseFront'
+  | 'LicenseBack'
+  | 'VehicleRegistration'
+  | 'VehicleInspection'
+  | 'VehiclePhoto'
+  | 'CitizenIdFront'
+  | 'CitizenIdBack'
+  | 'Portrait'
+  | 'VehicleInfo'
+  | 'PersonalInfo';
+export interface RejectedApplicationItem {
+  key: RejectedItemKey | string;
+  reason: string;
 }
 export interface SubmitDriverApplicationRequest {
   vehicleTypeId: number;
-  citizenIdNumber: string;
-  driverLicenseNumber: string;
   licensePlate: string;
   maxLoadWeightKg: number;
-  /** Đúng 5 phần tử: [bằng lái trước, bằng lái sau, đăng ký xe, đăng kiểm, ảnh xe] */
+  /** Đúng 7 phần tử: [bằng lái trước, bằng lái sau, đăng ký xe, đăng kiểm, ảnh xe, CCCD trước, CCCD sau] */
   documentUrls: string[];
+}
+/** Nộp lại chỉ phần bị từ chối (POST /driver/onboarding/resubmit) */
+export interface ResubmitDriverApplicationRequest {
+  items?: { key: RejectedItemKey | string; url: string }[];
+  vehicle?: { vehicleTypeId?: number; licensePlate?: string; maxLoadWeightKg?: number };
 }
 export interface NearbyOrderDto {
   orderId: number;
@@ -885,6 +906,7 @@ export interface ApplicationHistoryDto {
   submittedAt: string;
   reviewedAt: string | null;
   rejectionReasons: string[] | null;
+  rejectedItems?: RejectedApplicationItem[] | null;
 }
 export interface DriverApplicationDetailsResponse {
   applicationId: number;
@@ -893,8 +915,8 @@ export interface DriverApplicationDetailsResponse {
   fullName: string;
   phoneNumber: string;
   email: string;
-  citizenIdNumber: string;
-  driverLicenseNumber: string;
+  citizenIdNumber: string | null;
+  driverLicenseNumber: string | null;
   vehicleTypeId: number;
   vehicleTypeName: string;
   licensePlate: string;
@@ -906,6 +928,7 @@ export interface DriverApplicationDetailsResponse {
   reviewedAt: string | null;
   documentUrls: string[];
   rejectionReasons: string[] | null;
+  rejectedItems?: RejectedApplicationItem[] | null;
   history: ApplicationHistoryDto[];
 }
 export interface VehicleTypePricingResponse {

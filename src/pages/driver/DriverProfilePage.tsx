@@ -15,6 +15,14 @@ import { formatDateTime } from '../../utils/format';
 /** Đúng 7 ảnh theo thứ tự BE (DECISIONS D2, 2026-11-12): CCCD ở cuối để hồ sơ 5 ảnh cũ giữ nguyên vị trí. */
 export const DRIVER_DOCS = ['Bằng lái – mặt trước', 'Bằng lái – mặt sau', 'Đăng ký xe', 'Giấy đăng kiểm', 'Ảnh xe', 'CCCD – mặt trước', 'CCCD – mặt sau'];
 const DOCS = DRIVER_DOCS;
+/** Khoá mục của BE theo đúng thứ tự 7 ảnh */
+const DOC_KEYS = ['LicenseFront', 'LicenseBack', 'VehicleRegistration', 'VehicleInspection', 'VehiclePhoto', 'CitizenIdFront', 'CitizenIdBack'];
+const ITEM_LABEL: Record<string, string> = {
+  ...Object.fromEntries(DOC_KEYS.map((k, i) => [k, DRIVER_DOCS[i]])),
+  VehicleInfo: 'Thông tin xe',
+  PersonalInfo: 'Thông tin cá nhân',
+  Portrait: 'Ảnh chân dung',
+};
 const isUrl = (u: string) => /^https?:\/\/\S{4,}$/i.test(u) && u.length <= 500;
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -23,7 +31,7 @@ export const DriverProfilePage: React.FC = () => {
   const { onboarding: ob, reload } = useDriver();
   const user = useAuthStore((s) => s.user);
   const vehicles = useQuery(() => publicApi.vehicleTypes(), []);
-  const [f, setF] = useState({ vehicleTypeId: 0, citizenId: '', license: '', plate: '', maxLoad: 0, docs: DOCS.map(() => '') });
+  const [f, setF] = useState({ vehicleTypeId: 0, plate: '', maxLoad: 0, docs: DOCS.map(() => '') });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -70,8 +78,6 @@ export const DriverProfilePage: React.FC = () => {
     if (!ob) return;
     setF({
       vehicleTypeId: ob.vehicleTypeId ?? 0,
-      citizenId: ob.citizenIdNumber ?? '',
-      license: ob.driverLicenseNumber ?? '',
       plate: ob.licensePlate ?? '',
       maxLoad: ob.maxLoadWeightKg ?? 0,
       docs: DOCS.map((_, i) => ob.documentUrls[i] ?? ''),
@@ -85,20 +91,51 @@ export const DriverProfilePage: React.FC = () => {
       </PageShell>
     );
 
+  const rejected = ob.profileApprovalStatus === 'Rejected' ? ob.rejectedItems ?? [] : [];
+  const rejectedKeys = new Set(rejected.map((i) => i.key));
+  /** Đang nộp lại: chỉ các mục bị từ chối được sửa */
+  const resubmitting = rejected.length > 0;
+  const docRejected = (i: number) => rejectedKeys.has(DOC_KEYS[i]);
+  const vehicleRejected = rejectedKeys.has('VehicleInfo');
+
+  const checkVehicle = () => {
+    if (!f.vehicleTypeId) return 'Chọn loại xe.';
+    if (!/^[0-9A-Za-z.\- ]{5,15}$/.test(f.plate)) return 'Biển số không hợp lệ.';
+    if (!(f.maxLoad > 0)) return 'Nhập tải trọng tối đa của xe.';
+    return null;
+  };
+
   const submit = async () => {
-    if (!f.vehicleTypeId) return toast.error('Chọn loại xe.');
-    if (!/^[0-9]{9,12}$/.test(f.citizenId)) return toast.error('Số CCCD gồm 9–12 chữ số.');
-    if (!/^[0-9A-Za-z]{8,20}$/.test(f.license)) return toast.error('Số GPLX gồm 8–20 chữ/số.');
-    if (!/^[0-9A-Za-z.\- ]{5,15}$/.test(f.plate)) return toast.error('Biển số không hợp lệ (5–15 ký tự).');
-    if (!(f.maxLoad > 0)) return toast.error('Nhập tải trọng tối đa của xe.');
+    if (resubmitting) {
+      const unchanged = DOCS.findIndex((_, i) => docRejected(i) && (!isUrl(f.docs[i].trim()) || f.docs[i] === ob.documentUrls[i]));
+      if (unchanged >= 0) return toast.error(`Hãy tải ảnh mới cho “${DOCS[unchanged]}”.`);
+      if (vehicleRejected) {
+        const err = checkVehicle();
+        if (err) return toast.error(err);
+      }
+      setBusy(true);
+      try {
+        await driverApi.resubmitOnboarding({
+          items: DOCS.flatMap((_, i) => (docRejected(i) ? [{ key: DOC_KEYS[i], url: f.docs[i].trim() }] : [])),
+          ...(vehicleRejected ? { vehicle: { vehicleTypeId: f.vehicleTypeId, licensePlate: f.plate.toUpperCase(), maxLoadWeightKg: f.maxLoad } } : {}),
+        });
+        toast.success('Đã nộp lại các mục bị từ chối. Quản trị viên sẽ thẩm định và thông báo kết quả.');
+        await reload();
+      } catch (e) {
+        toast.error(errorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const vErr = checkVehicle();
+    if (vErr) return toast.error(vErr);
     const bad = f.docs.findIndex((d) => !isUrl(d.trim()));
     if (bad >= 0) return toast.error(`Thiếu ảnh “${DOCS[bad]}”.`);
     setBusy(true);
     try {
       await driverApi.submitOnboarding({
         vehicleTypeId: f.vehicleTypeId,
-        citizenIdNumber: f.citizenId,
-        driverLicenseNumber: f.license,
         licensePlate: f.plate.toUpperCase(),
         maxLoadWeightKg: f.maxLoad,
         documentUrls: f.docs.map((d) => d.trim()),
@@ -132,15 +169,18 @@ export const DriverProfilePage: React.FC = () => {
             </div>
           </div>
           {st === 'Approved' && <Banner kind="success" className="mt-3">Hồ sơ đã được duyệt. Bạn có thể bật nhận đơn.</Banner>}
-          {st === 'Rejected' && ob.rejectionReasons && (
+          {st === 'Rejected' && (rejected.length > 0 || ob.rejectionReasons) && (
             <div className="mt-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">
-              <b>Hồ sơ bị từ chối – cần sửa:</b>
+              <b>Hồ sơ bị từ chối:</b>
               <ul className="list-disc ml-5 mt-1">
-                {ob.rejectionReasons.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
+                {rejected.length > 0
+                  ? rejected.map((r, i) => (
+                      <li key={i}>
+                        {ITEM_LABEL[r.key] ?? r.key}: {r.reason}
+                      </li>
+                    ))
+                  : ob.rejectionReasons?.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
-              <p className="mt-1">Sửa các mục trên rồi nộp lại – hệ thống tạo phiên bản mới.</p>
             </div>
           )}
         </Card>
@@ -159,7 +199,7 @@ export const DriverProfilePage: React.FC = () => {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Loại xe *</label>
-                <select className={inputClass()} value={f.vehicleTypeId} onChange={(e) => setF({ ...f, vehicleTypeId: Number(e.target.value) })}>
+                <select className={inputClass()} disabled={resubmitting && !vehicleRejected} value={f.vehicleTypeId} onChange={(e) => setF({ ...f, vehicleTypeId: Number(e.target.value) })}>
                   <option value={0}>— Chọn loại xe —</option>
                   {(vehicles.data ?? []).map((v) => (
                     <option key={v.id} value={v.id}>
@@ -173,17 +213,15 @@ export const DriverProfilePage: React.FC = () => {
                   </p>
                 )}
               </div>
-              <Field label="Biển số xe" required value={f.plate} onChange={(e) => setF({ ...f, plate: e.target.value.toUpperCase() })} placeholder="29C-874.12" />
-              <Field label="Tải trọng tối đa kg" type="number" required value={f.maxLoad || ''} onChange={(e) => setF({ ...f, maxLoad: Number(e.target.value) })} />
-              <Field label="Số CCCD" required value={f.citizenId} onChange={(e) => setF({ ...f, citizenId: e.target.value.replace(/\D/g, '') })} />
-              <Field label="Số giấy phép lái xe" required value={f.license} onChange={(e) => setF({ ...f, license: e.target.value })} />
+              <Field label="Biển số xe" required disabled={resubmitting && !vehicleRejected} value={f.plate} onChange={(e) => setF({ ...f, plate: e.target.value.toUpperCase() })} placeholder="29C-874.12" />
+              <Field label="Tải trọng tối đa kg" type="number" required disabled={resubmitting && !vehicleRejected} value={f.maxLoad || ''} onChange={(e) => setF({ ...f, maxLoad: Number(e.target.value) })} />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">Giấy tờ & ảnh xe (đủ 7 ảnh)</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
                 {DOCS.map((label, i) => (
                   <div key={label} className="space-y-1.5">
-                    <div className="aspect-[4/3] rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                    <div className={`aspect-[4/3] rounded-xl border bg-slate-50 overflow-hidden flex items-center justify-center ${docRejected(i) ? 'border-rose-400 ring-2 ring-rose-100' : 'border-slate-200'}`}>
                       {uploading === i ? (
                         <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
                       ) : isUrl(f.docs[i]) ? (
@@ -192,8 +230,10 @@ export const DriverProfilePage: React.FC = () => {
                         <ImageOff className="w-5 h-5 text-slate-300" />
                       )}
                     </div>
-                    <div className="text-[11px] font-bold text-slate-700">{label} *</div>
-                    {ob.canSubmit && (
+                    <div className="text-[11px] font-bold text-slate-700">
+                      {label} *{docRejected(i) && <span className="ml-1 text-rose-600">Cần sửa</span>}
+                    </div>
+                    {ob.canSubmit && (!resubmitting || docRejected(i)) && (
                       <label className="flex items-center justify-center gap-1.5 h-8 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
                         <Upload className="w-3.5 h-3.5" /> {f.docs[i] ? 'Đổi ảnh' : 'Tải ảnh'}
                         <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={uploading !== null} onChange={(e) => { void pick(i, e.target.files?.[0]); e.target.value = ''; }} />

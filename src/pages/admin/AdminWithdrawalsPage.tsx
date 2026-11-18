@@ -147,8 +147,8 @@ const ActModal: React.FC<{ act: 'approve' | 'reject' | 'wrongAccount'; w: AdminW
     setBusy(true);
     try {
       if (act === 'approve') await adminApi.approveWithdrawal(w.transactionId, text.trim());
-      else await adminApi.rejectWithdrawal(w.transactionId, text.trim());
-      toast.success(act === 'approve' ? 'Đã ghi nhận chuyển khoản. Tài xế đã được thông báo.' : 'Đã từ chối, tiền được hoàn vào thu nhập tài xế.');
+      else await adminApi.rejectWithdrawal(w.transactionId, text.trim(), act === 'wrongAccount' ? 'WrongBankAccount' : 'Other');
+      toast.success(act === 'approve' ? 'Đã ghi nhận chuyển khoản. Tài xế đã được thông báo.' : act === 'wrongAccount' ? 'Đã báo sai số tài khoản. Tiền được hoàn vào ví và tài xế được nhắc cập nhật.' : 'Đã từ chối, tiền được hoàn vào thu nhập tài xế.');
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));

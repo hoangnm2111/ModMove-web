@@ -83,7 +83,7 @@ export const ROLE_LABEL: Record<T.UserRole, string> = { Customer: 'Khách hàng'
 export const WITHDRAWAL_STATUS: Record<T.WalletTransactionStatus, Tone> = {
   Pending: tone('Chờ xử lý', 'bg-amber-50 text-amber-700 border-amber-200'),
   Completed: tone('Đã chuyển', 'bg-emerald-50 text-emerald-700 border-emerald-200'),
-  Failed: tone('Lỗi', 'bg-rose-50 text-rose-700 border-rose-200'),
+  Failed: tone('Sai số tài khoản', 'bg-rose-50 text-rose-700 border-rose-200'),
   Rejected: tone('Từ chối', 'bg-slate-100 text-slate-600 border-slate-200'),
 };
 /** Loại biến động ví tài xế (api/driver/wallet/transactions) */

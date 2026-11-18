@@ -89,6 +89,7 @@ export const driverApi = {
   sendLocation: (latitude: number, longitude: number) => call(() => apiClient.post<void>('/driver/location', { latitude, longitude })),
   onboardingStatus: () => call(() => apiClient.get<T.DriverOnboardingStatusResponse>('/driver/Onboarding/status')),
   submitOnboarding: (body: T.SubmitDriverApplicationRequest) => call(() => apiClient.post<{ id: number }>('/driver/Onboarding', body)),
+  resubmitOnboarding: (body: T.ResubmitDriverApplicationRequest) => call(() => apiClient.post<{ id: number }>('/driver/Onboarding/resubmit', body)),
   nearbyOrders: () => call(() => apiClient.get<T.NearbyOrderDto[]>('/driver/Matching/orders')),
   acceptOrder: (id: number) => call(() => apiClient.post<void>(`/driver/Matching/orders/${id}/accept`)),
   /** Chuyến đang chạy (Accepted…InTransit); đang rảnh thì BE trả 204 → null. */
@@ -150,7 +151,7 @@ export const adminApi = {
   pendingApplications: (page = 1, pageSize = 20) => call(() => apiClient.get<T.PagedResult<T.PendingApplicationDto>>('/admin/driver-applications/pending', { params: { page, pageSize } })),
   application: (id: number) => call(() => apiClient.get<T.DriverApplicationDetailsResponse>(`/admin/driver-applications/${id}`)),
   approveApplication: (id: number) => call(() => apiClient.post<void>(`/admin/driver-applications/${id}/approve`)),
-  rejectApplication: (id: number, reasons: string[]) => call(() => apiClient.post<void>(`/admin/driver-applications/${id}/reject`, { reasons })),
+  rejectApplication: (id: number, body: { reasons?: string[]; rejectedItems?: T.RejectedApplicationItem[] }) => call(() => apiClient.post<void>(`/admin/driver-applications/${id}/reject`, body)),
 
   pricing: () => call(() => apiClient.get<T.PricingConfigurationResponse>('/admin/Pricing')),
   updateFares: (id: number, baseFare: number, pricePerKm: number, minimumFare: number) =>
@@ -171,7 +172,9 @@ export const adminApi = {
   refunds: (p: T.AdminRefundsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.AdminRefundDto>>('/admin/Refunds', { params: q({ page: 1, pageSize: 20, ...p }) })),
   refund: (id: number) => call(() => apiClient.get<T.AdminRefundDetailResponse>(`/admin/Refunds/${id}`)),
   approveRefund: (id: number, note?: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/approve`, { note: note || null })),
-  rejectRefund: (id: number, note?: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/reject`, { note: note || null })),
+  /** `reasonCode: 'WrongBankAccount'` giữ khoản hoàn và nhắc khách sửa tài khoản nhận; mặc định từ chối hoàn tiền. */
+  rejectRefund: (id: number, note?: string, reasonCode: 'Other' | 'WrongBankAccount' = 'Other') =>
+    call(() => apiClient.post<void>(`/admin/Refunds/${id}/reject`, { note: note || null, reasonCode })),
   payoutRefund: (id: number, bankReferenceCode: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/payout`, { bankReferenceCode })),
   /** UC-ADM-18 5a (R-01): chuyển khoản tay thất bại → Failed, khách khai lại tài khoản nhận. */
   refundPayoutFailed: (id: number, reason: string) => call(() => apiClient.post<void>(`/admin/Refunds/${id}/payout-failed`, { reason })),
@@ -179,7 +182,9 @@ export const adminApi = {
   withdrawals: (p: T.AdminWithdrawalsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.AdminWithdrawalSummary>>('/admin/Withdrawals', { params: q({ page: 1, pageSize: 20, ...p }) })),
   withdrawal: (id: number) => call(() => apiClient.get<T.AdminWithdrawalDetailResponse>(`/admin/Withdrawals/${id}`)),
   approveWithdrawal: (id: number, bankReferenceCode: string) => call(() => apiClient.post<void>(`/admin/Withdrawals/${id}/approve`, { bankReferenceCode })),
-  rejectWithdrawal: (id: number, reason?: string) => call(() => apiClient.post<void>(`/admin/Withdrawals/${id}/reject`, { reason: reason || null })),
+  /** `reasonCode: 'WrongBankAccount'` hoàn tiền về ví và nhắc tài xế sửa số tài khoản; mặc định từ chối. */
+  rejectWithdrawal: (id: number, reason?: string, reasonCode: 'Other' | 'WrongBankAccount' = 'Other') =>
+    call(() => apiClient.post<void>(`/admin/Withdrawals/${id}/reject`, { reason: reason || null, reasonCode })),
 
   revenue: (fromDate: string, toDate: string) => call(() => apiClient.get<T.RevenueReportResponse>('/admin/Reports/revenue', { params: { fromDate, toDate } })),
   /**

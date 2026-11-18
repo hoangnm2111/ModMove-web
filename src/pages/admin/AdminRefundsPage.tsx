@@ -140,15 +140,15 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
                 )}
               </>
             )}
+            {(r.refundStatus === 'Approved' || r.refundStatus === 'Requested') && r.hasPayoutAccount && (
+              <Button size="sm" variant="outline" onClick={() => setAct('failed')}>
+                <XCircle className="w-4 h-4 mr-1" /> Sai số tài khoản
+              </Button>
+            )}
             {r.refundStatus === 'Approved' && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => setAct('failed')} disabled={!r.hasPayoutAccount} title={r.hasPayoutAccount ? undefined : 'Khách chưa khai tài khoản nhận'}>
-                  <XCircle className="w-4 h-4 mr-1" /> Sai số tài khoản
-                </Button>
-                <Button size="sm" onClick={() => setAct('payout')} disabled={!r.hasPayoutAccount} title={r.hasPayoutAccount ? undefined : 'Khách chưa khai tài khoản nhận'}>
-                  <Banknote className="w-4 h-4 mr-1" /> Xác nhận đã chuyển khoản
-                </Button>
-              </>
+              <Button size="sm" onClick={() => setAct('payout')} disabled={!r.hasPayoutAccount} title={r.hasPayoutAccount ? undefined : 'Khách chưa khai tài khoản nhận'}>
+                <Banknote className="w-4 h-4 mr-1" /> Xác nhận đã chuyển khoản
+              </Button>
             )}
           </>
         )
@@ -258,7 +258,7 @@ const ActModal: React.FC<{ act: Exclude<Act, null>; refund: AdminRefundDetailRes
       if (act === 'approve') await adminApi.approveRefund(refund.id, text.trim());
       if (act === 'reject') await adminApi.rejectRefund(refund.id, text.trim());
       if (act === 'payout') await adminApi.payoutRefund(refund.id, text.trim());
-      if (act === 'failed') await adminApi.refundPayoutFailed(refund.id, text.trim());
+      if (act === 'failed') await adminApi.rejectRefund(refund.id, text.trim(), 'WrongBankAccount');
       toast.success(
         { approve: 'Đã duyệt hoàn tiền.', reject: 'Đã từ chối hoàn tiền.', payout: 'Đã ghi nhận chuyển khoản.', failed: 'Đã báo sai số tài khoản. Khách được nhắc khai lại.' }[act]
       );
