@@ -461,18 +461,14 @@ export interface DriverOnboardingStatusResponse {
   vehicleTypeName: string | null;
   licensePlate: string | null;
   maxLoadWeightKg: number | null;
-  citizenIdNumber: string | null;
-  driverLicenseNumber: string | null;
   documentUrls: string[];
   rejectionReasons: string[] | null;
 }
 export interface SubmitDriverApplicationRequest {
   vehicleTypeId: number;
-  citizenIdNumber: string;
-  driverLicenseNumber: string;
   licensePlate: string;
   maxLoadWeightKg: number;
-  /** Đúng 5 phần tử: [bằng lái trước, bằng lái sau, đăng ký xe, đăng kiểm, ảnh xe] */
+  /** Đúng 7 phần tử: [bằng lái trước, bằng lái sau, đăng ký xe, đăng kiểm, ảnh xe, CCCD trước, CCCD sau] */
   documentUrls: string[];
 }
 export interface NearbyOrderDto {
@@ -893,8 +889,6 @@ export interface DriverApplicationDetailsResponse {
   fullName: string;
   phoneNumber: string;
   email: string;
-  citizenIdNumber: string;
-  driverLicenseNumber: string;
   vehicleTypeId: number;
   vehicleTypeName: string;
   licensePlate: string;
