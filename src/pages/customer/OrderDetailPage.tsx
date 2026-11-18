@@ -30,7 +30,7 @@ import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 import { PhoneLink } from '../../components/ui/PhoneLink';
-import { useDropoffArrival, useOrderRealtime } from '../../hooks/useRealtime';
+import { useDriverLocations, useDropoffArrival, useOrderRealtime } from '../../hooks/useRealtime';
 
 const H = 3_600_000;
 const ACTIVE_TRACK = ['Accepted', 'Arrived', 'PickedUp', 'InTransit'];
@@ -82,6 +82,10 @@ export const OrderDetailPage: React.FC = () => {
   };
   // Tài xế đổi trạng thái đơn → tự tải lại chi tiết đơn đang xem (SignalR OrderStatusChanged)
   useOrderRealtime(() => void reloadAll(), orderId);
+  // GPS tài xế realtime (LocationUpdated): ghi đè vị trí trong bản tracking, giữ ETA; REST 60 giây vẫn làm mới ETA
+  useDriverLocations((e) => {
+    if (tracking.data) tracking.setData({ ...tracking.data, driver: { latitude: e.latitude, longitude: e.longitude, at: e.at, isStale: false } });
+  }, orderId);
 
   // Còn sự cố mở (của ai cũng được) hoặc tài xế đang có sự cố chặn chuyến: tải lại mỗi 15 giây
   const hasOpenIncident =
