@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useState } from 'react';
-import { getDropoffArrival, realtime } from '../services/realtime.service';
+import { getDropoffArrival, realtime, type LocationUpdatedEvent } from '../services/realtime.service';
 import { useAuthStore } from '../store/useAuthStore';
 
 /**
@@ -38,6 +38,25 @@ export const useOrderRealtime = (onChange: () => void, orderId?: number | null) 
       if (orderId) realtime.leaveOrder(orderId);
     };
   }, [orderId, role]);
+};
+
+/**
+ * Vị trí tài xế realtime (LocationUpdated). `orderId` có giá trị: chỉ điểm của đơn đó (khách tự JoinOrder đơn này);
+ * bỏ trống: mọi tài xế (bản đồ Dispatcher). Dùng bản gọi lại mới nhất như useOrderRealtime.
+ */
+export const useDriverLocations = (onUpdate: (e: LocationUpdatedEvent) => void, orderId?: number | null) => {
+  const callback = useRef(onUpdate);
+  callback.current = onUpdate;
+  useEffect(() => {
+    if (orderId) void realtime.joinOrder(orderId);
+    const off = realtime.onLocationUpdated((e) => {
+      if (!orderId || e.orderId === orderId) callback.current(e);
+    });
+    return () => {
+      off();
+      if (orderId) realtime.leaveOrder(orderId);
+    };
+  }, [orderId]);
 };
 
 /** Tải lại khi có bất kỳ thông báo thời gian thực nào (đơn, sự cố, khiếu nại…) */
