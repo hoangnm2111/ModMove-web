@@ -972,6 +972,19 @@ export interface CreateCouponRequest {
   expiresAt: string;
   usageLimit?: number | null;
 }
+/** PUT /admin/Coupons/{id} (K-30): mã coupon không sửa được */
+export type UpdateCouponRequest = Omit<CreateCouponRequest, 'discountCode'>;
+/** POST /admin/Pricing/vehicletypes (K-30) */
+export interface CreateVehicleTypeRequest {
+  name: string;
+  maxLoadWeightKg: number;
+  cargoBedLengthCm: number;
+  cargoBedWidthCm: number;
+  cargoBedHeightCm: number;
+  baseFare: number;
+  pricePerKm: number;
+  minimumFare: number;
+}
 export interface AdminRefundsQuery {
   page?: number;
   pageSize?: number;

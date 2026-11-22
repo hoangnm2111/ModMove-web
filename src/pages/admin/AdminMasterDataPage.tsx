@@ -12,7 +12,8 @@ import type { MasterDataCategory, MasterDataItemDto } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatDateTime } from '../../utils/format';
 
-const CATS = Object.keys(MASTER_CATEGORY) as MasterDataCategory[];
+// K-24: loại sự cố cố định 4 giá trị (enum BE), không cho Admin sửa "Nhóm sự cố"
+const CATS = (Object.keys(MASTER_CATEGORY) as MasterDataCategory[]).filter((c) => c !== 'INCIDENT_CATEGORY');
 const ON = { label: 'Đang bật', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 const OFF = { label: 'Đã tắt', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
 

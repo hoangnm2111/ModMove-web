@@ -19,7 +19,7 @@ export const phone = (field = 'Số điện thoại'): Validator => (v) =>
 export const email = (field = 'Email'): Validator => (v) =>
   !v.trim() ? msg('MSG01', { field_name: field }) : isEmail(v) ? null : msg('MSG02', { field_name: field.toLowerCase() });
 
-/** GB-53: mật khẩu 8–100 ký tự */
+/** GB-53: mật khẩu 8–20 ký tự (chốt nghiệp vụ K-13) */
 export const password: Validator = (v) => {
   if (!v) return msg('MSG01', { field_name: 'Mật khẩu' });
   if (v.length < BUSINESS.PASSWORD_MIN || v.length > BUSINESS.PASSWORD_MAX) {

@@ -22,7 +22,7 @@ const readAsDataUrl = (file: File) =>
   });
 
 /** Upload ảnh theo GB-06: JPG/PNG ≤ 5MB, giới hạn số lượng */
-export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, max = BUSINESS.MAX_CARGO_PHOTOS, label, hint, upload }) => {
+export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ value, onChange, max = BUSINESS.MAX_CARGO_PHOTOS, label, hint: _hint, upload }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);

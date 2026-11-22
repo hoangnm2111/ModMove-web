@@ -10,7 +10,7 @@ export const getRoleHomePath = (role?: UserRole | null): string => {
     case 'Customer':
       return '/booking';
     case 'Driver':
-      return '/driver';
+      return '/'; // K-07: tài xế dùng app mobile, web không có trang tài xế
     case 'Dispatcher':
       return '/dispatcher/live-map';
     case 'Administrator':
@@ -43,11 +43,28 @@ const fromSession = (s: Session | null) => ({
   activeRole: s?.user.role ?? null,
 });
 
+/** K-07: web phục vụ Guest, Customer, Dispatcher, Administrator; tài xế dùng app mobile */
+export const DRIVER_USE_MOBILE_MESSAGE = 'Tài khoản tài xế chỉ dùng được trên ứng dụng ModMove cho điện thoại.';
+
+const restoreWebSession = (): Session | null => {
+  const s = authService.restoreSession();
+  if (s?.user.role === 'Driver') {
+    authService.saveSession(null);
+    return null;
+  }
+  return s;
+};
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  ...fromSession(authService.restoreSession()),
+  ...fromSession(restoreWebSession()),
 
   signIn: async (identifier, password) => {
     const session = await authService.signIn(identifier, password);
+    if (session.user.role === 'Driver') {
+      await authService.signOut();
+      authService.saveSession(null);
+      throw new Error(DRIVER_USE_MOBILE_MESSAGE);
+    }
     set(fromSession(session));
     return session.user;
   },

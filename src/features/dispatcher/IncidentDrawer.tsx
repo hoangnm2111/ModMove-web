@@ -305,7 +305,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
 const ReasonAction: React.FC<{ title: string; label?: string; hint?: string; confirm: string; danger?: boolean; onClose: () => void; onSubmit: (reason: string) => Promise<void> }> = ({
   title,
   label = 'Lý do / ghi chú quyết định',
-  hint,
+  hint: _hint, // gợi ý đã bỏ khỏi giao diện (dọn chữ 2026-11-17), giữ prop để không đổi chỗ gọi
   confirm,
   danger,
   onClose,

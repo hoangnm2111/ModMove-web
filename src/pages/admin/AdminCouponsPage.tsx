@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
@@ -26,6 +26,7 @@ export const AdminCouponsPage: React.FC = () => {
   const [tab, setTab] = useState<Tab>('ALL');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<CouponDto | null>(null);
   const q = useQuery(() => adminApi.coupons(page, 15, tab === 'ALL' ? undefined : tab === 'ON'), [tab, page]);
   const toggle = async (c: CouponDto) => {
     try {
@@ -90,9 +91,14 @@ export const AdminCouponsPage: React.FC = () => {
                       head: '',
                       className: 'text-right',
                       cell: (c) => (
-                        <Button size="sm" variant="outline" onClick={() => toggle(c)}>
-                          {c.isActive ? 'Tắt' : 'Bật'}
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                            <Pencil className="w-3.5 h-3.5 mr-1" /> Sửa
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => toggle(c)}>
+                            {c.isActive ? 'Tắt' : 'Bật'}
+                          </Button>
+                        </div>
                       ),
                     },
                   ]}
@@ -104,29 +110,50 @@ export const AdminCouponsPage: React.FC = () => {
         </Card>
       </div>
       {creating && <CreateModal onClose={() => setCreating(false)} onDone={() => (setCreating(false), q.reload())} />}
+      {editing && <CreateModal coupon={editing} onClose={() => setEditing(null)} onDone={() => (setEditing(null), q.reload())} />}
     </PageShell>
   );
 };
 
-const CreateModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ onClose, onDone }) => {
-  const today = new Date().toISOString().slice(0, 16);
-  const [f, setF] = useState({ code: '', value: 20000, min: 100000, from: today, to: '', limit: '' });
+/** Giờ địa phương cho ô datetime-local */
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+
+/** Tạo mã mới, hoặc sửa điều kiện mã có sẵn (K-30: mã không đổi, giới hạn lượt ≥ số lượt đã dùng) */
+const CreateModal: React.FC<{ coupon?: CouponDto; onClose: () => void; onDone: () => void }> = ({ coupon, onClose, onDone }) => {
+  const today = toLocalInput(new Date().toISOString());
+  const [f, setF] = useState(
+    coupon
+      ? { code: coupon.discountCode, value: coupon.discountValue, min: coupon.minimumOrderValue, from: toLocalInput(coupon.validFrom), to: toLocalInput(coupon.expiresAt), limit: coupon.usageLimit === null ? '' : String(coupon.usageLimit) }
+      : { code: '', value: 20000, min: 100000, from: today, to: '', limit: '' }
+  );
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!/^[A-Z0-9_-]{1,30}$/.test(f.code)) return toast.error('Mã tối đa 30 ký tự, chữ in hoa/số/-/_.');
+    if (!coupon && !/^[A-Z0-9_-]{1,30}$/.test(f.code)) return toast.error('Mã tối đa 30 ký tự, chữ in hoa/số/-/_.');
     if (!(f.value > 0)) return toast.error('Giá trị giảm phải > 0.');
+    if (f.min < 0) return toast.error('Giá trị đơn tối thiểu không được âm.');
     if (!f.to || new Date(f.to) <= new Date(f.from)) return toast.error('Ngày hết hạn phải sau ngày bắt đầu.');
+    const limit = f.limit ? Number(f.limit) : null;
+    if (limit !== null && !(limit > 0)) return toast.error('Tổng lượt dùng phải > 0.');
+    if (coupon && limit !== null && limit < coupon.usedCount) return toast.error(`Tổng lượt dùng không được nhỏ hơn ${coupon.usedCount} lượt đã dùng.`);
+    const terms = {
+      discountValue: f.value,
+      minimumOrderValue: f.min,
+      validFrom: new Date(f.from).toISOString(),
+      expiresAt: new Date(f.to).toISOString(),
+      usageLimit: limit,
+    };
     setBusy(true);
     try {
-      await adminApi.createCoupon({
-        discountCode: f.code,
-        discountValue: f.value,
-        minimumOrderValue: f.min,
-        validFrom: new Date(f.from).toISOString(),
-        expiresAt: new Date(f.to).toISOString(),
-        usageLimit: f.limit ? Number(f.limit) : null,
-      });
-      toast.success(`Đã tạo mã ${f.code}.`);
+      if (coupon) {
+        await adminApi.updateCoupon(coupon.id, terms);
+        toast.success(`Đã cập nhật mã ${coupon.discountCode}.`);
+      } else {
+        await adminApi.createCoupon({ discountCode: f.code, ...terms });
+        toast.success(`Đã tạo mã ${f.code}.`);
+      }
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -137,7 +164,7 @@ const CreateModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ on
   return (
     <Modal
       open
-      title="Tạo mã giảm giá"
+      title={coupon ? `Sửa mã ${coupon.discountCode}` : 'Tạo mã giảm giá'}
       onClose={onClose}
       footer={
         <>
@@ -145,13 +172,14 @@ const CreateModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ on
             Đóng
           </Button>
           <Button size="sm" onClick={submit} isLoading={busy}>
-            Tạo mã
+            {coupon ? 'Lưu' : 'Tạo mã'}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Mã" required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VD: MODMOVE30" />
+        <Field label="Mã" required disabled={!!coupon} value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VD: MODMOVE30" />
+        {coupon && <p className="text-xs text-slate-500">Mã không đổi được. Đơn đã đặt giữ nguyên số tiền giảm. Đã dùng {coupon.usedCount} lượt.</p>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Số tiền giảm VND" type="number" required value={f.value} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />
           <Field label="Giá trị đơn tối thiểu VND" type="number" value={f.min} onChange={(e) => setF({ ...f, min: Number(e.target.value) })} />

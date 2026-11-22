@@ -8,7 +8,7 @@ import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
 import { BUSINESS, IS_DEMO } from '../../config/business';
 import { msg } from '../../constants/messages';
-import { confirmPassword, email as emailRule, isEmail, isPhone, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
+import { confirmPassword, email as emailRule, isEmail, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
 import { useCountdown } from '../../hooks/useLiveData';
 import { authService, DEMO_PASSWORD, OtpPurpose } from '../../services/auth.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -17,7 +17,6 @@ import { UserRole } from '../../types/user.types';
 
 const DEMO_ACCOUNTS: { role: UserRole; email: string; label: string }[] = [
   { role: 'Customer', email: 'customer@modmove.local', label: 'Khách hàng' },
-  { role: 'Driver', email: 'driver@modmove.local', label: 'Tài xế' },
   { role: 'Dispatcher', email: 'dispatcher@modmove.local', label: 'Điều phối viên' },
   { role: 'Administrator', email: 'admin@modmove.local', label: 'Quản trị viên' },
 ];
@@ -47,8 +46,11 @@ export const LoginPage: React.FC = () => {
   const submitLogin = () => {
     const err: { id?: string; pwd?: string } = {};
     const id = identifier.trim();
-    if (!isEmail(id) && !isPhone(id)) err.id = 'Vui lòng nhập email hoặc số điện thoại hợp lệ.';
-    if (pwd.length < 8 || pwd.length > 100) err.pwd = 'Mật khẩu phải dài từ 8 đến 100 ký tự.';
+    // K-12: chỉ đăng nhập bằng email (BE không tra số điện thoại)
+    if (!isEmail(id)) err.id = 'Vui lòng nhập email hợp lệ.';
+    // K-13: mật khẩu mới 8–20 ký tự; ô đăng nhập vẫn nhận tới 100 để tài khoản cũ không bị chặn
+    if (pwd.length < BUSINESS.PASSWORD_MIN || pwd.length > BUSINESS.PASSWORD_LOGIN_MAX)
+      err.pwd = `Mật khẩu phải dài từ ${BUSINESS.PASSWORD_MIN} ký tự.`;
     setLoginErr(err);
     if (!err.id && !err.pwd) doLogin(id, pwd);
   };
@@ -191,7 +193,7 @@ export const LoginPage: React.FC = () => {
               className="space-y-3"
               noValidate
             >
-              <Field label="Email hoặc số điện thoại" icon={<Mail className="w-4 h-4" />} autoComplete="username" value={identifier} error={loginErr.id} onChange={(e) => setIdentifier(e.target.value)} />
+              <Field label="Email" icon={<Mail className="w-4 h-4" />} type="email" inputMode="email" autoComplete="username" value={identifier} error={loginErr.id} onChange={(e) => setIdentifier(e.target.value)} />
               <Field label="Mật khẩu" type="password" icon={<Lock className="w-4 h-4" />} autoComplete="current-password" value={pwd} error={loginErr.pwd} onChange={(e) => setPwd(e.target.value)} />
               <div className="flex justify-end">
                 <button type="button" className="text-xs font-bold text-blue-600" onClick={() => { setForgotEmail(identifier.includes('@') ? identifier : ''); setForgotOpen(true); }}>

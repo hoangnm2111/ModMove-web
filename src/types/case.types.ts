@@ -68,7 +68,8 @@ export interface Refund {
   updatedAt: string;
 }
 
-export type WalletTxType = 'TopUpDeposit' | 'TripEarning' | 'CommissionDeduction' | 'WithdrawEarnings';
+/** Khớp enum WalletTransactionType của BE (X-04) */
+export type WalletTxType = 'TopUpDeposit' | 'TripEarning' | 'CommissionDeduction' | 'Withdrawal' | 'DepositRefill';
 
 export interface WalletTransaction {
   id: string;

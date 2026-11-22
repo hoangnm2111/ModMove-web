@@ -1,7 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { CustomerLayout } from '../layouts/CustomerLayout';
-import { DriverLayout } from '../layouts/DriverLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
 import { DispatcherLayout } from '../layouts/DispatcherLayout';
 import { getRoleHomePath, useAuthStore } from '../store/useAuthStore';
@@ -19,11 +18,6 @@ const OrdersPage = page(() => import('../pages/customer/OrdersPage'), 'OrdersPag
 const OrderDetailPage = page(() => import('../pages/customer/OrderDetailPage'), 'OrderDetailPage');
 const MyRatingsPage = page(() => import('../pages/customer/MyRatingsPage'), 'MyRatingsPage');
 const LiveTrackingPage = page(() => import('../pages/customer/LiveTrackingPage'), 'LiveTrackingPage');
-const DriverJobListPage = page(() => import('../pages/driver/DriverJobListPage'), 'DriverJobListPage');
-const DriverHomePage = page(() => import('../pages/driver/DriverHomePage'), 'DriverHomePage');
-const DriverEarningsPage = page(() => import('../pages/driver/DriverEarningsPage'), 'DriverEarningsPage');
-const DriverProfilePage = page(() => import('../pages/driver/DriverProfilePage'), 'DriverProfilePage');
-const DriverIncidentsPage = page(() => import('../pages/driver/DriverIncidentsPage'), 'DriverIncidentsPage');
 const LiveMapPage = page(() => import('../pages/dispatcher/LiveMapPage'), 'LiveMapPage');
 const IncidentsPage = page(() => import('../pages/dispatcher/IncidentsPage'), 'IncidentsPage');
 const DispatcherComplaintsPage = page(() => import('../pages/dispatcher/DispatcherComplaintsPage'), 'DispatcherComplaintsPage');
@@ -92,17 +86,8 @@ export const AppRoutes: React.FC = () => (
         </Route>
       </Route>
 
-      {/* Driver */}
-      <Route element={<RequireRole roles={['Driver']} />}>
-        <Route path="/driver" element={<DriverLayout />}>
-          <Route index element={<DriverJobListPage />} />
-          <Route path="trip" element={<DriverHomePage />} />
-          <Route path="history" element={<Navigate to="/driver/trip" replace />} />
-          <Route path="incidents" element={<DriverIncidentsPage />} />
-          <Route path="earnings" element={<DriverEarningsPage />} />
-          <Route path="profile" element={<DriverProfilePage />} />
-        </Route>
-      </Route>
+      {/* Tài xế chỉ dùng app mobile (chốt nghiệp vụ K-07): /driver/* trên web chuyển về trang chủ */}
+      <Route path="/driver/*" element={<Navigate to="/" replace />} />
 
       {/* Dispatcher */}
       <Route element={<RequireRole roles={['Dispatcher']} />}>

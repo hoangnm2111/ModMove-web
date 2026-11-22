@@ -12,6 +12,7 @@ import { formatCurrency, formatDateTime } from '../../utils/format';
  * UC-CUS-27 – Thanh toán PayOS: POST /customer/Orders/{id}/payment (platform=Web).
  * Mã sống 10 phút; hết hạn thì tạo mã mới cho cùng đơn (DECISIONS 3.1).
  * Trạng thái "đã trả" chỉ tin webhook → nút "Kiểm tra" tải lại chi tiết đơn.
+ * UC-CUS-27 4a (K-28): đóng hộp thoại khi chưa xác nhận đã trả → huỷ mã đang chờ; đơn vẫn chờ thanh toán, mở lại để tạo mã mới.
  */
 export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; onClose: () => void; onChecked: () => Promise<boolean> }> = ({
   orderId,
@@ -52,6 +53,12 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
   const left = session ? Math.max(0, Math.floor((new Date(session.expiresAt).getTime() - now) / 1000)) : 0;
   const expired = !!session && left === 0;
 
+  const closeAndCancel = () => {
+    // Mã còn sống mà khách đóng trang → huỷ ở BE (và PayOS); lỗi mạng không chặn việc đóng
+    if (session && !expired) void customerApi.cancelPayment(orderId).catch(() => undefined);
+    onClose();
+  };
+
   const check = async () => {
     setChecking(true);
     try {
@@ -66,7 +73,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
   };
 
   return (
-    <Modal open title={`Thanh toán PayOS – ${orderCode}`} onClose={onClose}>
+    <Modal open title={`Thanh toán PayOS – ${orderCode}`} onClose={closeAndCancel}>
       <div className="space-y-4">
         {error && <Banner kind="error">{error}</Banner>}
         {creating && !session && <p className="text-sm text-slate-500">Đang tạo phiên thanh toán…</p>}
@@ -95,6 +102,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Đơn chỉ hiện cho tài xế sau khi PayOS xác nhận thanh toán.
           </li>
           <li>• Mỗi mã sống 10 phút; đơn chưa thanh toán sau 30 phút kể từ lúc tạo sẽ tự huỷ.</li>
+          <li>• Đóng hộp thoại này sẽ huỷ mã đang chờ. Nếu đã chuyển khoản, hãy bấm "Tôi đã thanh toán – kiểm tra" trước.</li>
         </ul>
         <div className="flex flex-wrap justify-end gap-2 pt-1">
           <Button variant="outline" size="sm" onClick={create} isLoading={creating}>

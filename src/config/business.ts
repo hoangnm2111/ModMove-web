@@ -46,7 +46,9 @@ export const BUSINESS = {
   SIGNIN_LOCK_MINUTES: 10,
   /** GB-53 */
   PASSWORD_MIN: 8,
-  PASSWORD_MAX: 100,
+  PASSWORD_MAX: 20,
+  /** Ô đăng nhập: BE vẫn nhận tới 100 ký tự cho tài khoản cũ */
+  PASSWORD_LOGIN_MAX: 100,
   /** GB-39 */
   LOCATION_STALE_SECONDS: 30,
   /** GB-43 */

@@ -59,6 +59,8 @@ export const customerApi = {
   createOrder: (body: T.CreateOrderRequest) => call(() => apiClient.post<T.CreateOrderResponse>('/customer/Orders', body)),
   cancelOrder: (id: number, reasonCode: string, reason?: string | null) => call(() => apiClient.post<void>(`/customer/Orders/${id}/cancel`, { reasonCode, reason: reason || null })),
   createPayment: (id: number) => call(() => apiClient.post<T.CreateOrderPaymentResponse>(`/customer/Orders/${id}/payment`, { platform: 'Web' as T.PaymentPlatform })),
+  /** UC-CUS-27 4a (K-28): khách đóng trang thanh toán → huỷ mã PayOS đang chờ; đơn vẫn Pending, thanh toán lại được */
+  cancelPayment: (id: number) => call(() => apiClient.post<void>(`/customer/Orders/${id}/payment/cancel`)),
   reviewPickup: (id: number, approve: boolean, reason?: string) => call(() => apiClient.post<void>(`/customer/Orders/${id}/pickup-evidence`, { approve, reason: approve ? null : reason })),
   confirmReceipt: (id: number) => call(() => apiClient.post<void>(`/customer/Orders/${id}/confirm-receipt`)),
 
@@ -156,6 +158,8 @@ export const adminApi = {
   updateFares: (id: number, baseFare: number, pricePerKm: number, minimumFare: number) =>
     call(() => apiClient.put<void>(`/admin/Pricing/vehicletypes/${id}`, { baseFare, pricePerKm, minimumFare })),
   setVehicleTypeActive: (id: number, isActive: boolean) => call(() => apiClient.patch<void>(`/admin/Pricing/vehicletypes/${id}/status`, { isActive })),
+  /** K-30: thêm loại xe (kích thước thùng tính bằng cm) */
+  createVehicleType: (body: T.CreateVehicleTypeRequest) => call(() => apiClient.post<{ id: number }>('/admin/Pricing/vehicletypes', body)),
   updateSettings: (s: Partial<T.PlatformSettingsResponse>) => call(() => apiClient.put<void>('/admin/Pricing/settings', s)),
 
   masterData: (category?: string) => call(() => apiClient.get<T.MasterDataItemDto[]>('/admin/MasterData', { params: q({ category }) })),
@@ -167,6 +171,8 @@ export const adminApi = {
   coupons: (page = 1, pageSize = 50, isActive?: boolean) => call(() => apiClient.get<T.PagedResult<T.CouponDto>>('/admin/Coupons', { params: q({ page, pageSize, isActive }) })),
   createCoupon: (body: T.CreateCouponRequest) => call(() => apiClient.post<{ id: number }>('/admin/Coupons', body)),
   setCouponActive: (id: number, isActive: boolean) => call(() => apiClient.patch<void>(`/admin/Coupons/${id}/status`, { isActive })),
+  /** K-30: sửa điều kiện coupon; mã không đổi */
+  updateCoupon: (id: number, body: T.UpdateCouponRequest) => call(() => apiClient.put<void>(`/admin/Coupons/${id}`, body)),
 
   refunds: (p: T.AdminRefundsQuery = {}) => call(() => apiClient.get<T.PagedResult<T.AdminRefundDto>>('/admin/Refunds', { params: q({ page: 1, pageSize: 20, ...p }) })),
   refund: (id: number) => call(() => apiClient.get<T.AdminRefundDetailResponse>(`/admin/Refunds/${id}`)),

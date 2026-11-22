@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pencil, Save } from 'lucide-react';
+import { Pencil, Plus, Save } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
@@ -18,6 +18,7 @@ const OFF = { label: 'Đã tắt', cls: 'bg-slate-100 text-slate-600 border-slat
 export const AdminPricingPage: React.FC = () => {
   const q = useQuery(() => adminApi.pricing(), []);
   const [edit, setEdit] = useState<VehicleTypePricingResponse | null>(null);
+  const [adding, setAdding] = useState(false);
   const toggle = async (v: VehicleTypePricingResponse) => {
     try {
       await adminApi.setVehicleTypeActive(v.id, !v.isActive);
@@ -33,7 +34,14 @@ export const AdminPricingPage: React.FC = () => {
         <DataState q={q}>
           {(p) => (
             <>
-              <Card title="Giá theo loại xe">
+              <Card
+                title="Giá theo loại xe"
+                actions={
+                  <Button size="sm" onClick={() => setAdding(true)}>
+                    <Plus className="w-4 h-4 mr-1" /> Thêm loại xe
+                  </Button>
+                }
+              >
                 <Table
                   rows={p.vehicleTypes}
                   rowKey={(v) => v.id}
@@ -68,7 +76,73 @@ export const AdminPricingPage: React.FC = () => {
         </DataState>
       </div>
       {edit && <FareModal v={edit} onClose={() => setEdit(null)} onDone={() => (setEdit(null), q.reload())} />}
+      {adding && <AddVehicleTypeModal onClose={() => setAdding(false)} onDone={() => (setAdding(false), q.reload())} />}
     </PageShell>
+  );
+};
+
+/** K-30: Admin thêm loại xe – kích thước thùng tính bằng cm (K-35), loại xe mới ở trạng thái bật */
+const AddVehicleTypeModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ onClose, onDone }) => {
+  const [f, setF] = useState({ name: '', weight: 500, length: 200, width: 150, height: 150, baseFare: 50000, pricePerKm: 10000, minimumFare: 80000 });
+  const [busy, setBusy] = useState(false);
+  const num = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value) });
+  const submit = async () => {
+    const name = f.name.trim();
+    if (!name || name.length > 50) return toast.error('Tên loại xe bắt buộc, tối đa 50 ký tự.');
+    if (!(f.weight > 0)) return toast.error('Tải trọng phải > 0 kg.');
+    if ([f.length, f.width, f.height].some((x) => !Number.isInteger(x) || x < 1 || x > 2000)) return toast.error('Kích thước thùng là số nguyên từ 1 đến 2000 cm.');
+    if (!(f.pricePerKm > 0) || f.baseFare < 0 || f.minimumFare < 0) return toast.error('Giá mỗi km phải > 0; giá mở cửa và giá tối thiểu không được âm.');
+    setBusy(true);
+    try {
+      await adminApi.createVehicleType({
+        name,
+        maxLoadWeightKg: f.weight,
+        cargoBedLengthCm: f.length,
+        cargoBedWidthCm: f.width,
+        cargoBedHeightCm: f.height,
+        baseFare: f.baseFare,
+        pricePerKm: f.pricePerKm,
+        minimumFare: f.minimumFare,
+      });
+      toast.success(`Đã thêm loại xe ${name}.`);
+      onDone();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      title="Thêm loại xe"
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button size="sm" onClick={submit} isLoading={busy}>
+            Thêm
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Tên loại xe" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="VD: Xe tải 1,5 tấn" />
+        <Field label="Tải trọng tối đa kg" type="number" required value={f.weight} onChange={num('weight')} />
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Dài thùng cm" type="number" required value={f.length} onChange={num('length')} />
+          <Field label="Rộng thùng cm" type="number" required value={f.width} onChange={num('width')} />
+          <Field label="Cao thùng cm" type="number" required value={f.height} onChange={num('height')} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Giá mở cửa VND" type="number" value={f.baseFare} onChange={num('baseFare')} />
+          <Field label="Giá mỗi km VND" type="number" required value={f.pricePerKm} onChange={num('pricePerKm')} />
+          <Field label="Giá tối thiểu VND" type="number" value={f.minimumFare} onChange={num('minimumFare')} />
+        </div>
+      </div>
+    </Modal>
   );
 };
 
