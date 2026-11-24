@@ -61,7 +61,7 @@ export const COMPLAINT_STAGE: Record<T.ComplaintStage, Tone> = {
   NeedsReview: tone('Cần xem xét', 'bg-rose-50 text-rose-700 border-rose-200'),
   WaitingForCustomer: tone('Chờ khách bổ sung', 'bg-amber-50 text-amber-700 border-amber-200'),
   CustomerReplied: tone('Khách đã trả lời', 'bg-indigo-50 text-indigo-700 border-indigo-200'),
-  ProposedToAdmin: tone('Đã đề xuất Admin', 'bg-blue-50 text-blue-700 border-blue-200'),
+  ProposedToAdmin: tone('Đã đề xuất Quản trị viên', 'bg-blue-50 text-blue-700 border-blue-200'),
   Closed: tone('Đã đóng', 'bg-slate-100 text-slate-600 border-slate-200'),
 };
 export const PROOF_STATUS: Record<T.ProofStatus, Tone> = {
@@ -94,7 +94,7 @@ export const WALLET_TX_TYPE: Record<string, string> = {
   DepositRefill: 'Tự bù tiền cọc từ thu nhập',
   Withdrawal: 'Rút tiền',
 };
-export const CHANGED_BY: Record<string, string> = { Customer: 'Khách hàng', Driver: 'Tài xế', Dispatcher: 'Điều phối', Administrator: 'Admin', System: 'Hệ thống' };
+export const CHANGED_BY: Record<string, string> = { Customer: 'Khách hàng', Driver: 'Tài xế', Dispatcher: 'Điều phối viên', Administrator: 'Quản trị viên', System: 'Hệ thống' };
 export const MASTER_CATEGORY: Record<T.MasterDataCategory, { label: string; hint: string }> = {
   POLICY: { label: 'Chính sách', hint: 'Bảo hành, hoàn tiền, điều khoản, quyền riêng tư – nội dung ở mô tả' },
   SERVICE_INFO: { label: 'Giới thiệu dịch vụ', hint: 'Giới thiệu, khu vực phục vụ, lợi ích – hiển thị trang chủ' },

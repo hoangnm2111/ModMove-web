@@ -4,6 +4,7 @@ import {
   BookingDraft,
   CargoDetail,
   FareBreakdown,
+  FareEstimateResult,
   OrderStatus,
   OrderStatusHistory,
   Rating,
@@ -11,6 +12,9 @@ import {
   VehicleSnapshot,
 } from '../types/order.types';
 import { User } from '../types/user.types';
+import { cargoNotes } from '../domain/booking';
+import { normalizePhone } from '../domain/validators';
+import { formatCurrency } from '../utils/format';
 import { apiClient, toServiceError } from './api';
 import { readStore, ServiceError, subscribeStore, writeStore } from './mock/storage';
 import { PagedResult } from './pagination';
@@ -180,6 +184,10 @@ interface OrderDetailDto {
   history: { fromStatus: OrderStatus | null; toStatus: OrderStatus; changedByRole: string; note?: string; changedAt: string }[];
   couponCode?: string;
   payment: { transactionStatus: string; checkoutUrl?: string; expiresAt?: string; paidAt?: string; isExpired: boolean } | null;
+  senderName?: string | null;
+  senderPhone?: string | null;
+  pickupNote?: string | null;
+  dropoffNote?: string | null;
 }
 
 function detailToOrder(d: OrderDetailDto, customer: Pick<User, 'id' | 'fullName' | 'phoneNumber'>): ShippingOrder {
@@ -193,8 +201,15 @@ function detailToOrder(d: OrderDetailDto, customer: Pick<User, 'id' | 'fullName'
     customerId: customer.id,
     customerName: customer.fullName,
     customerPhone: customer.phoneNumber,
-    pickup: { address: d.pickupAddress, lat: 0, lng: 0, contactName: customer.fullName, contactPhone: customer.phoneNumber },
-    dropoff: { address: d.dropoffAddress, lat: 0, lng: 0, contactName: d.receiverName, contactPhone: d.receiverPhone },
+    pickup: {
+      address: d.pickupAddress,
+      lat: 0,
+      lng: 0,
+      contactName: d.senderName || customer.fullName,
+      contactPhone: d.senderPhone || customer.phoneNumber,
+      note: d.pickupNote ?? undefined,
+    },
+    dropoff: { address: d.dropoffAddress, lat: 0, lng: 0, contactName: d.receiverName, contactPhone: d.receiverPhone, note: d.dropoffNote ?? undefined },
     vehicle: emptyVehicle(d.vehicleTypeName),
     cargo: {
       type: d.cargo.cargoType,
@@ -283,11 +298,21 @@ export const orderService = {
     }
   },
 
-  /** UC-GST-13: POST /public/fareestimate */
-  async estimate(draft: BookingDraft): Promise<{ vehicle: VehicleSnapshot; fare: FareBreakdown; couponError: string | null } | null> {
+  /** POST /public/FareEstimate: giá cước, toạ độ hai điểm và đường đi để vẽ bản đồ */
+  async estimate(draft: BookingDraft): Promise<FareEstimateResult | null> {
     if (!draft.vehicleTypeId || !draft.pickup.address || !draft.dropoff.address) return null;
     const call = async (couponCode: string | null) => {
-      const { data } = await apiClient.post<{ distanceKm: number; durationMinutes: number; distanceFee: number; serviceFee: number; discountAmount: number; totalFee: number }>(
+      const { data } = await apiClient.post<{
+        distanceKm: number;
+        durationMinutes: number;
+        distanceFee: number;
+        serviceFee: number;
+        discountAmount: number;
+        totalFee: number;
+        pickup?: { latitude: number; longitude: number } | null;
+        dropoff?: { latitude: number; longitude: number } | null;
+        polyline?: string | null;
+      }>(
         '/public/FareEstimate',
         {
           vehicleTypeId: Number(draft.vehicleTypeId),
@@ -306,6 +331,11 @@ export const orderService = {
       return {
         vehicle,
         fare: { distanceKm: data.distanceKm, durationMins: data.durationMinutes, distanceFare: data.distanceFee, loadingFee: data.serviceFee, discount: data.discountAmount, total: data.totalFee },
+        route: {
+          from: data.pickup ? { lat: Number(data.pickup.latitude), lng: Number(data.pickup.longitude) } : null,
+          to: data.dropoff ? { lat: Number(data.dropoff.latitude), lng: Number(data.dropoff.longitude) } : null,
+          polyline: data.polyline ?? null,
+        },
       };
     };
     const coupon = draft.couponCode.trim();
@@ -321,22 +351,33 @@ export const orderService = {
       try {
         return { ...(await call(null)), couponError: err.message };
       } catch {
-        return { vehicle: emptyVehicle(), fare: emptyFare(), couponError: err.message };
+        return { vehicle: emptyVehicle(), fare: emptyFare(), route: null, couponError: err.message };
       }
     }
   },
 
-  /** UC-GST-17: POST /customer/orders */
-  async createOrder(draft: BookingDraft, _customer: User): Promise<ShippingOrder & { expectedTotalFee?: number }> {
+  /**
+   * POST /customer/Orders. Báo giá lại ngay trước khi gửi: giá đổi so với số khách đang thấy thì dừng lại để khách xem giá mới.
+   * `shownTotal` = tổng tiền đang hiển thị trên màn hình.
+   */
+  async createOrder(draft: BookingDraft, _customer: User, shownTotal?: number): Promise<ShippingOrder & { expectedTotalFee?: number }> {
     try {
       const est = await this.estimate(draft);
       if (est?.couponError) throw new ServiceError(est.couponError, 'COUPON_INVALID');
+      if (!est) throw new ServiceError('Không tính được giá cước. Vui lòng thử lại.', 'FARE_UNAVAILABLE');
+      if (shownTotal !== undefined && est.fare.total !== shownTotal) {
+        throw new ServiceError(`Giá cước vừa thay đổi thành ${formatCurrency(est.fare.total)}. Vui lòng xem lại trước khi đặt.`, 'FARE_CHANGED');
+      }
       const { data } = await apiClient.post<{ orderId: number; orderCode: string; totalFee: number }>('/customer/Orders', {
         vehicleTypeId: Number(draft.vehicleTypeId),
         pickupAddress: draft.pickup.address,
         dropoffAddress: draft.dropoff.address,
-        receiverName: draft.dropoff.contactName,
-        receiverPhone: draft.dropoff.contactPhone,
+        receiverName: draft.dropoff.contactName.trim(),
+        receiverPhone: normalizePhone(draft.dropoff.contactPhone),
+        senderName: draft.pickup.contactName.trim(),
+        senderPhone: normalizePhone(draft.pickup.contactPhone),
+        pickupNote: draft.pickup.note?.trim() || null,
+        dropoffNote: draft.dropoff.note?.trim() || null,
         cargo: {
           cargoType: draft.cargo.type,
           quantity: draft.cargo.quantity,
@@ -345,7 +386,7 @@ export const orderService = {
           widthCm: draft.cargo.largestItem.widthCm,
           heightCm: draft.cargo.largestItem.heightCm,
           photoUrls: draft.cargo.photos,
-          specialNotes: draft.cargo.specialNotes || null,
+          specialNotes: cargoNotes(draft.cargo),
         },
         hasLoadingService: draft.loadingService,
         couponCode: draft.couponCode.trim() || null,

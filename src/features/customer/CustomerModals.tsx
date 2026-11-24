@@ -1,4 +1,5 @@
 /** Các hộp thoại thao tác của khách hàng – gọi API backend thật (customerApi) */
+import { BUSINESS } from '../../config/business';
 import React, { useState } from 'react';
 import { Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
@@ -51,7 +52,7 @@ export const CancelOrderModal: React.FC<BaseProps & { order: OrderDetailResponse
     setBusy(true);
     try {
       await customerApi.cancelOrder(order.id, code, reason.trim());
-      toast.success(`Đã huỷ đơn ${order.orderCode}.${paid ? ' Yêu cầu hoàn 100% đã được gửi tới Admin.' : ''}`);
+      toast.success(`Đã huỷ đơn ${order.orderCode}.${paid ? ' Yêu cầu hoàn toàn bộ số tiền đã được gửi tới Quản trị viên.' : ''}`);
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -121,7 +122,7 @@ export const RejectPickupModal: React.FC<BaseProps & { order: OrderDetailRespons
         <Banner kind="warning">
           Đây là lần gửi ảnh thứ {count}/5. Sau lần từ chối thứ 5, tài xế phải báo sự cố để Dispatcher xử lý.
         </Banner>
-        <TextArea label="Lý do từ chối *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="VD: Ảnh mờ, thiếu thùng hàng số 2, hàng có vết móp chưa ghi nhận…" />
+        <TextArea label="Lý do từ chối *" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
     </Modal>
   );
@@ -259,7 +260,7 @@ export const IncidentRefundModal: React.FC<BaseProps & { order: OrderDetailRespo
     setBusy(true);
     try {
       await customerApi.requestIncidentRefund({ incidentId: incident.id, reason: reason.trim(), evidenceUrls: photos, requestedAmount: Math.round(amount), payoutAccount: toPayoutInput(payout) });
-      toast.success('Đã gửi yêu cầu hoàn tiền. Điều phối viên sẽ đề xuất, Admin duyệt và chuyển khoản.');
+      toast.success('Đã gửi yêu cầu hoàn tiền. Điều phối viên sẽ xem xét, Quản trị viên duyệt và chuyển khoản.');
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -343,7 +344,7 @@ export const ReplyInfoModal: React.FC<BaseProps & { refund: MyRefundDetailRespon
         {room > 0 ? (
           <PhotoUploader label={`Ảnh bổ sung (còn ${room} ảnh)`} value={photos} onChange={setPhotos} max={room} upload={customerApi.upload} />
         ) : (
-          <p className="text-[11px] text-slate-400">Đã đủ 5 ảnh bằng chứng, không thêm ảnh được nữa.</p>
+          <p className="text-[11px] text-slate-400">Đã đủ {BUSINESS.MAX_EVIDENCE_PHOTOS} ảnh bằng chứng, không thêm ảnh được nữa.</p>
         )}
       </div>
     </Modal>

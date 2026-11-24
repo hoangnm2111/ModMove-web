@@ -22,8 +22,8 @@ export function formatDistanceCeil(km: number): string {
 }
 
 /**
- * Tiền trong ô Ước tính cước phí: làm tròn LÊN bội số 1.000đ cho "chẵn" (chỉ hiển thị ước tính; số tiền
- * thật khi đặt đơn/thanh toán vẫn lấy nguyên giá trị BE trả về, không dùng hàm này).
+ * Tiền làm tròn LÊN bội số 1.000đ. BE đã tính cước theo nghìn đồng nên với đơn mới số hiển thị trùng số thanh toán;
+ * hàm này chỉ giữ cho các đơn cũ còn số lẻ.
  */
 export function formatCurrencyCeil1000(amount: number): string {
   return formatCurrency(Math.ceil(amount / 1000) * 1000);

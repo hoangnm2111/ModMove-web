@@ -18,7 +18,7 @@ import {
 import { Button } from '../../components/Button';
 import { Banner, confirm, toast } from '../../components/ui/feedback';
 import { Card, ErrorBox, KV, Loading, PhotoGrid, Pill, SectionTitle, StatusPill, StatusTimeline, cx, isAwaitingPayment } from '../../components/ui/kit';
-import { MapEmbed } from '../../components/MapEmbed';
+import { MapView } from '../../components/MapView';
 import { customerApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, ORDER_FLOW, ORDER_STATUS, PAYER_ROLE, PAYMENT_STATUS, PAYMENT_TX_STATUS, PROOF_STATUS, REFUND_SOURCE, REFUND_STATUS } from '../../api/labels';
@@ -28,7 +28,9 @@ import { CancelOrderModal, ComplaintModal, IncidentRefundModal, RatingModal, Rej
 import { PayOsPaymentModal } from '../../features/payment/PayOsPaymentModal';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { errorMessage } from '../../services/mock/storage';
-import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
+import { formatCurrency, formatDateTime, formatDistanceCeil, timeAgo } from '../../utils/format';
+import { BUSINESS } from '../../config/business';
+import { usePublicConfig } from '../../services/config.service';
 import { PhoneLink } from '../../components/ui/PhoneLink';
 import { useDriverLocations, useDropoffArrival, useOrderRealtime } from '../../hooks/useRealtime';
 
@@ -172,6 +174,12 @@ export const OrderDetailPage: React.FC = () => {
             </div>
             <div className="space-y-4">
               <DriverCard order={o} />
+              {o.senderName && (
+                <Card title="Người gửi">
+                  <KV label="Họ tên">{o.senderName}</KV>
+                  {o.senderPhone && <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={o.senderPhone} /></div>}
+                </Card>
+              )}
               <Card title="Người nhận">
                 <KV label="Họ tên">{o.receiverName}</KV>
                 <div className="py-1 text-sm font-bold text-slate-800"><PhoneLink phone={o.receiverPhone} /></div>
@@ -290,6 +298,7 @@ const NextAction: React.FC<{
 }> = ({ order: o, dropoffArrivedAt, hasOpenComplaint, rated, onModal, onReload }) => {
   // Tài xế có sự cố mở: khách chưa duyệt được ảnh lấy hàng (BE trả INCIDENT_PENDING), vẫn từ chối được
   const driverIncidentPending = !!o.pendingDriverIncidentId;
+  usePublicConfig(); // vẽ lại khi BE trả số thật (hạn thanh toán, hạn khiếu nại, hạn đánh giá)
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -333,13 +342,13 @@ const NextAction: React.FC<{
     case 'Pending': {
       const needPay = o.paymentMethod === 'PayOS' && o.paymentStatus === 'Unpaid';
       if (needPay) {
-        const left = new Date(o.createdAt).getTime() + 30 * 60_000 - now;
+        const left = new Date(o.createdAt).getTime() + BUSINESS.UNPAID_ORDER_TIMEOUT_MIN * 60_000 - now;
         return box(
           'bg-rose-50 border-rose-200',
           <CreditCard className="w-5 h-5 text-rose-600" />,
           'Thanh toán để bắt đầu tìm tài xế',
           <>
-            Đơn PayOS chỉ được gửi tới tài xế sau khi thanh toán. Đơn tự huỷ nếu chưa thanh toán sau 30 phút – còn <b>{fmtLeft(left)}</b>.
+            Đơn PayOS chỉ được gửi tới tài xế sau khi thanh toán. Đơn tự huỷ nếu chưa thanh toán sau {BUSINESS.UNPAID_ORDER_TIMEOUT_MIN} phút – còn <b>{fmtLeft(left)}</b>.
             {o.payment?.isExpired && ' Mã thanh toán trước đã hết hạn, hãy tạo mã mới.'}
           </>,
           <>
@@ -354,7 +363,7 @@ const NextAction: React.FC<{
         'bg-amber-50 border-amber-200',
         <Clock className="w-5 h-5 text-amber-600" />,
         'Đang tìm tài xế phù hợp gần điểm lấy',
-        'Đơn hiển thị cho mọi tài xế đủ điều kiện trong bán kính; tài xế nhận trước sẽ được giao đơn. Không có tài xế nhận trong 10 phút, đơn tự huỷ.',
+        `Đơn hiển thị cho mọi tài xế đủ điều kiện trong bán kính; tài xế nhận trước sẽ được giao đơn. Không có tài xế nhận trong ${BUSINESS.MATCHING_TIMEOUT_MIN} phút, đơn tự huỷ.`,
         cancelBtn
       );
     }
@@ -436,7 +445,7 @@ const NextAction: React.FC<{
       );
     case 'Delivered': {
       const at = deliveredAtOf(o);
-      const left = at ? new Date(at).getTime() + 24 * H - now : 0;
+      const left = at ? new Date(at).getTime() + BUSINESS.COMPLAINT_WINDOW_HOURS * H - now : 0;
       const canComplain = left > 0 && !hasOpenComplaint;
       return box(
         'bg-teal-50 border-teal-200',
@@ -446,7 +455,7 @@ const NextAction: React.FC<{
           <>Đơn đang có khiếu nại mở. Đơn sẽ hoàn tất sau khi khiếu nại được đóng.</>
         ) : (
           <>
-            Hàng ổn: bấm <b>Xác nhận đã nhận hàng</b>. Hàng có vấn đề: bấm <b>Khiếu nại</b> (còn <b>{fmtLeft(left)}</b>). Xác nhận rồi sẽ không khiếu nại được nữa; quá 24 giờ đơn tự hoàn
+            Hàng ổn: bấm <b>Xác nhận đã nhận hàng</b>. Hàng có vấn đề: bấm <b>Khiếu nại</b> (còn <b>{fmtLeft(left)}</b>). Xác nhận rồi sẽ không khiếu nại được nữa; quá {BUSINESS.AUTO_COMPLETE_HOURS} giờ đơn tự hoàn
             tất.
           </>
         ),
@@ -473,13 +482,13 @@ const NextAction: React.FC<{
     }
     case 'Completed': {
       const at = historyAt(o, 'Completed');
-      const left = at ? new Date(at).getTime() + 24 * H - now : 0;
+      const left = at ? new Date(at).getTime() + BUSINESS.RATING_WINDOW_HOURS * H - now : 0;
       if (rated) return box('bg-emerald-50 border-emerald-200', <CheckCircle2 className="w-5 h-5 text-emerald-600" />, 'Đơn đã hoàn thành', 'Cảm ơn bạn đã đánh giá chuyến đi.', null);
       return box(
         'bg-emerald-50 border-emerald-200',
         <Star className="w-5 h-5 text-amber-500" />,
         'Đơn đã hoàn thành',
-        left > 0 ? <>Hãy đánh giá tài xế (còn {fmtLeft(left)}, chỉ một lần).</> : 'Đã quá thời hạn 1 ngày để đánh giá.',
+        left > 0 ? <>Hãy đánh giá tài xế (còn {fmtLeft(left)}, chỉ một lần).</> : `Đã quá thời hạn ${BUSINESS.RATING_WINDOW_HOURS} giờ để đánh giá.`,
         left > 0 && (
           <Button size="sm" onClick={() => onModal('rate')}>
             <Star className="w-4 h-4 mr-1" /> Đánh giá tài xế
@@ -541,7 +550,7 @@ export const TrackingCard: React.FC<{ tracking?: import('../../api/types').Order
             const target = tracking.eta?.target === 'Handover' ? null : tracking.eta?.target === 'Pickup' || (!tracking.eta && toPickup) ? pickup : dropoff;
             return (
               <>
-                <MapEmbed className="h-72" title="Theo dõi tài xế" from={d && target ? d : pickup} to={d && target ? target : d ? null : dropoff} point={d && !target ? d : null} />
+                <MapView className="h-72" title="Theo dõi tài xế" from={d && target ? d : pickup} to={d && target ? target : d ? null : dropoff} point={d && !target ? d : null} />
                 <p className="text-[11px] text-slate-500">
                   {d
                     ? target
@@ -590,6 +599,7 @@ const CargoCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => (
           <div>
             <div className="font-bold text-slate-500">Điểm lấy</div>
             <div className="text-slate-900 font-semibold">{o.pickupAddress}</div>
+            {o.pickupNote && <div className="text-slate-600 mt-0.5">Ghi chú: {o.pickupNote}</div>}
           </div>
         </div>
         <div className="flex gap-2">
@@ -597,10 +607,11 @@ const CargoCard: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) => (
           <div>
             <div className="font-bold text-slate-500">Điểm giao</div>
             <div className="text-slate-900 font-semibold">{o.dropoffAddress}</div>
+            {o.dropoffNote && <div className="text-slate-600 mt-0.5">Ghi chú: {o.dropoffNote}</div>}
           </div>
         </div>
         <div className="text-slate-500">
-          {o.estimatedDistanceKm} km • ~{o.estimatedDurationMin} phút • {o.vehicleTypeName}
+          {formatDistanceCeil(o.estimatedDistanceKm)} • khoảng {o.estimatedDurationMin} phút • {o.vehicleTypeName}
           {o.hasLoadingService && ' • Có bốc xếp'}
         </div>
       </div>
@@ -832,7 +843,7 @@ const RefundItem: React.FC<{ refund: MyRefundDetailResponse; onReply: (r: MyRefu
       )}
       {r.decisionReason && (
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
-          <b>Quyết định của Admin:</b> {r.decisionReason}
+          <b>Quyết định của Quản trị viên:</b> {r.decisionReason}
         </div>
       )}
       {r.payoutAccount && (
@@ -882,15 +893,17 @@ const ReorderButton: React.FC<{ order: OrderDetailResponse }> = ({ order: o }) =
       className="w-full"
       onClick={() => {
         reset();
-        setPickup({ address: o.pickupAddress });
-        setDropoff({ address: o.dropoffAddress, contactName: o.receiverName, contactPhone: o.receiverPhone });
+        setPickup({ address: o.pickupAddress, contactName: o.senderName ?? '', contactPhone: o.senderPhone ?? '', note: o.pickupNote ?? '' });
+        setDropoff({ address: o.dropoffAddress, contactName: o.receiverName, contactPhone: o.receiverPhone, note: o.dropoffNote ?? '' });
         setCargo({
           type: o.cargo.cargoType,
           quantity: o.cargo.quantity,
           weightKg: o.cargo.weightKg,
           largestItem: { lengthCm: o.cargo.lengthCm, widthCm: o.cargo.widthCm, heightCm: o.cargo.heightCm },
           photos: o.cargo.photoUrls,
-          specialNotes: o.cargo.specialNotes ?? '',
+          // Mô tả và ghi chú được gộp làm một khi gửi lên: đặt lại thì đưa cả vào ô mô tả
+          description: o.cargo.specialNotes ?? '',
+          specialNotes: '',
         });
         update({ loadingService: o.hasLoadingService });
         navigate('/booking');

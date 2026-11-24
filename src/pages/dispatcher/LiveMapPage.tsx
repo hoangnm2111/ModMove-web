@@ -5,7 +5,7 @@ import { useQuery } from '../../api/useQuery';
 import { ORDER_STATUS } from '../../api/labels';
 import type { OrderStatus } from '../../api/types';
 import { Card, DataState, PageShell, Pager, SearchBox, StatCard, StatusPill, Table, cx } from '../../components/ui/kit';
-import { MapEmbed } from '../../components/MapEmbed';
+import { MapView } from '../../components/MapView';
 import { DispatcherOrderDrawer } from '../../features/dispatcher/DispatcherOrderDrawer';
 import { IncidentDrawer } from '../../features/dispatcher/IncidentDrawer';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
@@ -187,7 +187,7 @@ export const LiveMapPage: React.FC = () => {
 
           <Card title={`Tài xế online (${driverList.length})`} padded={false}>
             <div className="p-3">
-              <MapEmbed className="h-56" point={selDriver ? { lat: selDriver.latitude, lng: selDriver.longitude } : null} title="Vị trí tài xế" />
+              <MapView className="h-56" point={selDriver ? { lat: selDriver.latitude, lng: selDriver.longitude } : null} title="Vị trí tài xế" />
             </div>
             <DataState q={drivers} empty={(d) => d.length === 0}>
               {(list) => (

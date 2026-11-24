@@ -225,7 +225,7 @@ const RefundDrawer: React.FC<{ id: number; onClose: () => void; onChanged: () =>
             </Card>
             {(r.decidedAt || r.processedAt) && (
               <Card title="Kết quả xử lý">
-                {r.approvedByName && <KV label="Admin xử lý">{r.approvedByName}</KV>}
+                {r.approvedByName && <KV label="Quản trị viên xử lý">{r.approvedByName}</KV>}
                 {r.decidedAt && <KV label="Quyết định lúc">{formatDateTime(r.decidedAt)}</KV>}
                 {r.decisionNote && <KV label="Ghi chú cho khách">{r.decisionNote}</KV>}
                 {r.bankReferenceCode && <KV label="Mã chuyển khoản">{r.bankReferenceCode}</KV>}

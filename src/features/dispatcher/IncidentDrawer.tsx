@@ -5,7 +5,7 @@ import { Banner, toast } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/Modal';
 import { TextArea, inputClass } from '../../components/ui/Field';
 import { Card, DataState, Drawer, KV, PhotoGrid, Pill, SectionTitle, StatusPill, StatusTimeline, cx } from '../../components/ui/kit';
-import { MapEmbed } from '../../components/MapEmbed';
+import { MapView } from '../../components/MapView';
 import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PAYMENT_STATUS, PROOF_STATUS, REFUND_STATUS, reporterLabel } from '../../api/labels';
@@ -155,7 +155,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
               {i.latitude && i.longitude && (
                 <div className="mt-3">
                   <SectionTitle>Vị trí khi báo</SectionTitle>
-                  <MapEmbed className="h-48" point={{ lat: i.latitude, lng: i.longitude }} />
+                  <MapView className="h-48" point={{ lat: i.latitude, lng: i.longitude }} />
                 </div>
               )}
             </Card>
@@ -290,7 +290,7 @@ export const IncidentDrawer: React.FC<{ incidentId: number; onClose: () => void;
               />
             )}
             {action === 'refundPropose' && i.refund && (
-              <ProposeModal max={i.refund.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.incidentRefundProposal(i.id, a, r).then(() => after('Đã gửi đề xuất lên Admin duyệt.'))} />
+              <ProposeModal max={i.refund.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.incidentRefundProposal(i.id, a, r).then(() => after('Đã gửi đề xuất lên Quản trị viên duyệt.'))} />
             )}
             {action === 'reassign' && <ReassignModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã đổi tài xế. Đơn quay về "Tài xế đã nhận", tài xế mới sẽ kiểm hàng lại.', true)} />}
             {action === 'cancelOrder' && <CancelOrderModal incident={i} onClose={() => setAction(null)} onDone={() => after('Đã huỷ đơn do sự cố.', true)} />}
@@ -366,7 +366,7 @@ export const ProposeModal: React.FC<{ max: number; onClose: () => void; onSubmit
   return (
     <Modal
       open
-      title="Đề xuất hoàn tiền lên Admin"
+      title="Đề xuất hoàn tiền lên Quản trị viên"
       onClose={onClose}
       footer={
         <>

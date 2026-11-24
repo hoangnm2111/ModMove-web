@@ -1,8 +1,8 @@
 import React from 'react';
 import { FareBreakdown, VehicleType } from '../../types/order.types';
-import { formatCurrency, formatCurrencyCeil1000, formatDistanceCeil } from '../../utils/format';
+import { formatCurrencyCeil1000, formatDistanceCeil } from '../../utils/format';
 
-/** UC-GST-13 – Ước tính cước theo GB-29 (không VAT, không phụ phí) */
+/** Ước tính cước: phí vận chuyển, phí bốc xếp, giảm giá và tổng (đã làm tròn lên nghìn đồng) */
 export const FareSummary: React.FC<{ fare: FareBreakdown | null; vehicle?: VehicleType; couponCode?: string }> = ({ fare, vehicle, couponCode }) => (
   <aside className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 text-sm">
     <h3 className="font-extrabold text-slate-900">Ước tính cước phí</h3>
@@ -11,16 +11,11 @@ export const FareSummary: React.FC<{ fare: FareBreakdown | null; vehicle?: Vehic
     ) : (
       <>
         <div className="text-xs text-slate-500">
-          {vehicle.name} • {formatDistanceCeil(fare.distanceKm)} • ~{fare.durationMins} phút
+          {vehicle.name} • {formatDistanceCeil(fare.distanceKm)} • khoảng {fare.durationMins} phút
         </div>
         <dl className="space-y-1.5 text-xs">
           <div className="flex justify-between">
-            <dt className="text-slate-500">
-              Phí vận chuyển
-              <span className="block text-[10px]">
-                max({formatCurrency(vehicle.minimumFare)}, {formatCurrency(vehicle.baseFare)} + {formatCurrency(vehicle.pricePerKm)} × {formatDistanceCeil(fare.distanceKm)})
-              </span>
-            </dt>
+            <dt className="text-slate-500">Phí vận chuyển</dt>
             <dd className="font-bold">{formatCurrencyCeil1000(fare.distanceFare)}</dd>
           </div>
           {fare.loadingFee > 0 && (

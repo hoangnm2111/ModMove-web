@@ -11,6 +11,9 @@ export const required = (field: string): Validator => (v) =>
   v.trim() ? null : msg('MSG01', { field_name: field });
 
 export const isPhone = (v: string) => VN_PHONE.test(v.replace(/[\s.]/g, ''));
+
+/** BE nhận số dạng 0xxxxxxxxx: bỏ khoảng trắng, dấu chấm và đổi +84 thành 0 */
+export const normalizePhone = (v: string) => v.replace(/[\s.]/g, '').replace(/^\+84/, '0');
 export const isEmail = (v: string) => EMAIL.test(v.trim());
 
 export const phone = (field = 'Số điện thoại'): Validator => (v) =>

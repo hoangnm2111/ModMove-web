@@ -10,7 +10,8 @@ import { dispatcherApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
 import { INCIDENT_DECISION, INCIDENT_STATUS, INCIDENT_TYPE, PAYER_ROLE, PAYMENT_STATUS, PAYMENT_TX_STATUS, PROOF_STATUS, REFUND_SOURCE, REFUND_STATUS } from '../../api/labels';
 import { Card, DataState, Drawer, KV, PhotoGrid, Pill, SectionTitle, Select, StatusPill, StatusTimeline } from '../../components/ui/kit';
-import { MapEmbed, mapsLink } from '../../components/MapEmbed';
+import { mapsLink } from '../../components/MapEmbed';
+import { MapView } from '../../components/MapView';
 import { formatCurrency, formatDateTime, timeAgo } from '../../utils/format';
 
 /** UC-DIS-01 bước 6 – Chi tiết đầy đủ đơn cho Dispatcher: GET /dispatcher/Orders/{id} */
@@ -59,10 +60,16 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
           <>
             {o.cancellationReason && <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">Lý do huỷ: {o.cancellationReason}</div>}
             <div className="grid sm:grid-cols-2 gap-4">
-              <Card title="Khách hàng & người nhận">
+              <Card title="Khách hàng, người gửi & người nhận">
                 <KV label="Khách">{o.customer.fullName}</KV>
                 <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600" href={`tel:${o.customer.phoneNumber}`}> {o.customer.phoneNumber} </a></div>
                 <KV label="Email">{o.customer.email}</KV>
+                {o.sender && (
+                  <>
+                    <KV label="Người gửi">{o.sender.name}</KV>
+                    <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600" href={`tel:${o.sender.phoneNumber}`}> {o.sender.phoneNumber} </a></div>
+                  </>
+                )}
                 <KV label="Người nhận">{o.receiver.name}</KV>
                 <div className="py-1 text-sm font-bold text-slate-800"><a className="text-blue-600" href={`tel:${o.receiver.phoneNumber}`}> {o.receiver.phoneNumber} </a></div>
               </Card>
@@ -93,12 +100,14 @@ export const DispatcherOrderDrawer: React.FC<{ orderId: number; onClose: () => v
             <Card title="Tuyến đường">
               <div className="text-xs space-y-1 mb-3">
                 <KV label="Điểm lấy">{o.pickupAddress}</KV>
+                {o.pickupNote && <KV label="Ghi chú điểm lấy">{o.pickupNote}</KV>}
                 <KV label="Điểm giao">{o.dropoffAddress}</KV>
+                {o.dropoffNote && <KV label="Ghi chú điểm giao">{o.dropoffNote}</KV>}
                 <KV label="Quãng đường / thời gian">
-                  {o.estimatedDistanceKm} km • ~{o.estimatedDurationMin} phút
+                  {o.estimatedDistanceKm} km • khoảng {o.estimatedDurationMin} phút
                 </KV>
               </div>
-              <MapEmbed
+              <MapView
                 className="h-56"
                 point={o.driver?.lastLatitude && o.driver?.lastLongitude && ['Accepted', 'Arrived', 'PickedUp', 'InTransit'].includes(o.orderStatus) ? { lat: o.driver.lastLatitude, lng: o.driver.lastLongitude } : null}
                 from={{ lat: o.pickupLatitude, lng: o.pickupLongitude }}

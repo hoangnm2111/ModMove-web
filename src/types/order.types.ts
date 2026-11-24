@@ -87,12 +87,25 @@ export interface Coupon {
 export interface FareBreakdown {
   distanceKm: number;
   durationMins: number;
-  /** max(MinimumFare, BaseFare + PricePerKm × km) */
   distanceFare: number;
   loadingFee: number;
   discount: number;
-  /** GB-29 */
+  /** BE đã làm tròn lên nghìn đồng */
   total: number;
+}
+
+/** Hai điểm BE đã tìm được từ địa chỉ và đường đi (polyline 5 chữ số), dùng để vẽ bản đồ lộ trình */
+export interface EstimatedRoute {
+  from: { lat: number; lng: number } | null;
+  to: { lat: number; lng: number } | null;
+  polyline: string | null;
+}
+
+export interface FareEstimateResult {
+  vehicle: VehicleSnapshot;
+  fare: FareBreakdown;
+  route: EstimatedRoute | null;
+  couponError: string | null;
 }
 
 export interface AssignedDriver {

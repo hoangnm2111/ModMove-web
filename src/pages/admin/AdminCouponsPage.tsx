@@ -127,16 +127,16 @@ const CreateModal: React.FC<{ coupon?: CouponDto; onClose: () => void; onDone: (
   const [f, setF] = useState(
     coupon
       ? { code: coupon.discountCode, value: coupon.discountValue, min: coupon.minimumOrderValue, from: toLocalInput(coupon.validFrom), to: toLocalInput(coupon.expiresAt), limit: coupon.usageLimit === null ? '' : String(coupon.usageLimit) }
-      : { code: '', value: 20000, min: 100000, from: today, to: '', limit: '' }
+      : { code: '', value: 0, min: 0, from: today, to: '', limit: '' }
   );
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!coupon && !/^[A-Z0-9_-]{1,30}$/.test(f.code)) return toast.error('Mã tối đa 30 ký tự, chữ in hoa/số/-/_.');
-    if (!(f.value > 0)) return toast.error('Giá trị giảm phải > 0.');
+    if (!coupon && !/^[A-Z0-9_-]{1,30}$/.test(f.code)) return toast.error('Mã giảm giá tối đa 30 ký tự, chỉ gồm chữ in hoa, chữ số, dấu gạch ngang và dấu gạch dưới.');
+    if (!(f.value > 0)) return toast.error('Giá trị giảm phải lớn hơn 0.');
     if (f.min < 0) return toast.error('Giá trị đơn tối thiểu không được âm.');
     if (!f.to || new Date(f.to) <= new Date(f.from)) return toast.error('Ngày hết hạn phải sau ngày bắt đầu.');
     const limit = f.limit ? Number(f.limit) : null;
-    if (limit !== null && !(limit > 0)) return toast.error('Tổng lượt dùng phải > 0.');
+    if (limit !== null && !(limit > 0)) return toast.error('Tổng lượt dùng phải lớn hơn 0.');
     if (coupon && limit !== null && limit < coupon.usedCount) return toast.error(`Tổng lượt dùng không được nhỏ hơn ${coupon.usedCount} lượt đã dùng.`);
     const terms = {
       discountValue: f.value,
@@ -178,11 +178,11 @@ const CreateModal: React.FC<{ coupon?: CouponDto; onClose: () => void; onDone: (
       }
     >
       <div className="space-y-3">
-        <Field label="Mã" required disabled={!!coupon} value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VD: MODMOVE30" />
+        <Field label="Mã" required disabled={!!coupon} value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} />
         {coupon && <p className="text-xs text-slate-500">Mã không đổi được. Đơn đã đặt giữ nguyên số tiền giảm. Đã dùng {coupon.usedCount} lượt.</p>}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Số tiền giảm VND" type="number" required value={f.value} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />
-          <Field label="Giá trị đơn tối thiểu VND" type="number" value={f.min} onChange={(e) => setF({ ...f, min: Number(e.target.value) })} />
+          <Field label="Số tiền giảm VND" type="number" required value={f.value || ''} onChange={(e) => setF({ ...f, value: Number(e.target.value) })} />
+          <Field label="Giá trị đơn tối thiểu VND" type="number" value={f.min || ''} onChange={(e) => setF({ ...f, min: Number(e.target.value) })} />
           <Field label="Bắt đầu" type="datetime-local" required value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} />
           <Field label="Hết hạn" type="datetime-local" required value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} />
         </div>

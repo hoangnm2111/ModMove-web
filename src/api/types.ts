@@ -90,6 +90,12 @@ export interface FareEstimateRequest {
   hasLoadingService: boolean;
   couponCode?: string | null;
 }
+/** `polyline`: mã hoá kiểu Google, 5 chữ số; null khi MapVina không trả hình dạng (vẽ đường thẳng). */
+export interface RouteResponse {
+  distanceKm: number;
+  durationMinutes: number;
+  polyline: string | null;
+}
 export interface FareEstimateResponse {
   distanceKm: number;
   durationMinutes: number;
@@ -97,6 +103,10 @@ export interface FareEstimateResponse {
   serviceFee: number;
   discountAmount: number;
   totalFee: number;
+  /** Hai điểm BE đã tìm từ địa chỉ và đường đi, để vẽ bản đồ lộ trình */
+  pickup?: GeoPoint | null;
+  dropoff?: GeoPoint | null;
+  polyline?: string | null;
 }
 
 /* ============================================================ Customer: đơn hàng */
@@ -116,6 +126,11 @@ export interface CreateOrderRequest {
   dropoffAddress: string;
   receiverName: string;
   receiverPhone: string;
+  /** Người giao hàng ở điểm lấy; để trống = chính khách đặt */
+  senderName?: string | null;
+  senderPhone?: string | null;
+  pickupNote?: string | null;
+  dropoffNote?: string | null;
   cargo: CargoInput;
   hasLoadingService: boolean;
   couponCode?: string | null;
@@ -219,6 +234,11 @@ export interface OrderDetailResponse {
   history: StatusHistoryResponse[];
   couponCode: string | null;
   payment: PaymentResponse | null;
+  /** Null ở các đơn đặt trước khi có thông tin người gửi */
+  senderName?: string | null;
+  senderPhone?: string | null;
+  pickupNote?: string | null;
+  dropoffNote?: string | null;
 }
 export interface GeoPoint {
   latitude: number;
@@ -614,6 +634,10 @@ export interface DispatcherOrderDetailResponse {
   completedAt: string | null;
   customer: { id: number; fullName: string; phoneNumber: string; email: string };
   receiver: { name: string; phoneNumber: string };
+  /** Null ở các đơn đặt trước khi có thông tin người gửi */
+  sender?: { name: string; phoneNumber: string } | null;
+  pickupNote?: string | null;
+  dropoffNote?: string | null;
   driver: {
     driverProfileId: number;
     userId: number;

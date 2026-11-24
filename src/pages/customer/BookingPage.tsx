@@ -6,17 +6,19 @@ import { Banner, toast } from '../../components/ui/feedback';
 import { msg } from '../../constants/messages';
 import { useBookingDraftStore } from '../../store/useBookingDraftStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { usePlatformSettings, useVehicleTypes } from '../../hooks/useDomainData';
+import { useVehicleTypes } from '../../hooks/useDomainData';
 import { orderService } from '../../services/order.service';
+import { usePublicConfig } from '../../services/config.service';
 import { errorMessage } from '../../services/mock/storage';
 import { ShippingOrder } from '../../types/order.types';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatDistanceCeil } from '../../utils/format';
 import { RouteStep } from '../../features/booking/steps/RouteStep';
 import { CargoStep } from '../../features/booking/steps/CargoStep';
 import { VehicleStep } from '../../features/booking/steps/VehicleStep';
 import { PaymentStep } from '../../features/booking/steps/PaymentStep';
-import { MapEmbed } from '../../components/MapEmbed';
+import { MapView } from '../../components/MapView';
 import { FareSummary } from '../../features/booking/FareSummary';
+import { canVehicleCarry } from '../../domain/vehicleFit';
 import { ProhibitedCargoModal, WarrantyPolicyModal } from '../../features/booking/PolicyModals';
 import { StepErrors, validateCargo, validateConfirm, validateRoute, validateVehicle } from '../../features/booking/bookingValidation';
 
@@ -27,16 +29,13 @@ const STEPS = [
   { num: 4, label: 'Thanh toán', sub: 'Dịch vụ & xác nhận' },
 ];
 
-/**
- * SCR-06 → SCR-10: Tạo yêu cầu vận chuyển (UC-GST-06 → UC-GST-17).
- * Guest được điền nháp; khi gửi phải đăng nhập (GB-28).
- */
+/** Đặt xe 4 bước. Khách chưa đăng nhập vẫn lập được đơn nháp; khi gửi mới phải đăng nhập. */
 export const BookingPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { draft, step, setStep, update, setPickup, setDropoff, setCargo, reset } = useBookingDraftStore();
+  const { draft, step, restored, setStep, update, setPickup, setDropoff, setCargo, keepRestored, reset } = useBookingDraftStore();
   const vehicles = useVehicleTypes();
-  const settings = usePlatformSettings();
+  const publicConfig = usePublicConfig();
 
   const [errors, setErrors] = useState<StepErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -46,6 +45,8 @@ export const BookingPage: React.FC = () => {
   const [estimate, setEstimate] = useState<Awaited<ReturnType<typeof orderService.estimate>>>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  /** Tăng lên để báo giá lại (ví dụ giá vừa đổi lúc gửi đơn) */
+  const [estimateNonce, setEstimateNonce] = useState(0);
 
   useEffect(() => {
     if (!draft.pickup.address || !draft.dropoff.address || !draft.vehicleTypeId) {
@@ -77,7 +78,7 @@ export const BookingPage: React.FC = () => {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.pickup.address, draft.dropoff.address, draft.vehicleTypeId, draft.loadingService, draft.couponCode, draft.cargo.weightKg, draft.cargo.largestItem.lengthCm, draft.cargo.largestItem.widthCm, draft.cargo.largestItem.heightCm]);
+  }, [estimateNonce, draft.pickup.address, draft.dropoff.address, draft.vehicleTypeId, draft.loadingService, draft.couponCode, draft.cargo.weightKg, draft.cargo.largestItem.lengthCm, draft.cargo.largestItem.widthCm, draft.cargo.largestItem.heightCm]);
 
   const validators: Record<number, () => StepErrors> = {
     1: () => validateRoute(draft),
@@ -105,7 +106,7 @@ export const BookingPage: React.FC = () => {
     setStep(target);
   };
 
-  /** Đặt xong → trang chi tiết đơn; đơn PayOS tự mở thanh toán (UC-CUS-27) */
+  /** Đặt xong → trang chi tiết đơn; đơn chuyển khoản tự mở thanh toán */
   const finish = (order: ShippingOrder) => {
     reset();
     toast.success(msg('MSG33', { order_id: order.code }));
@@ -121,7 +122,7 @@ export const BookingPage: React.FC = () => {
         return;
       }
     }
-    // GB-28: chỉ Customer đã đăng nhập mới gửi được đơn
+    // Chỉ khách đã đăng nhập mới gửi được đơn; nháp được giữ lại để gửi sau khi đăng nhập
     if (!isAuthenticated || !user) {
       toast.info(msg('MSG14'));
       navigate('/login?redirect=/booking');
@@ -130,16 +131,24 @@ export const BookingPage: React.FC = () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const order = await orderService.createOrder(draft, user);
+      const order = await orderService.createOrder(draft, user, estimate?.fare.total);
       finish(order);
     } catch (e) {
       setSubmitError(errorMessage(e));
+      // Giá vừa đổi: báo giá lại để khách thấy số mới rồi bấm gửi lần nữa
+      if ((e as { code?: string }).code === 'FARE_CHANGED') setEstimateNonce((n) => n + 1);
     } finally {
       setSubmitting(false);
     }
   };
 
   const selectedVehicle = vehicles.find((v) => v.id === draft.vehicleTypeId);
+
+  // Xe không phù hợp bị ẩn ở bước chọn xe: hàng khai lại không còn vừa xe đã chọn thì bỏ chọn để khách chọn lại
+  const selectedNoLongerFits = Boolean(selectedVehicle && !canVehicleCarry(selectedVehicle, draft.cargo));
+  useEffect(() => {
+    if (selectedNoLongerFits) update({ vehicleTypeId: null });
+  }, [selectedNoLongerFits, update]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-y-auto min-w-0">
@@ -150,6 +159,29 @@ export const BookingPage: React.FC = () => {
         <h1 className="text-base font-extrabold text-slate-900">Đặt xe vận chuyển</h1>
         {!isAuthenticated && <span className="ml-auto text-[11px] font-semibold text-slate-500">Bạn đang lập đơn nháp – cần đăng nhập khi gửi</span>}
       </header>
+
+      {restored && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2 text-xs text-amber-900">
+          <span className="font-semibold">Bạn có đơn nháp chưa gửi.</span>
+          <span className="text-amber-800">Mã giảm giá và các ô đồng ý chính sách cần chọn lại.</span>
+          <span className="ml-auto flex gap-2">
+            <Button size="sm" onClick={keepRestored}>
+              Tiếp tục
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                reset();
+                setErrors({});
+                setSubmitError(null);
+              }}
+            >
+              Bắt đầu lại
+            </Button>
+          </span>
+        </div>
+      )}
 
       <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex-shrink-0" aria-label="Các bước đặt xe">
         <ol className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -197,7 +229,7 @@ export const BookingPage: React.FC = () => {
           {step === 4 && (
             <PaymentStep
               draft={draft}
-              loadingFee={settings.loadingFee}
+              loadingFee={publicConfig?.loadingFee ?? estimate?.fare.loadingFee ?? 0}
               couponError={estimate?.couponError ?? null}
               discount={estimate?.fare.discount ?? 0}
               errors={errors}
@@ -227,14 +259,15 @@ export const BookingPage: React.FC = () => {
 
         <div className="lg:sticky lg:top-4 h-fit space-y-4">
           <FareSummary fare={estimate?.fare ?? null} vehicle={selectedVehicle} couponCode={draft.couponCode} />
-          {/* Bản đồ lộ trình theo địa chỉ khách nhập; quãng đường tính giá do backend (MapVina) trả về */}
+          {/* Hai điểm và đường đi lấy từ báo giá (BE tìm bằng MapVina); trước khi có báo giá thì dùng điểm khách chọn từ gợi ý */}
           <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
             <h3 className="text-sm font-extrabold text-slate-900">Bản đồ lộ trình</h3>
-            <MapEmbed
+            <MapView
               className="h-64"
               title="Lộ trình đặt xe"
-              from={draft.pickup.lat ? { lat: draft.pickup.lat, lng: draft.pickup.lng } : null}
-              to={draft.dropoff.lat ? { lat: draft.dropoff.lat, lng: draft.dropoff.lng } : null}
+              from={estimate?.route?.from ?? (draft.pickup.lat ? { lat: draft.pickup.lat, lng: draft.pickup.lng } : null)}
+              to={estimate?.route?.to ?? (draft.dropoff.lat ? { lat: draft.dropoff.lat, lng: draft.dropoff.lng } : null)}
+              routePolyline={estimate?.route ? estimate.route.polyline : undefined}
               fromText={draft.pickup.address}
               toText={draft.dropoff.address}
             />
@@ -247,7 +280,7 @@ export const BookingPage: React.FC = () => {
               </p>
               {estimate?.fare && (
                 <p className="font-semibold text-slate-700">
-                  Quãng đường tính giá: {estimate.fare.distanceKm} km • ~{estimate.fare.durationMins} phút
+                  Quãng đường: {formatDistanceCeil(estimate.fare.distanceKm)} • khoảng {estimate.fare.durationMins} phút
                 </p>
               )}
             </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BUSINESS } from '../../config/business';
 import { useSearchParams } from 'react-router-dom';
 import { Lock, Power, Unlock, UserPlus } from 'lucide-react';
 import { Button } from '../../components/Button';
@@ -212,7 +213,7 @@ const CreateDispatcherModal: React.FC<{ onClose: () => void; onDone: () => void 
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!f.fullName.trim() || !f.phoneNumber.trim() || !f.email.trim()) return toast.error('Nhập đủ họ tên, số điện thoại, email.');
-    if (f.password.length < 8 || f.password.length > 100) return toast.error('Mật khẩu 8–100 ký tự.');
+    if (f.password.length < BUSINESS.PASSWORD_MIN || f.password.length > BUSINESS.PASSWORD_MAX) return toast.error(`Mật khẩu phải dài từ ${BUSINESS.PASSWORD_MIN} đến ${BUSINESS.PASSWORD_MAX} ký tự.`);
     setBusy(true);
     try {
       await adminApi.createDispatcher({ fullName: f.fullName.trim(), phoneNumber: f.phoneNumber.trim(), email: f.email.trim().toLowerCase(), password: f.password });

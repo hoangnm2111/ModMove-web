@@ -83,15 +83,15 @@ export const AdminPricingPage: React.FC = () => {
 
 /** K-30: Admin thêm loại xe – kích thước thùng tính bằng cm (K-35), loại xe mới ở trạng thái bật */
 const AddVehicleTypeModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ onClose, onDone }) => {
-  const [f, setF] = useState({ name: '', weight: 500, length: 200, width: 150, height: 150, baseFare: 50000, pricePerKm: 10000, minimumFare: 80000 });
+  const [f, setF] = useState({ name: '', weight: 0, length: 0, width: 0, height: 0, baseFare: 0, pricePerKm: 0, minimumFare: 0 });
   const [busy, setBusy] = useState(false);
   const num = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value) });
   const submit = async () => {
     const name = f.name.trim();
     if (!name || name.length > 50) return toast.error('Tên loại xe bắt buộc, tối đa 50 ký tự.');
-    if (!(f.weight > 0)) return toast.error('Tải trọng phải > 0 kg.');
+    if (!(f.weight > 0)) return toast.error('Tải trọng phải lớn hơn 0 kg.');
     if ([f.length, f.width, f.height].some((x) => !Number.isInteger(x) || x < 1 || x > 2000)) return toast.error('Kích thước thùng là số nguyên từ 1 đến 2000 cm.');
-    if (!(f.pricePerKm > 0) || f.baseFare < 0 || f.minimumFare < 0) return toast.error('Giá mỗi km phải > 0; giá mở cửa và giá tối thiểu không được âm.');
+    if (!(f.pricePerKm > 0) || f.baseFare < 0 || f.minimumFare < 0) return toast.error('Giá mỗi km phải lớn hơn 0; giá mở cửa và giá tối thiểu không được âm.');
     setBusy(true);
     try {
       await adminApi.createVehicleType({
@@ -129,17 +129,17 @@ const AddVehicleTypeModal: React.FC<{ onClose: () => void; onDone: () => void }>
       }
     >
       <div className="space-y-3">
-        <Field label="Tên loại xe" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="VD: Xe tải 1,5 tấn" />
-        <Field label="Tải trọng tối đa kg" type="number" required value={f.weight} onChange={num('weight')} />
+        <Field label="Tên loại xe" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <Field label="Tải trọng tối đa kg" type="number" required value={f.weight || ''} onChange={num('weight')} />
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Dài thùng cm" type="number" required value={f.length} onChange={num('length')} />
-          <Field label="Rộng thùng cm" type="number" required value={f.width} onChange={num('width')} />
-          <Field label="Cao thùng cm" type="number" required value={f.height} onChange={num('height')} />
+          <Field label="Dài thùng cm" type="number" required value={f.length || ''} onChange={num('length')} />
+          <Field label="Rộng thùng cm" type="number" required value={f.width || ''} onChange={num('width')} />
+          <Field label="Cao thùng cm" type="number" required value={f.height || ''} onChange={num('height')} />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Giá mở cửa VND" type="number" value={f.baseFare} onChange={num('baseFare')} />
-          <Field label="Giá mỗi km VND" type="number" required value={f.pricePerKm} onChange={num('pricePerKm')} />
-          <Field label="Giá tối thiểu VND" type="number" value={f.minimumFare} onChange={num('minimumFare')} />
+          <Field label="Giá mở cửa VND" type="number" value={f.baseFare || ''} onChange={num('baseFare')} />
+          <Field label="Giá mỗi km VND" type="number" required value={f.pricePerKm || ''} onChange={num('pricePerKm')} />
+          <Field label="Giá tối thiểu VND" type="number" value={f.minimumFare || ''} onChange={num('minimumFare')} />
         </div>
       </div>
     </Modal>

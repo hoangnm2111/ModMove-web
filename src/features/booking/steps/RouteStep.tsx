@@ -1,5 +1,6 @@
 import React from 'react';
 import { Field } from '../../../components/ui/Field';
+import { BUSINESS } from '../../../config/business';
 import { LocationPoint } from '../../../types/order.types';
 import { AddressInput } from '../AddressInput';
 import { StepErrors } from '../bookingValidation';
@@ -37,6 +38,7 @@ const PointCard: React.FC<{
         <Field
           label={isPickup ? 'Tên người gửi' : 'Tên người nhận'}
           required
+          maxLength={100}
           value={point.contactName}
           error={errors[`${kind}.contactName`]}
           onChange={(e) => onChange({ contactName: e.target.value })}
@@ -45,6 +47,7 @@ const PointCard: React.FC<{
           label={isPickup ? 'Số điện thoại người gửi' : 'Số điện thoại người nhận'}
           required
           inputMode="tel"
+          maxLength={20}
           placeholder="09xxxxxxxx"
           value={point.contactPhone}
           error={errors[`${kind}.contactPhone`]}
@@ -52,16 +55,18 @@ const PointCard: React.FC<{
         />
       </div>
       <Field
+        id={`${kind}-note`}
         label="Ghi chú"
-        placeholder={isPickup ? 'VD: cửa hầm B1, thang máy hàng…' : 'VD: gọi trước 15 phút…'}
+        maxLength={BUSINESS.MAX_NOTE_LENGTH}
         value={point.note ?? ''}
+        error={errors[`${kind}.note`]}
         onChange={(e) => onChange({ note: e.target.value })}
       />
     </section>
   );
 };
 
-/** Bước 1 – Lộ trình (GB-05: đúng 1 điểm lấy + 1 điểm giao) */
+/** Bước 1: lộ trình, đúng 1 điểm lấy và 1 điểm giao */
 export const RouteStep: React.FC<Props> = ({ pickup, dropoff, errors, onPickup, onDropoff }) => (
   <div className="space-y-4">
     <PointCard kind="pickup" point={pickup} errors={errors} onChange={onPickup} />

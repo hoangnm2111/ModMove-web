@@ -7,6 +7,8 @@ import { customerApi } from '../../api/endpoints';
 import type { CreateOrderPaymentResponse } from '../../api/types';
 import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
+import { BUSINESS } from '../../config/business';
+import { usePublicConfig } from '../../services/config.service';
 
 /**
  * UC-CUS-27 – Thanh toán PayOS: POST /customer/Orders/{id}/payment (platform=Web).
@@ -20,6 +22,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
   onClose,
   onChecked,
 }) => {
+  usePublicConfig(); // vẽ lại khi BE trả số thật (thời hạn mã, hạn huỷ đơn)
   const [session, setSession] = useState<CreateOrderPaymentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -101,7 +104,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
           <li className="flex gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Đơn chỉ hiện cho tài xế sau khi PayOS xác nhận thanh toán.
           </li>
-          <li>• Mỗi mã sống 10 phút; đơn chưa thanh toán sau 30 phút kể từ lúc tạo sẽ tự huỷ.</li>
+          <li>• Mỗi mã sống {BUSINESS.PAYOS_CODE_TTL_MIN} phút; đơn chưa thanh toán sau {BUSINESS.UNPAID_ORDER_TIMEOUT_MIN} phút kể từ lúc tạo sẽ tự huỷ.</li>
           <li>• Đóng hộp thoại này sẽ huỷ mã đang chờ. Nếu đã chuyển khoản, hãy bấm "Tôi đã thanh toán – kiểm tra" trước.</li>
         </ul>
         <div className="flex flex-wrap justify-end gap-2 pt-1">

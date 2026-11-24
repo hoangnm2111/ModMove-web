@@ -26,6 +26,14 @@ export function writeStore<T>(key: string, value: T, notify = true): void {
   if (notify) window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: key }));
 }
 
+export function removeStore(key: string): void {
+  try {
+    localStorage.removeItem(PREFIX + key);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Đăng ký lắng nghe thay đổi (cùng tab và tab khác) */
 export function subscribeStore(key: string, cb: () => void): () => void {
   const local = (e: Event) => (e as CustomEvent).detail === key && cb();

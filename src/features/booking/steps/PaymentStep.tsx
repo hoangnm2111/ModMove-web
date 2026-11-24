@@ -75,7 +75,7 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
             <span className="block text-[11px] text-slate-500">Khuân vác tại điểm lấy và điểm giao.</span>
           </span>
         </span>
-        <span className="font-extrabold text-slate-900">+{formatCurrency(loadingFee)}</span>
+        {loadingFee > 0 && <span className="font-extrabold text-slate-900">+{formatCurrency(loadingFee)}</span>}
       </label>
     </section>
 
@@ -83,7 +83,6 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
       <h3 className="text-sm font-extrabold text-slate-900 mb-2">Mã giảm giá</h3>
       <Field
         label="Nhập mã giảm giá"
-        placeholder="VD: MODMOVE30"
         value={draft.couponCode}
         onChange={(e) => onChange({ couponCode: e.target.value.toUpperCase() })}
         error={draft.couponCode ? couponError : null}

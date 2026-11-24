@@ -103,7 +103,7 @@ const EditModal: React.FC<{ category: MasterDataCategory; item: MasterDataItemDt
   const [busy, setBusy] = useState(false);
   const long = category === 'POLICY' || category === 'SERVICE_INFO';
   const submit = async () => {
-    if (!item && !/^[A-Z0-9_-]{1,50}$/.test(code)) return toast.error('Mã tối đa 50 ký tự, chữ IN HOA, số, gạch dưới.');
+    if (!item && !/^[A-Z0-9_-]{1,50}$/.test(code)) return toast.error('Mã tối đa 50 ký tự, chỉ gồm chữ in hoa, chữ số và dấu gạch dưới.');
     if (!name.trim()) return toast.error('Nhập tên.');
     if (name.trim().length > 100) return toast.error('Tên tối đa 100 ký tự.');
     if (desc.length > DESC_MAX) return toast.error(`Nội dung tối đa ${DESC_MAX.toLocaleString('vi-VN')} ký tự.`);

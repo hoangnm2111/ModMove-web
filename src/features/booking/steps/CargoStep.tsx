@@ -1,9 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Field, TextArea } from '../../../components/ui/Field';
 import { PhotoUploader } from '../../../components/ui/PhotoUploader';
 import { BUSINESS } from '../../../config/business';
 import { useCargoTypes } from '../../../hooks/useDomainData';
 import { customerUploadService } from '../../../services/customer-upload.service';
+import { ServiceError } from '../../../services/mock/storage';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { CargoDetail } from '../../../types/order.types';
 import { StepErrors } from '../bookingValidation';
 
@@ -18,9 +21,19 @@ interface Props {
 
 const num = (v: string) => (v === '' ? 0 : Number(v));
 
-/** Bước 2 – Khai báo hàng hoá (UC-GST-10, GB-06) */
+/** Bước 2: khai báo hàng hoá */
 export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, errors, onChange, onAgree, onShowProhibited }) => {
   const cargoTypes = useCargoTypes();
+  const navigate = useNavigate();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  /** Ảnh được tải lên tài khoản khách: chưa đăng nhập thì mời đăng nhập, nháp vẫn giữ nguyên */
+  const upload = async (file: File) => {
+    if (!isAuthenticated) {
+      navigate('/login?redirect=/booking');
+      throw new ServiceError('Vui lòng đăng nhập để thêm ảnh hàng hoá. Đơn nháp của bạn được giữ nguyên.', 'SIGN_IN_REQUIRED');
+    }
+    return customerUploadService.uploadImage(file);
+  };
   return (
   <div className="space-y-4">
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
@@ -34,7 +47,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
               type="button"
               onClick={() => onChange({ type: o.code })}
               className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                cargo.type === o.code ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                cargo.type.toLowerCase() === o.code.toLowerCase() ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
               }`}
             >
               {o.name}
@@ -45,7 +58,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
       <TextArea
         label="Mô tả hàng hoá"
         required
-        placeholder="VD: 1 tủ quần áo 2 cánh, 1 đệm 1m6, 5 thùng carton"
+        maxLength={BUSINESS.MAX_NOTE_LENGTH}
         value={cargo.description}
         error={errors['cargo.description']}
         onChange={(e) => onChange({ description: e.target.value })}
@@ -94,13 +107,13 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
         {errors['cargo.largestItem'] && <p className="mt-1 text-[11px] font-semibold text-rose-600">{errors['cargo.largestItem']}</p>}
       </div>
       <div>
-        <PhotoUploader label={`Ảnh hàng hoá (${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh) *`} value={cargo.photos} onChange={(photos) => onChange({ photos })} upload={customerUploadService.uploadImage} />
+        <PhotoUploader label={`Ảnh hàng hoá (${BUSINESS.MIN_CARGO_PHOTOS}–${BUSINESS.MAX_CARGO_PHOTOS} ảnh) *`} value={cargo.photos} onChange={(photos) => onChange({ photos })} upload={upload} />
         {errors['cargo.photos'] && <p className="mt-1 text-[11px] font-semibold text-rose-600">{errors['cargo.photos']}</p>}
       </div>
       <TextArea
         label="Ghi chú bốc xếp đặc biệt"
-        placeholder="VD: hàng dễ vỡ, không lật úp…"
         value={cargo.specialNotes ?? ''}
+        error={errors['cargo.specialNotes']}
         onChange={(e) => onChange({ specialNotes: e.target.value })}
       />
     </section>

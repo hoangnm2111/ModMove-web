@@ -21,7 +21,6 @@ export const CATALOG_KEYS = {
   vehicles: 'vehicleTypes',
   adminVehicles: 'adminVehicleTypes',
   coupons: 'coupons',
-  settings: 'settings',
   policies: 'policies',
   serviceInfo: 'serviceInfo',
   cargoTypes: 'cargoTypes',
@@ -30,8 +29,6 @@ export const CATALOG_KEYS = {
 } as const;
 
 export const CUSTOMER_COUPONS_KEY = 'customerCoupons';
-
-const DEFAULT_SETTINGS: PlatformSettings = { commissionRate: 0.1, loadingFee: 100_000, requiredDeposit: 200_000, matchingRadiusKm: 5 };
 
 const iconFor = (maxLoadKg: number): VehicleType['iconType'] => (maxLoadKg <= 600 ? 'pickup' : maxLoadKg <= 1200 ? 'truck' : 'heavy_truck');
 
@@ -108,8 +105,6 @@ export const catalogService = {
     }
   },
 
-  getSettingsSync: (): PlatformSettings => readStore(CATALOG_KEYS.settings, () => DEFAULT_SETTINGS),
-
   listPoliciesSync: (): LookupItem[] => readStore(CATALOG_KEYS.policies, () => []),
   async loadPolicies(): Promise<void> {
     try {
@@ -160,7 +155,6 @@ export const catalogService = {
         settings: PlatformSettings;
       }>('/admin/Pricing');
       writeStore(CATALOG_KEYS.adminVehicles, data.vehicleTypes.map((v) => toVehicleType(v, v.isActive)));
-      writeStore(CATALOG_KEYS.settings, data.settings);
     } catch {
       /* ignore */
     }

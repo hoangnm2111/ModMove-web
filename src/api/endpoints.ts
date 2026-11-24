@@ -42,6 +42,16 @@ export const accountApi = {
   updateProfile: (fullName: string, phoneNumber: string) => call(() => apiClient.put<void>('/account/Profile', { fullName, phoneNumber })),
   changePassword: (currentPassword: string, newPassword: string) => call(() => apiClient.post<void>('/account/Password', { currentPassword, newPassword })),
   logout: () => call(() => apiClient.post<void>('/account/Logout')),
+  /**
+   * Đường đi thật giữa hai điểm (BE gọi MapVina, có cache; giới hạn theo người dùng → 429). Giống app mobile:
+   * tài xế gọi `driver/Route`, các vai trò còn lại gọi `account/Route`; cùng dữ liệu trả về.
+   */
+  route: (role: string | null | undefined, from: { lat: number; lng: number }, to: { lat: number; lng: number }) =>
+    call(() =>
+      apiClient.get<T.RouteResponse>(role === 'Driver' ? '/driver/Route' : '/account/Route', {
+        params: { fromLatitude: from.lat, fromLongitude: from.lng, toLatitude: to.lat, toLongitude: to.lng },
+      }),
+    ),
 };
 
 /* ================================================================ CUSTOMER */

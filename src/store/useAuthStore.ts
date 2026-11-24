@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearBookingDraft } from './useBookingDraftStore';
 import { authService, Session } from '../services/auth.service';
 import { User, UserRole } from '../types/user.types';
 
@@ -77,7 +78,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    // Chỉ xoá nháp đặt xe khi thật sự có phiên: khách vãng lai gặp 401 (ví dụ tải ảnh) vẫn giữ nháp.
+    const signedIn = get().isAuthenticated;
     void authService.signOut();
+    if (signedIn) clearBookingDraft();
     set(fromSession(null));
   },
 

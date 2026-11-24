@@ -1,4 +1,6 @@
 import React, { useEffect } from 'react';
+import { BUSINESS } from '../../config/business';
+import { usePublicConfig } from '../../services/config.service';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, Truck } from 'lucide-react';
 import { Button } from '../../components/Button';
@@ -13,6 +15,7 @@ const TRACKABLE = ['Accepted', 'Arrived', 'PickedUp', 'InTransit'];
 
 /** UC-CUS-13/14 – Theo dõi trực tiếp các đơn đang chạy: GET /customer/Orders?view=Active + /{id}/tracking */
 export const LiveTrackingPage: React.FC = () => {
+  usePublicConfig(); // vẽ lại khi BE trả số thật
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const active = useQuery(() => customerApi.orders({ view: 'Active', pageSize: 50 }), [], { refreshMs: 30_000 });
@@ -84,7 +87,7 @@ const Tracked: React.FC<{ id: number }> = ({ id }) => {
           <p className="text-sm text-slate-600">
             Đơn đang <StatusPill status={o.orderStatus} paymentMethod={o.paymentMethod} paymentStatus={o.paymentStatus} />.{' '}
             {o.orderStatus === 'Pending' && (o.paymentMethod === 'PayOS' && o.paymentStatus === 'Unpaid' ? 'Hãy thanh toán để bắt đầu tìm tài xế.' : 'Hệ thống đang tìm tài xế gần bạn.')}
-            {o.orderStatus === 'Delivered' && 'Hàng đã giao, hãy xác nhận đã nhận hàng hoặc khiếu nại trong 24 giờ.'}
+            {o.orderStatus === 'Delivered' && `Hàng đã giao, hãy xác nhận đã nhận hàng hoặc khiếu nại trong ${BUSINESS.COMPLAINT_WINDOW_HOURS} giờ.`}
           </p>
         </Card>
       )}

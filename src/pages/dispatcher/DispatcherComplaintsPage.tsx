@@ -19,7 +19,7 @@ const TABS: { key: StageTab; label: string }[] = [
   { key: 'NeedsReview', label: 'Cần xem xét' },
   { key: 'CustomerReplied', label: 'Khách đã trả lời' },
   { key: 'WaitingForCustomer', label: 'Chờ khách' },
-  { key: 'ProposedToAdmin', label: 'Đã đề xuất Admin' },
+  { key: 'ProposedToAdmin', label: 'Đã đề xuất Quản trị viên' },
   { key: 'Closed', label: 'Đã đóng' },
   { key: 'ALL', label: 'Tất cả' },
 ];
@@ -36,7 +36,7 @@ export const DispatcherComplaintsPage: React.FC = () => {
   return (
     <PageShell
       title="Khiếu nại của khách"
-      subtitle="Đối chiếu bằng chứng, xin thêm thông tin và đề xuất số tiền hoàn lên Admin"
+      subtitle="Đối chiếu bằng chứng, xin thêm thông tin và đề xuất số tiền hoàn lên Quản trị viên"
       toolbar={
         <div className="w-full flex flex-wrap items-center gap-2">
           <Tabs value={tab} onChange={(k) => (setTab(k), setPage(1))} items={TABS} />
@@ -258,7 +258,7 @@ const ComplaintDrawer: React.FC<{ id: number; onClose: () => void; onChanged: ()
 
             {action === 'info' && <InfoModal onClose={() => setAction(null)} onSubmit={(note) => dispatcherApi.complaintRequestInfo(c.id, note).then(() => after('Đã gửi câu hỏi cho khách.'))} />}
             {action === 'propose' && (
-              <ProposeModal max={c.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.complaintProposal(c.id, a, r).then(() => after('Đã gửi đề xuất lên Admin.', true))} />
+              <ProposeModal max={c.requestedAmount} onClose={() => setAction(null)} onSubmit={(a, r) => dispatcherApi.complaintProposal(c.id, a, r).then(() => after('Đã gửi đề xuất lên Quản trị viên.', true))} />
             )}
           </>
         )}

@@ -1,15 +1,34 @@
+import { BUSINESS } from '../config/business';
+
 /**
  * Map `code` của ProblemDetails (ModMove-backend/docs/api/README.md "Mã lỗi") sang câu tiếng Việt.
  * Client rẽ nhánh theo `code`, không theo `detail` tiếng Anh (DECISIONS 9.4).
  */
 export const ERROR_MESSAGES: Record<string, string> = {
+  // Các câu có số liệu lấy từ BE (BUSINESS được ghi đè bởi GET /public/Config): viết bằng getter để luôn đọc số mới nhất
+  get PICKUP_PHOTO_LIMIT() {
+    const n = BUSINESS.MAX_PICKUP_SUBMISSIONS;
+    return `Đã hết ${n} lần gửi ảnh lấy hàng. Khách đã từ chối cả ${n} lần nên không thể cho tiếp tục chuyến: hãy đổi tài xế hoặc huỷ đơn.`;
+  },
+  get RATING_WINDOW_CLOSED() {
+    return `Đã quá ${BUSINESS.RATING_WINDOW_HOURS} giờ kể từ khi hoàn thành, không thể đánh giá.`;
+  },
+  get COMPLAINT_WINDOW_CLOSED() {
+    return `Chỉ khiếu nại được khi đơn đã giao và trong vòng ${BUSINESS.COMPLAINT_WINDOW_HOURS} giờ.`;
+  },
+  get TOO_MANY_PHOTOS() {
+    return `Tối đa ${BUSINESS.MAX_EVIDENCE_PHOTOS} ảnh bằng chứng.`;
+  },
+  get FILE_TOO_LARGE() {
+    return `Ảnh vượt quá ${BUSINESS.MAX_PHOTO_SIZE_MB} MB. Vui lòng chọn ảnh nhỏ hơn.`;
+  },
   VALIDATION: 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra lại các trường.',
   UNAUTHORIZED: 'Sai thông tin đăng nhập hoặc phiên đã hết hạn.',
   FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
   EMAIL_NOT_VERIFIED: 'Email chưa được xác minh. Vui lòng nhập mã OTP đã gửi tới email.',
   // BE 2026-11-12: tài khoản chỉ được tạo sau khi xác minh OTP; mật khẩu sai → đăng ký lại với mật khẩu mong muốn
   ACCOUNT_INACTIVE: 'Tài khoản đã bị khóa hoặc vô hiệu hóa. Liên hệ hỗ trợ.',
-  ACCOUNT_HAS_PENDING_WITHDRAWAL: 'Còn yêu cầu rút tiền đang chờ Admin chuyển. Hãy chờ xử lý xong rồi xoá tài khoản.',
+  ACCOUNT_HAS_PENDING_WITHDRAWAL: 'Còn yêu cầu rút tiền đang chờ Quản trị viên chuyển. Hãy chờ xử lý xong rồi xoá tài khoản.',
   ACCOUNT_HAS_WALLET_BALANCE: 'Ví còn tiền hoặc tiền cọc đang âm. Hãy rút hết hoặc nạp cho đủ trước khi xoá tài khoản.',
   DRIVER_HAS_ACTIVE_ORDER: 'Đang có đơn chạy nên chưa thể tắt nhận đơn. Hãy hoàn tất chuyến trước.',
   REFUND_ZERO_PROPOSAL: 'Điều phối viên đề xuất hoàn 0đ: khoản này chỉ có thể từ chối.',
@@ -27,7 +46,6 @@ export const ERROR_MESSAGES: Record<string, string> = {
   ORDER_NOT_YOURS: 'Đơn hàng không thuộc tài khoản của bạn.',
   ORDER_CANCELLED: 'Đơn hàng đã bị huỷ.',
   PAYMENT_AMOUNT_MISMATCH: 'Số tiền thanh toán không khớp.',
-  PICKUP_PHOTO_LIMIT: 'Đã hết 5 lần gửi ảnh lấy hàng. Khách đã từ chối cả 5 lần nên không thể cho tiếp tục chuyến: hãy đổi tài xế hoặc huỷ đơn.',
   INCIDENT_PENDING: 'Tài xế đã báo sự cố, chuyến đang tạm dừng chờ điều phối viên.',
   WITHDRAWAL_EXCEEDS_BALANCE: 'Số tiền rút vượt số dư được phép rút. Khi đang có đơn chạy chỉ rút được phần thu nhập.',
   TOP_UP_BELOW_MISSING_DEPOSIT: 'Số tiền nạp nhỏ hơn phần tiền cọc còn thiếu. Hãy nạp ít nhất phần thiếu.',
@@ -36,13 +54,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   REFUND_PAYOUT_UNCHANGED: 'Chuyển khoản lần trước bị lỗi với tài khoản này. Hãy nhập tài khoản khác.',
   NO_SUGGESTED_PAYOUT_ACCOUNT: 'Đơn này không có tài khoản đã thanh toán để gợi ý. Hãy nhập tài khoản nhận tay.',
   RATING_NOT_ALLOWED: 'Chỉ đánh giá được đơn đã hoàn thành.',
-  RATING_WINDOW_CLOSED: 'Đã quá 1 ngày kể từ khi hoàn thành, không thể đánh giá.',
-  COMPLAINT_WINDOW_CLOSED: 'Chỉ khiếu nại được khi đơn đã giao và trong vòng 24 giờ.',
   REFUND_AMOUNT_INVALID: 'Số tiền yêu cầu phải lớn hơn 0 và không vượt tổng cước đơn.',
   REFUND_TOTAL_EXCEEDED: 'Tổng các khoản hoàn của đơn sẽ vượt tổng cước.',
   INCIDENT_NOT_ALLOWED: 'Đơn không ở trạng thái cho phép báo sự cố (khách: Đã đến…Đang giao; tài xế và điều phối: Đã nhận…Đang giao).',
-  TOO_MANY_PHOTOS: 'Tối đa 5 ảnh bằng chứng.',
-  REFUND_NOT_FOR_DISPATCHER: 'Hoàn tiền do huỷ đơn được chuyển thẳng cho Admin, Dispatcher không xử lý.',
+  REFUND_NOT_FOR_DISPATCHER: 'Hoàn tiền do huỷ đơn được chuyển thẳng cho Quản trị viên, Điều phối viên không xử lý.',
   NO_INFO_REQUEST: 'Chưa có yêu cầu bổ sung thông tin nào để trả lời.',
   FARE_CHANGED: 'Giá cước vừa thay đổi. Vui lòng xem lại giá mới trước khi đặt.',
   ADDRESS_NOT_FOUND: 'Không tìm thấy địa chỉ lấy hoặc giao hàng. Hãy nhập cụ thể hơn.',
@@ -63,7 +78,6 @@ export const ERROR_MESSAGES: Record<string, string> = {
   WRONG_BANK_ACCOUNT: 'Số tài khoản ngân hàng không đúng hoặc chưa được khai.',
   COLLECT_CASH_WRONG_LOCATION: 'Cần ở trong bán kính 500 m quanh điểm thu tiền.',
   RESUBMIT_MISSING_REJECTED_ITEMS: 'Hãy cập nhật đủ các mục đã bị từ chối rồi nộp lại.',
-  FILE_TOO_LARGE: 'Ảnh vượt quá 5 MB. Vui lòng chọn ảnh nhỏ hơn.',
   UNSUPPORTED_FILE_TYPE: 'Chỉ nhận ảnh JPG hoặc PNG hợp lệ.',
   UPLOAD_FAILED: 'Không tải được ảnh lên. Vui lòng thử lại.',
   SERVER_ERROR: 'Lỗi máy chủ. Vui lòng thử lại sau.',

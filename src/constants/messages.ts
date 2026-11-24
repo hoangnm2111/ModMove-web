@@ -1,3 +1,5 @@
+import { BUSINESS } from '../config/business';
+
 /**
  * Thông điệp hệ thống – SRS V.2 System Messages (bản tiếng Việt).
  * Dùng `msg('MSG36', { order_id })` để điền tham số {…}.
@@ -13,7 +15,9 @@ export const MESSAGES = {
   MSG08: 'Thông tin đăng nhập không đúng. Vui lòng thử lại.',
   MSG09: 'Vui lòng xác thực email trước khi đăng nhập.',
   MSG10: 'Tài khoản không khả dụng. Vui lòng liên hệ bộ phận hỗ trợ.',
-  MSG11: 'Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 10 phút.',
+  get MSG11() {
+    return `Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ${BUSINESS.SIGNIN_LOCK_MINUTES} phút.`;
+  },
   MSG12: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
   MSG13: 'Bạn không có quyền thực hiện thao tác này.',
   MSG14: 'Vui lòng đăng nhập hoặc đăng ký tài khoản để tiếp tục.',

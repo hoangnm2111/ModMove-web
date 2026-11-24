@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal } from '../../components/ui/Modal';
-import { useCargoTypes, usePlatformSettings, usePolicies, useVehicleTypes } from '../../hooks/useDomainData';
+import { useCargoTypes, usePolicies, useVehicleTypes } from '../../hooks/useDomainData';
+import { usePublicConfig } from '../../services/config.service';
 import { formatCurrency } from '../../utils/format';
 import { PolicyAccordion } from '../policy/PolicyAccordion';
 
@@ -14,7 +15,7 @@ const Empty: React.FC<{ text: string }> = ({ text }) => <p className="text-slate
 /** Giá cước theo loại xe: bảng `vehicle_types` (GET /public/VehicleTypes). */
 export const VehiclePriceModal: React.FC<Props> = ({ open, onClose }) => {
   const vehicles = useVehicleTypes().filter((v) => v.isActive);
-  const { loadingFee } = usePlatformSettings();
+  const loadingFee = usePublicConfig()?.loadingFee;
   const cargo = useCargoTypes();
   return (
     <Modal open={open} onClose={onClose} title="Bảng giá theo loại xe và loại hàng hoá" size="lg">
@@ -46,7 +47,7 @@ export const VehiclePriceModal: React.FC<Props> = ({ open, onClose }) => {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-slate-500">Phí bốc xếp {formatCurrency(loadingFee)}.</p>
+          {loadingFee !== undefined && <p className="mt-3 text-xs text-slate-500">Phí bốc xếp {formatCurrency(loadingFee)}.</p>}
         </>
       )}
       <h3 className="mt-5 mb-2 font-extrabold text-slate-900">Loại hàng hoá</h3>
