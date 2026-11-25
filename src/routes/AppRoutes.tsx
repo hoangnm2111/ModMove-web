@@ -15,6 +15,7 @@ const LoginPage = page(() => import('../pages/auth/LoginPage'), 'LoginPage');
 const ProfilePage = page(() => import('../pages/account/ProfilePage'), 'ProfilePage');
 const BookingPage = page(() => import('../pages/customer/BookingPage'), 'BookingPage');
 const OrdersPage = page(() => import('../pages/customer/OrdersPage'), 'OrdersPage');
+const PaymentResultPage = page(() => import('../pages/customer/PaymentResultPage'), 'PaymentResultPage');
 const OrderDetailPage = page(() => import('../pages/customer/OrderDetailPage'), 'OrderDetailPage');
 const MyRatingsPage = page(() => import('../pages/customer/MyRatingsPage'), 'MyRatingsPage');
 const LiveTrackingPage = page(() => import('../pages/customer/LiveTrackingPage'), 'LiveTrackingPage');
@@ -79,6 +80,8 @@ export const AppRoutes: React.FC = () => (
       <Route element={<RequireRole roles={['Customer']} />}>
         <Route element={<CustomerLayout />}>
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/success" element={<PaymentResultPage />} />
+          <Route path="/orders/cancel" element={<PaymentResultPage />} />
           <Route path="/orders/:id" element={<OrderDetailPage />} />
           <Route path="/ratings" element={<MyRatingsPage />} />
           <Route path="/tracking" element={<LiveTrackingPage />} />

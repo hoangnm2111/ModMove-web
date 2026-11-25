@@ -9,6 +9,7 @@ import { errorMessage } from '../../services/mock/storage';
 import { formatCurrency, formatDateTime } from '../../utils/format';
 import { BUSINESS } from '../../config/business';
 import { usePublicConfig } from '../../services/config.service';
+import { PAYOS_PENDING_ORDER_KEY } from './payosReturn';
 
 /**
  * UC-CUS-27 – Thanh toán PayOS: POST /customer/Orders/{id}/payment (platform=Web).
@@ -34,6 +35,7 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
     setError(null);
     try {
       setSession(await customerApi.createPayment(orderId));
+      localStorage.setItem(PAYOS_PENDING_ORDER_KEY, String(orderId));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
