@@ -1,4 +1,4 @@
-import { password as passwordRule } from '../domain/validators';
+import { normalizePhone, passwordPolicy as passwordRule } from '../domain/validators';
 import { AccountStatus, User, UserRole } from '../types/user.types';
 import { apiClient, toServiceError } from './api';
 import { PagedResult } from './pagination';
@@ -111,7 +111,7 @@ export const authService = {
     try {
       const { data: res } = await apiClient.post('/public/Auth/register', {
         fullName: data.fullName.trim(),
-        phoneNumber: data.phoneNumber.trim(),
+        phoneNumber: normalizePhone(data.phoneNumber), // BE chỉ nhận 0xxxxxxxxx: bỏ dấu cách/chấm, đổi +84 thành 0
         email: data.email.trim().toLowerCase(),
         password: data.password,
       });

@@ -8,7 +8,7 @@ import { Field } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Modal';
 import { BUSINESS, IS_DEMO } from '../../config/business';
 import { msg } from '../../constants/messages';
-import { confirmPassword, email as emailRule, isEmail, maskEmail, password as passwordRule, phone as phoneRule, required, validate } from '../../domain/validators';
+import { confirmPassword, email as emailRule, isEmail, maskEmail, FULL_NAME_MAX, fullName as fullNameRule, passwordPolicy as passwordRule, phone as phoneRule } from '../../domain/validators';
 import { useCountdown } from '../../hooks/useLiveData';
 import { authService, DEMO_PASSWORD, OtpPurpose } from '../../services/auth.service';
 import { errorMessage } from '../../services/mock/storage';
@@ -46,11 +46,13 @@ export const LoginPage: React.FC = () => {
   const submitLogin = () => {
     const err: { id?: string; pwd?: string } = {};
     const id = identifier.trim();
+    setLoginError(null); // lỗi của lần đăng nhập trước không được đứng cạnh lỗi nhập liệu mới: mỗi lần chỉ báo một lỗi
+    // Báo lần lượt từng ô: email đúng rồi mới kiểm tra mật khẩu
     // K-12: chỉ đăng nhập bằng email (BE không tra số điện thoại)
     if (!isEmail(id)) err.id = 'Vui lòng nhập email hợp lệ.';
-    // K-13: mật khẩu mới 8–20 ký tự; ô đăng nhập vẫn nhận tới 100 để tài khoản cũ không bị chặn
-    if (pwd.length < BUSINESS.PASSWORD_MIN || pwd.length > BUSINESS.PASSWORD_LOGIN_MAX)
-      err.pwd = `Mật khẩu phải dài từ ${BUSINESS.PASSWORD_MIN} ký tự.`;
+    // K-13: mật khẩu 8–20 ký tự
+    else if (pwd.length < BUSINESS.PASSWORD_MIN || pwd.length > BUSINESS.PASSWORD_MAX)
+      err.pwd = `Mật khẩu phải dài từ ${BUSINESS.PASSWORD_MIN} đến ${BUSINESS.PASSWORD_MAX} ký tự.`;
     setLoginErr(err);
     if (!err.id && !err.pwd) doLogin(id, pwd);
   };
@@ -101,7 +103,7 @@ export const LoginPage: React.FC = () => {
   const submitRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = {
-      fullName: validate(reg.fullName, required('Họ và tên')),
+      fullName: fullNameRule()(reg.fullName),
       phoneNumber: phoneRule()(reg.phoneNumber),
       email: emailRule()(reg.email),
       password: passwordRule(reg.password),
@@ -115,7 +117,9 @@ export const LoginPage: React.FC = () => {
       await authService.registerCustomer(reg); // GB-01: tạo tài khoản + gửi OTP email
       openOtp('register', email);
     } catch (err) {
-      setRegErr({ form: errorMessage(err) });
+      // 409: email/số điện thoại đã có tài khoản → nói rõ thay vì câu chung "bị trùng, hãy tải lại"
+      const duplicate = (err as { code?: string }).code === 'CONFLICT';
+      setRegErr({ form: duplicate ? 'Email hoặc số điện thoại đã được đăng ký. Hãy đăng nhập hoặc dùng thông tin khác.' : errorMessage(err) });
     } finally {
       setRegPending(false);
     }
@@ -221,7 +225,7 @@ export const LoginPage: React.FC = () => {
             </form>
           ) : (
             <form onSubmit={submitRegister} className="space-y-3" noValidate>
-              <Field label="Họ và tên" required icon={<UserIcon className="w-4 h-4" />} value={reg.fullName} error={regErr.fullName} onChange={(e) => setReg({ ...reg, fullName: e.target.value })} />
+              <Field label="Họ và tên" required maxLength={FULL_NAME_MAX} icon={<UserIcon className="w-4 h-4" />} value={reg.fullName} error={regErr.fullName} onChange={(e) => setReg({ ...reg, fullName: e.target.value })} />
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Số điện thoại" required icon={<Phone className="w-4 h-4" />} inputMode="tel" value={reg.phoneNumber} error={regErr.phoneNumber} onChange={(e) => setReg({ ...reg, phoneNumber: e.target.value })} />
                 <Field label="Email" required type="email" icon={<Mail className="w-4 h-4" />} value={reg.email} error={regErr.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} />

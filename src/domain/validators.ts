@@ -33,6 +33,28 @@ export const password: Validator = (v) => {
   return null;
 };
 
+/** BE bắt buộc mật khẩu có ít nhất 1 chữ cái và 1 chữ số (AuthRules): chặn sớm bằng tiếng Việt thay vì để BE trả tiếng Anh */
+export const passwordComposition: Validator = (v) => {
+  if (!/[A-Za-z]/.test(v)) return msg('MSG19', { password_error_message: 'Mật khẩu phải có ít nhất 1 chữ cái' });
+  if (!/[0-9]/.test(v)) return msg('MSG19', { password_error_message: 'Mật khẩu phải có ít nhất 1 chữ số' });
+  return null;
+};
+
+/** Đủ luật mật khẩu mới: độ dài (cấu hình) rồi thành phần chữ + số */
+export const passwordPolicy: Validator = (v) => password(v) ?? passwordComposition(v);
+
+export const FULL_NAME_MAX = 100;
+/** Bắt đầu bằng chữ cái, chỉ gồm chữ cái (có dấu), khoảng trắng, dấu chấm, nháy đơn, gạch nối */
+const FULL_NAME_CHARS = /^[\p{L}\p{M}][\p{L}\p{M} .'’-]*$/u;
+
+/** Họ và tên người dùng: bắt buộc, tối đa 100 ký tự, không chứa số hoặc ký tự đặc biệt như < > @ # */
+export const fullName = (field = 'Họ và tên'): Validator => (v) => {
+  const t = v.trim();
+  if (!t) return msg('MSG01', { field_name: field });
+  if (t.length > FULL_NAME_MAX) return msg('MSG03', { field_name: field, constraints: `tối đa ${FULL_NAME_MAX} ký tự` });
+  return FULL_NAME_CHARS.test(t) ? null : `${field} chỉ gồm chữ cái và khoảng trắng, không chứa số hoặc ký tự đặc biệt.`;
+};
+
 export const confirmPassword = (pwd: string): Validator => (v) =>
   v === pwd ? null : msg('MSG19', { password_error_message: 'Mật khẩu xác nhận không khớp' });
 
