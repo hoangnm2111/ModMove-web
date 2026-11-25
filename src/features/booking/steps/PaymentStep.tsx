@@ -17,6 +17,7 @@ interface Props {
   errors: StepErrors;
   onChange: (p: Partial<BookingDraft>) => void;
   onShowWarranty: () => void;
+  onShowProhibited: () => void;
 }
 
 const OptionCard: React.FC<{ active: boolean; onClick: () => void; title: string; desc: string; icon: React.ReactNode }> = ({ active, onClick, title, desc, icon }) => (
@@ -63,7 +64,7 @@ const AvailableCoupons: React.FC<{ selected: string; onPick: (code: string) => v
 };
 
 /** Bước 4 – Dịch vụ, coupon, thanh toán, chính sách (UC-GST-12/14/15/16) */
-export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, discount, errors, onChange, onShowWarranty }) => (
+export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, discount, errors, onChange, onShowWarranty, onShowProhibited }) => (
   <div className="space-y-4">
     <section className="bg-white border border-slate-200 rounded-2xl p-4">
       <h3 className="text-sm font-extrabold text-slate-900 mb-2">Dịch vụ bốc xếp</h3>
@@ -112,7 +113,12 @@ export const PaymentStep: React.FC<Props> = ({ draft, loadingFee, couponError, d
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 text-xs text-slate-700">
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input type="checkbox" className="mt-0.5" checked={draft.agreedNoProhibitedCargo} onChange={(e) => onChange({ agreedNoProhibitedCargo: e.target.checked })} />
-        Tôi cam kết không gửi hàng cấm.
+        <span>
+          Tôi cam kết hàng hoá không thuộc danh mục hàng cấm (chất nổ, động vật sống, rác thải y tế…).{' '}
+          <button type="button" className="text-blue-600 font-bold underline" onClick={onShowProhibited}>
+            Xem danh mục
+          </button>
+        </span>
       </label>
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input type="checkbox" className="mt-0.5" checked={draft.agreedWarrantyPolicy} onChange={(e) => onChange({ agreedWarrantyPolicy: e.target.checked })} />

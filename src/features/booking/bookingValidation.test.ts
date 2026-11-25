@@ -48,11 +48,11 @@ describe('bước 1: lộ trình', () => {
 describe('bước 2: hàng hoá', () => {
   it('hợp lệ khi điền đủ', () => expect(validateCargo(filledDraft())).toEqual({}));
 
-  it('thiếu mô tả, khối lượng, kích thước, ảnh và cam kết hàng cấm', () => {
-    const d = filledDraft({ agreedNoProhibitedCargo: false });
+  it('thiếu mô tả, khối lượng, kích thước và ảnh', () => {
+    const d = filledDraft();
     d.cargo = { ...d.cargo, description: '', weightKg: 0, largestItem: { lengthCm: 0, widthCm: 10, heightCm: 10 }, photos: [] };
     const e = validateCargo(d);
-    expect(Object.keys(e).sort()).toEqual(['agreedNoProhibitedCargo', 'cargo.description', 'cargo.largestItem', 'cargo.photos', 'cargo.weightKg']);
+    expect(Object.keys(e).sort()).toEqual(['cargo.description', 'cargo.largestItem', 'cargo.photos', 'cargo.weightKg']);
   });
 
   it('mô tả và ghi chú bốc xếp gộp lại không quá 500 ký tự', () => {
@@ -63,6 +63,15 @@ describe('bước 2: hàng hoá', () => {
     expect(validateCargo(d)['cargo.specialNotes']).toBeTruthy();
     d.cargo = { ...d.cargo, description: 'a'.repeat(250), specialNotes: 'b'.repeat(247) }; // 250 + 3 + 247 = 500
     expect(validateCargo(d)['cargo.specialNotes']).toBeUndefined();
+  });
+});
+
+describe('cam kết hàng cấm chỉ hỏi ở bước cuối', () => {
+  it('bước hàng hoá không còn đòi cam kết, dù chưa tick', () => {
+    expect(validateCargo(filledDraft({ agreedNoProhibitedCargo: false }))).toEqual({});
+  });
+  it('bước cuối báo đúng một lỗi duy nhất khi chưa tick', () => {
+    expect(Object.keys(validateConfirm(filledDraft({ agreedNoProhibitedCargo: false, agreedWarrantyPolicy: false })))).toEqual(['policy']);
   });
 });
 

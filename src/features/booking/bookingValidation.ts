@@ -36,16 +36,18 @@ export function validateCargo(d: BookingDraft): StepErrors {
   const c = d.cargo;
   if (!c.description.trim()) e['cargo.description'] = msg('MSG01', { field_name: 'Mô tả hàng hoá' });
   if (!(c.quantity >= 1)) e['cargo.quantity'] = msg('MSG03', { field_name: 'Số lượng', constraints: 'tối thiểu 1' });
+  else if (!Number.isInteger(c.quantity)) e['cargo.quantity'] = msg('MSG03', { field_name: 'Số lượng', constraints: 'phải là số nguyên' }); // BE nhận số nguyên
   if (!(c.weightKg > 0)) e['cargo.weightKg'] = msg('MSG03', { field_name: 'Khối lượng', constraints: 'lớn hơn 0 kg' });
   const { lengthCm, widthCm, heightCm } = c.largestItem;
   if (!(lengthCm > 0 && widthCm > 0 && heightCm > 0)) {
     e['cargo.largestItem'] = msg('MSG03', { field_name: 'Kích thước kiện lớn nhất', constraints: 'dài, rộng, cao lớn hơn 0 cm' });
+  } else if (![lengthCm, widthCm, heightCm].every(Number.isInteger)) {
+    e['cargo.largestItem'] = msg('MSG03', { field_name: 'Kích thước kiện lớn nhất', constraints: 'dài, rộng, cao là số nguyên (cm)' }); // BE nhận số nguyên
   }
   if ((cargoNotes(c) ?? '').length > BUSINESS.MAX_NOTE_LENGTH) {
     e['cargo.specialNotes'] = msg('MSG03', { field_name: 'Mô tả và ghi chú bốc xếp', constraints: `tổng cộng tối đa ${BUSINESS.MAX_NOTE_LENGTH} ký tự` });
   }
   if (c.photos.length < BUSINESS.MIN_CARGO_PHOTOS) e['cargo.photos'] = msg('MSG44', { evidence_type: 'ít nhất 1 ảnh hàng hoá' });
-  if (!d.agreedNoProhibitedCargo) e.agreedNoProhibitedCargo = 'Vui lòng xác nhận cam kết không gửi hàng cấm.';
   return e;
 }
 

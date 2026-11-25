@@ -12,17 +12,14 @@ import { StepErrors } from '../bookingValidation';
 
 interface Props {
   cargo: CargoDetail;
-  agreedNoProhibitedCargo: boolean;
   errors: StepErrors;
   onChange: (c: Partial<CargoDetail>) => void;
-  onAgree: (v: boolean) => void;
-  onShowProhibited: () => void;
 }
 
 const num = (v: string) => (v === '' ? 0 : Number(v));
 
 /** Bước 2: khai báo hàng hoá */
-export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, errors, onChange, onAgree, onShowProhibited }) => {
+export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
   const cargoTypes = useCargoTypes();
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -117,17 +114,6 @@ export const CargoStep: React.FC<Props> = ({ cargo, agreedNoProhibitedCargo, err
         onChange={(e) => onChange({ specialNotes: e.target.value })}
       />
     </section>
-
-    <label className="flex items-start gap-2.5 bg-white border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 cursor-pointer">
-      <input type="checkbox" className="mt-0.5" checked={agreedNoProhibitedCargo} onChange={(e) => onAgree(e.target.checked)} />
-      <span>
-        Tôi cam kết hàng hoá không thuộc danh mục hàng cấm (chất nổ, động vật sống, rác thải y tế…).{' '}
-        <button type="button" className="text-blue-600 font-bold underline" onClick={onShowProhibited}>
-          Xem danh mục
-        </button>
-        {errors.agreedNoProhibitedCargo && <span className="block mt-1 text-rose-600 font-semibold">{errors.agreedNoProhibitedCargo}</span>}
-      </span>
-    </label>
   </div>
   );
 };

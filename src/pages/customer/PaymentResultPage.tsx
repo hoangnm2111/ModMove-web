@@ -41,6 +41,7 @@ export const PaymentResultPage: React.FC = () => {
     const poll = async () => {
       let paid = false;
       try {
+        await customerApi.syncPayment(orderId).catch(() => undefined); // webhook chưa tới thì BE tự hỏi PayOS
         paid = (await customerApi.order(orderId)).paymentStatus === 'Paid';
       } catch {
         /* lỗi mạng tạm thời: thử lại */

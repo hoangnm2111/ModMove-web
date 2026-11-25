@@ -13,7 +13,7 @@ vi.mock('../../../hooks/useDomainData', () => ({
 }));
 vi.mock('../../../api/useQuery', () => ({ useQuery: () => ({ data: { items: [] }, loading: false }) }));
 
-const paymentProps = { couponError: null, discount: 0, errors: {}, onChange: vi.fn(), onShowWarranty: vi.fn() };
+const paymentProps = { couponError: null, discount: 0, errors: {}, onChange: vi.fn(), onShowWarranty: vi.fn(), onShowProhibited: vi.fn() };
 
 describe('bước thanh toán: nhãn phí bốc xếp lấy số thật từ BE', () => {
   it('có số thật của BE thì hiện, dù khách chưa chọn bốc xếp', () => {
@@ -32,7 +32,7 @@ describe('bước hàng hoá: loại hàng', () => {
     const d = filledDraft();
     render(
       <MemoryRouter>
-        <CargoStep cargo={{ ...d.cargo, type }} agreedNoProhibitedCargo errors={{}} onChange={vi.fn()} onAgree={vi.fn()} onShowProhibited={vi.fn()} />
+        <CargoStep cargo={{ ...d.cargo, type }} errors={{}} onChange={vi.fn()} />
       </MemoryRouter>,
     );
   };

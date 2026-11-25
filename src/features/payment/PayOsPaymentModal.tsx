@@ -17,6 +17,9 @@ import { PAYOS_PENDING_ORDER_KEY } from './payosReturn';
  * Trạng thái "đã trả" chỉ tin webhook → nút "Kiểm tra" tải lại chi tiết đơn.
  * UC-CUS-27 4a (K-28): đóng hộp thoại khi chưa xác nhận đã trả → huỷ mã đang chờ; đơn vẫn chờ thanh toán, mở lại để tạo mã mới.
  */
+/** Chu kỳ tự hỏi trạng thái thanh toán khi hộp đang mở */
+const AUTO_CHECK_MS = 3000;
+
 export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; onClose: () => void; onChecked: () => Promise<boolean> }> = ({
   orderId,
   orderCode,
@@ -64,18 +67,54 @@ export const PayOsPaymentModal: React.FC<{ orderId: number; orderCode: string; o
     onClose();
   };
 
+  /** Hỏi BE (BE tự hỏi PayOS nếu webhook chưa tới) rồi tải lại đơn; true nếu đã thanh toán */
+  const verify = async (): Promise<boolean> => {
+    await customerApi.syncPayment(orderId).catch(() => undefined);
+    return onChecked();
+  };
+
+  const paidDone = () => {
+    toast.success(`Đã nhận thanh toán cho đơn ${orderCode}. Đơn đang được gửi tới tài xế.`);
+    onClose();
+  };
+
   const check = async () => {
     setChecking(true);
     try {
-      const paid = await onChecked();
-      if (paid) {
-        toast.success(`Đã nhận thanh toán cho đơn ${orderCode}. Đơn đang được gửi tới tài xế.`);
-        onClose();
-      } else toast.warning('Chưa nhận được xác nhận từ PayOS. Nếu bạn vừa chuyển khoản, đợi vài giây rồi kiểm tra lại.');
+      if (await verify()) paidDone();
+      else toast.warning('Chưa nhận được xác nhận từ PayOS. Nếu bạn vừa chuyển khoản, đợi vài giây rồi kiểm tra lại.');
     } finally {
       setChecking(false);
     }
   };
+
+  // Tự kiểm tra định kỳ khi mã còn sống: khách chuyển khoản xong là màn tự chuyển tiếp, không cần bấm nút
+  const active = !!session && !expired;
+  const busyRef = useRef(false);
+  useEffect(() => {
+    if (!active) return;
+    let stop = false;
+    const timer = setInterval(async () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      try {
+        if (!stop && (await verify())) {
+          stop = true;
+          paidDone();
+        }
+      } catch {
+        /* lỗi mạng tạm thời: lần sau thử lại */
+      } finally {
+        busyRef.current = false;
+      }
+    }, AUTO_CHECK_MS);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+    // verify/paidDone đọc props mới nhất qua closure của lần render hiện tại
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, orderId]);
 
   return (
     <Modal open title={`Thanh toán PayOS – ${orderCode}`} onClose={closeAndCancel}>

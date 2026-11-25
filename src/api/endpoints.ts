@@ -71,6 +71,8 @@ export const customerApi = {
   createPayment: (id: number) => call(() => apiClient.post<T.CreateOrderPaymentResponse>(`/customer/Orders/${id}/payment`, { platform: 'Web' as T.PaymentPlatform })),
   /** UC-CUS-27 4a (K-28): khách đóng trang thanh toán → huỷ mã PayOS đang chờ; đơn vẫn Pending, thanh toán lại được */
   cancelPayment: (id: number) => call(() => apiClient.post<void>(`/customer/Orders/${id}/payment/cancel`)),
+  /** Hỏi PayOS trực tiếp đơn đã trả chưa (khi webhook chưa tới); không có gì đổi thì vẫn 204 */
+  syncPayment: (id: number) => call(() => apiClient.post<void>(`/customer/Orders/${id}/payment/sync`)),
   reviewPickup: (id: number, approve: boolean, reason?: string) => call(() => apiClient.post<void>(`/customer/Orders/${id}/pickup-evidence`, { approve, reason: approve ? null : reason })),
   confirmReceipt: (id: number) => call(() => apiClient.post<void>(`/customer/Orders/${id}/confirm-receipt`)),
 

@@ -218,11 +218,8 @@ export const BookingPage: React.FC = () => {
           {step === 2 && (
             <CargoStep
               cargo={draft.cargo}
-              agreedNoProhibitedCargo={draft.agreedNoProhibitedCargo}
               errors={errors}
               onChange={setCargo}
-              onAgree={(v) => update({ agreedNoProhibitedCargo: v })}
-              onShowProhibited={() => setModal('prohibited')}
             />
           )}
           {step === 3 && <VehicleStep vehicles={vehicles} cargo={draft.cargo} selectedId={draft.vehicleTypeId} errors={errors} onSelect={(id) => update({ vehicleTypeId: id })} />}
@@ -235,6 +232,7 @@ export const BookingPage: React.FC = () => {
               errors={errors}
               onChange={update}
               onShowWarranty={() => setModal('warranty')}
+              onShowProhibited={() => setModal('prohibited')}
             />
           )}
 

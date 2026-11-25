@@ -94,7 +94,7 @@ describe('trang giới thiệu và nhãn bốc xếp: tiền chỉ lấy từ BE
   it('PaymentStep hiện đúng phí BE trả về, không hiện khi chưa có', async () => {
     const { PaymentStep } = await import('../features/booking/steps/PaymentStep');
     const { filledDraft } = await import('../test/fixtures');
-    const props = { couponError: null, discount: 0, errors: {}, onChange: vi.fn(), onShowWarranty: vi.fn() };
+    const props = { couponError: null, discount: 0, errors: {}, onChange: vi.fn(), onShowWarranty: vi.fn(), onShowProhibited: vi.fn() };
 
     const { rerender } = render(<PaymentStep draft={filledDraft()} loadingFee={0} {...props} />);
     expect(screen.queryByText(/\+/)).toBeNull();
