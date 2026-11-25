@@ -313,7 +313,11 @@ const NextAction: React.FC<{
       toast.success(ok);
       await onReload();
     } catch (e) {
-      toast.error(errorMessage(e));
+      if ((e as { code?: string }).code === 'CONFLICT') {
+        // Đơn vừa đổi trạng thái ở nơi khác (tự hoàn tất, tài xế/dispatcher xử lý…): tải lại để hiện đúng trạng thái mới
+        toast.warning('Đơn vừa được cập nhật ở nơi khác. Đã tải lại trạng thái mới nhất, hãy kiểm tra rồi thao tác lại nếu cần.');
+        await onReload();
+      } else toast.error(errorMessage(e));
     } finally {
       setBusy(false);
     }

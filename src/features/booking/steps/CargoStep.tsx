@@ -16,7 +16,19 @@ interface Props {
   onChange: (c: Partial<CargoDetail>) => void;
 }
 
-const num = (v: string) => (v === '' ? 0 : Number(v));
+/** Chỉ nhận số nguyên: bỏ mọi ký tự không phải chữ số (dấu ., e, +, -) */
+const num = (v: string) => {
+  const digits = v.replace(/\D/g, '');
+  return digits === '' ? 0 : Number(digits);
+};
+/** Chặn gõ dấu thập phân / số mũ / dấu âm ngay từ bàn phím */
+const intOnly = {
+  step: 1,
+  inputMode: 'numeric' as const,
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+  },
+};
 
 /** Bước 2: khai báo hàng hoá */
 export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
@@ -66,6 +78,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
           required
           type="number"
           min={1}
+          {...intOnly}
           value={cargo.quantity || ''}
           error={errors['cargo.quantity']}
           onChange={(e) => onChange({ quantity: num(e.target.value) })}
@@ -75,6 +88,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
           required
           type="number"
           min={1}
+          {...intOnly}
           value={cargo.weightKg || ''}
           error={errors['cargo.weightKg']}
           onChange={(e) => onChange({ weightKg: num(e.target.value) })}
@@ -89,6 +103,7 @@ export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
               label={['Dài', 'Rộng', 'Cao'][i]}
               type="number"
               min={1}
+              {...intOnly}
               value={cargo.largestItem[k] || ''}
               onChange={(e) =>
                 onChange({

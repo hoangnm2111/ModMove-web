@@ -100,6 +100,15 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  /** Rời ô Email: nếu email hợp lệ thì hỏi BE đã đăng ký chưa và báo ngay dưới ô */
+  const checkRegEmail = async () => {
+    const value = reg.email;
+    if (emailRule()(value)) return; // sai định dạng: để lúc bấm gửi báo
+    if (!(await authService.isEmailAvailable(value))) {
+      setRegErr((prev) => (reg.email === value ? { ...prev, email: 'Email này đã được đăng ký. Hãy đăng nhập hoặc dùng email khác.' } : prev));
+    }
+  };
+
   const submitRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = {
@@ -119,7 +128,8 @@ export const LoginPage: React.FC = () => {
     } catch (err) {
       // 409: email/số điện thoại đã có tài khoản → nói rõ thay vì câu chung "bị trùng, hãy tải lại"
       const duplicate = (err as { code?: string }).code === 'CONFLICT';
-      setRegErr({ form: duplicate ? 'Email hoặc số điện thoại đã được đăng ký. Hãy đăng nhập hoặc dùng thông tin khác.' : errorMessage(err) });
+      // Báo ngay dưới ô Email (cạnh chỗ nhập) để khách thấy mà không phải cuộn xuống; BE chỉ trả một câu chung cho email/SĐT trùng
+      setRegErr(duplicate ? { email: 'Email hoặc số điện thoại này đã được đăng ký. Hãy đăng nhập hoặc dùng thông tin khác.' } : { form: errorMessage(err) });
     } finally {
       setRegPending(false);
     }
@@ -228,7 +238,7 @@ export const LoginPage: React.FC = () => {
               <Field label="Họ và tên" required maxLength={FULL_NAME_MAX} icon={<UserIcon className="w-4 h-4" />} value={reg.fullName} error={regErr.fullName} onChange={(e) => setReg({ ...reg, fullName: e.target.value })} />
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Số điện thoại" required icon={<Phone className="w-4 h-4" />} inputMode="tel" value={reg.phoneNumber} error={regErr.phoneNumber} onChange={(e) => setReg({ ...reg, phoneNumber: e.target.value })} />
-                <Field label="Email" required type="email" icon={<Mail className="w-4 h-4" />} value={reg.email} error={regErr.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} />
+                <Field label="Email" required type="email" icon={<Mail className="w-4 h-4" />} value={reg.email} error={regErr.email} onBlur={checkRegEmail} onChange={(e) => { setReg({ ...reg, email: e.target.value }); if (regErr.email) setRegErr({ ...regErr, email: null }); }} />
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Mật khẩu" required type="password" autoComplete="new-password" value={reg.password} error={regErr.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} />

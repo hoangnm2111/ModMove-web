@@ -131,6 +131,16 @@ export const authService = {
   },
 
   /** Gửi lại mã OTP (đăng ký hoặc đặt lại mật khẩu) – luôn trả về 204 dù email không tồn tại. */
+  /** Đăng ký: email đã có tài khoản chưa. Lỗi mạng/BE cũ → coi như chưa biết (true), BE vẫn chặn khi gửi form */
+  async isEmailAvailable(email: string): Promise<boolean> {
+    try {
+      const { data } = await apiClient.get<{ available: boolean }>('/public/Auth/email-available', { params: { email: email.trim().toLowerCase() } });
+      return data.available;
+    } catch {
+      return true;
+    }
+  },
+
   async resendOtp(email: string, purpose: OtpPurpose): Promise<void> {
     try {
       await apiClient.post('/public/Auth/otp/resend', { email: email.trim().toLowerCase(), purpose: OTP_PURPOSE_API[purpose] });
