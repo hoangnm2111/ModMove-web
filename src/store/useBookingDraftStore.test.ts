@@ -20,6 +20,16 @@ describe('nháp đặt xe', () => {
   });
   afterEach(() => vi.useRealTimers());
 
+  it('ảnh khách chọn khi chưa đăng nhập (data URL) không ghi vào localStorage, ảnh đã tải lên thì có (DEF-009)', async () => {
+    const { useBookingDraftStore } = await openPage();
+    const local = 'data:image/jpeg;base64,AAAA';
+    const uploaded = 'https://res.cloudinary.com/x/image/upload/a.jpg';
+    useBookingDraftStore.getState().update(filledDraft());
+    useBookingDraftStore.getState().setCargo({ photos: [uploaded, local] });
+    expect(useBookingDraftStore.getState().draft.cargo.photos).toEqual([uploaded, local]);
+    expect(JSON.parse(localStorage.getItem(KEY)!).draft.cargo.photos).toEqual([uploaded]);
+  });
+
   it('không có nháp thì bắt đầu trống và không hỏi', async () => {
     const { useBookingDraftStore } = await openPage();
     const s = useBookingDraftStore.getState();

@@ -4,7 +4,8 @@ import { Check, Truck } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Banner, toast } from '../../components/ui/feedback';
 import { msg } from '../../constants/messages';
-import { useBookingDraftStore } from '../../store/useBookingDraftStore';
+import { isLocalPhoto, useBookingDraftStore } from '../../store/useBookingDraftStore';
+import { customerUploadService } from '../../services/customer-upload.service';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useVehicleTypes } from '../../hooks/useDomainData';
 import { orderService } from '../../services/order.service';
@@ -28,6 +29,11 @@ const STEPS = [
   { num: 3, label: 'Loại xe', sub: 'Phù hợp tải trọng' },
   { num: 4, label: 'Thanh toán', sub: 'Dịch vụ & xác nhận' },
 ];
+
+async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
+  const blob = await (await fetch(dataUrl)).blob();
+  return new File([blob], `${name}.${blob.type === 'image/png' ? 'png' : 'jpg'}`, { type: blob.type });
+}
 
 /** Đặt xe 4 bước. Khách chưa đăng nhập vẫn lập được đơn nháp; khi gửi mới phải đăng nhập. */
 export const BookingPage: React.FC = () => {
@@ -131,7 +137,18 @@ export const BookingPage: React.FC = () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const order = await orderService.createOrder(draft, user, estimate?.fare.total);
+      // Ảnh khách chọn khi còn là guest: tải lên bây giờ (đã đăng nhập), lưu URL vào nháp để lần gửi lại không tải lại
+      let toSend = draft;
+      if (draft.cargo.photos.some(isLocalPhoto)) {
+        const photos = await Promise.all(
+          draft.cargo.photos.map(async (p, i) =>
+            isLocalPhoto(p) ? customerUploadService.uploadImage(await dataUrlToFile(p, `cargo-${i + 1}`)) : p,
+          ),
+        );
+        setCargo({ photos });
+        toSend = { ...draft, cargo: { ...draft.cargo, photos } };
+      }
+      const order = await orderService.createOrder(toSend, user, estimate?.fare.total);
       finish(order);
     } catch (e) {
       setSubmitError(errorMessage(e));
