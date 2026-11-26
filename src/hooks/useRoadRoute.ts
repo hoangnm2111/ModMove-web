@@ -15,6 +15,8 @@ let lastRequestAt = 0;
 
 const r3 = (n: number) => n.toFixed(3);
 const keyOf = (role: string | null, a: LatLng, b: LatLng) => `${role ?? '-'}|${r3(a.lat)},${r3(a.lng)}|${r3(b.lat)},${r3(b.lng)}`;
+/** Vai trò + điểm đến của key (bỏ phần `from`) */
+const targetOf = (key: string) => key.replace(/\|[^|]*\|/, '|');
 
 /**
  * Đường đi thật từ BE (MapVina Directions, có cache). Trả `line` = null khi chưa có/BE lỗi/429/BE cũ chưa có endpoint:
@@ -69,7 +71,9 @@ export function useRoadRoute(from?: LatLng | null, to?: LatLng | null): { line: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, role]);
 
-  return { line: state && state.key === key ? state.line : null, loading };
+  // Tài xế đi tiếp (chỉ `from` đổi): giữ đường cũ tới khi có đường mới, khỏi nháy sang nét đứt; đổi điểm đến thì bỏ ngay.
+  const sameTarget = state !== null && key !== '' && targetOf(state.key) === targetOf(key);
+  return { line: sameTarget ? state.line : null, loading };
 }
 
 /** Chỉ dùng cho test: xoá cache và bộ đếm giãn cách. */
