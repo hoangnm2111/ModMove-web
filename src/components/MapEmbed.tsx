@@ -59,7 +59,7 @@ export const MapEmbed: React.FC<{
         <MapPinOff className="w-5 h-5" /> Chưa có toạ độ để hiển thị
       </div>
     );
-  return <iframe title={title} src={shown}className={`${className} w-full rounded-2xl border border-slate-200`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />;
+  return <iframe title={title} src={shown} className={`${className} w-full rounded-2xl border border-slate-200`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />;
 };
 
 /** Link mở Google Maps ngoài tab mới */

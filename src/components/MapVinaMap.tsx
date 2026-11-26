@@ -11,6 +11,8 @@ const ROUTE_SOURCE = 'modmove-route';
 const ROUTE_LAYER = 'modmove-route-line';
 /** Quá thời gian này mà style chưa tải xong thì coi là lỗi và dùng bản đồ dự phòng */
 const STYLE_TIMEOUT_MS = 10000;
+/** Khách vừa tự kéo/phóng to bản đồ: chờ chừng này mới dời tâm về tài xế (`follow`) */
+const USER_MOVE_GRACE_MS = 15_000;
 
 const makeMarker = (color: string, label: string): HTMLDivElement => {
   const el = document.createElement('div');
@@ -29,6 +31,8 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
   const readyRef = useRef(false);
   const markers = useRef<{ from?: maplibregl.Marker; to?: maplibregl.Marker; point?: maplibregl.Marker }>({});
   const lastFitKey = useRef('');
+  /** Lúc khách tự kéo/phóng to lần cuối: trong USER_MOVE_GRACE_MS không dời tâm về tài xế */
+  const userMovedAt = useRef(0);
   const failRef = useRef(onFail);
   failRef.current = onFail;
 
@@ -79,7 +83,7 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
         : `only:${hasPoint ? `${point!.lat},${point!.lng}` : ''}`;
     if (stableKey === lastFitKey.current) {
       const moving = follow ? (hasFrom ? from : hasPoint ? point : null) : null;
-      if (moving && !map.getBounds().contains([moving.lng, moving.lat])) map.easeTo({ center: [moving.lng, moving.lat], duration: 400 });
+      if (moving && Date.now() - userMovedAt.current >= USER_MOVE_GRACE_MS && !map.getBounds().contains([moving.lng, moving.lat])) map.easeTo({ center: [moving.lng, moving.lat], duration: 400 });
       return;
     }
     lastFitKey.current = stableKey;
@@ -138,6 +142,10 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
         paint: { 'line-color': '#2563eb', 'line-width': 5, 'line-opacity': 0.85, 'line-dasharray': [2, 2] },
       });
       apply.current();
+    });
+    // Chỉ thao tác của khách mới có originalEvent; easeTo/fitBounds của code thì không
+    map.on('movestart', (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) userMovedAt.current = Date.now();
     });
     // Lỗi trước khi tải xong style (key sai, BE tắt, mất mạng) → dự phòng. Lỗi tile lẻ sau đó thì bỏ qua.
     map.on('error', () => {

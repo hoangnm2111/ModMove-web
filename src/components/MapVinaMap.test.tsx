@@ -98,6 +98,22 @@ describe('MapVinaMap follow (theo tài xế)', () => {
     expect(gl.easeTo.mock.calls[0][0]).not.toHaveProperty('zoom');
   });
 
+  it('follow: khách vừa tự kéo bản đồ thì 15 giây sau mới dời tâm về tài xế', () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = show({ follow: true, from: d0, to: pickup });
+      act(() => (gl.maps[0].handlers.movestart as (e: unknown) => void)({ originalEvent: {} }));
+      gl.state.inView = false;
+      rerender({ follow: true, from: d1, to: pickup });
+      expect(gl.easeTo).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(15_000);
+      rerender({ follow: true, from: d0, to: pickup });
+      expect(gl.easeTo).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('follow: đổi điểm đến thì căn khung lại', () => {
     const { rerender } = show({ follow: true, from: d0, to: pickup });
     rerender({ follow: true, from: d1, to: dropoff });
