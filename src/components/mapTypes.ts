@@ -16,8 +16,6 @@ export interface MapViewProps {
    * null = đã biết là không có hình dạng (vẽ đường thẳng). Bỏ trống = bản đồ tự hỏi đường đi.
    */
   routePolyline?: string | null;
-  /** `from`/`point` là tài xế đang chạy: chỉ căn khung khi `to` đổi, tài xế ra khỏi khung thì dời tâm, giữ mức zoom của khách. */
-  follow?: boolean;
   zoom?: number;
   className?: string;
   title?: string;

@@ -11,8 +11,6 @@ const ROUTE_SOURCE = 'modmove-route';
 const ROUTE_LAYER = 'modmove-route-line';
 /** Quá thời gian này mà style chưa tải xong thì coi là lỗi và dùng bản đồ dự phòng */
 const STYLE_TIMEOUT_MS = 10000;
-/** Khách vừa tự kéo/phóng to bản đồ: chờ chừng này mới dời tâm về tài xế (`follow`) */
-const USER_MOVE_GRACE_MS = 15_000;
 
 const makeMarker = (color: string, label: string): HTMLDivElement => {
   const el = document.createElement('div');
@@ -25,14 +23,12 @@ const makeMarker = (color: string, label: string): HTMLDivElement => {
  * Bản đồ MapVina (MapLibre GL). Style/tile/font lấy qua BE nên web không giữ key MapVina.
  * Đường đi thật lấy từ BE; chưa có hoặc lỗi → đường thẳng nét đứt. Lỗi tải style → gọi `onFail` để trang dùng bản dự phòng.
  */
-const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to, point, routePolyline, follow, zoom = 14, className = 'h-64', title = 'Bản đồ', onFail }) => {
+const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to, point, routePolyline, zoom = 14, className = 'h-64', title = 'Bản đồ', onFail }) => {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
   const markers = useRef<{ from?: maplibregl.Marker; to?: maplibregl.Marker; point?: maplibregl.Marker }>({});
   const lastFitKey = useRef('');
-  /** Lúc khách tự kéo/phóng to lần cuối: trong USER_MOVE_GRACE_MS không dời tâm về tài xế */
-  const userMovedAt = useRef(0);
   const failRef = useRef(onFail);
   failRef.current = onFail;
 
@@ -73,19 +69,10 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
     source?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } });
     if (map.getLayer(ROUTE_LAYER)) map.setPaintProperty(ROUTE_LAYER, 'line-dasharray', line ? [1, 0] : [2, 2]);
 
-    // Khung nhìn: chỉ căn lại khi tập điểm cố định đổi. `follow`: from/point là tài xế, chỉ `to` là cố định;
-    // tài xế ra khỏi khung thì dời tâm theo, giữ mức zoom khách đang xem.
+    // Khung nhìn: chỉ căn lại khi tập điểm lấy/giao đổi; điểm di động (tài xế) không kéo bản đồ liên tục
     const pairKey = `${hasFrom ? `${from!.lat},${from!.lng}` : ''}|${hasTo ? `${to!.lat},${to!.lng}` : ''}`;
-    const stableKey = follow
-      ? `follow|${hasTo ? `${to!.lat},${to!.lng}` : ''}`
-      : hasFrom || hasTo
-        ? pairKey
-        : `only:${hasPoint ? `${point!.lat},${point!.lng}` : ''}`;
-    if (stableKey === lastFitKey.current) {
-      const moving = follow ? (hasFrom ? from : hasPoint ? point : null) : null;
-      if (moving && Date.now() - userMovedAt.current >= USER_MOVE_GRACE_MS && !map.getBounds().contains([moving.lng, moving.lat])) map.easeTo({ center: [moving.lng, moving.lat], duration: 400 });
-      return;
-    }
+    const stableKey = hasFrom || hasTo ? pairKey : `only:${hasPoint ? `${point!.lat},${point!.lng}` : ''}`;
+    if (stableKey === lastFitKey.current) return;
     lastFitKey.current = stableKey;
 
     const pts = [hasFrom ? from : null, hasTo ? to : null, hasPoint ? point : null].filter(isValidPoint);
@@ -143,10 +130,6 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
       });
       apply.current();
     });
-    // Chỉ thao tác của khách mới có originalEvent; easeTo/fitBounds của code thì không
-    map.on('movestart', (e: { originalEvent?: unknown }) => {
-      if (e.originalEvent) userMovedAt.current = Date.now();
-    });
     // Lỗi trước khi tải xong style (key sai, BE tắt, mất mạng) → dự phòng. Lỗi tile lẻ sau đó thì bỏ qua.
     map.on('error', () => {
       if (!readyRef.current) fail();
@@ -172,7 +155,7 @@ const MapVinaMap: React.FC<MapViewProps & { onFail: () => void }> = ({ from, to,
 
   useEffect(() => {
     apply.current();
-  }, [from?.lat, from?.lng, to?.lat, to?.lng, point?.lat, point?.lng, line, follow]);
+  }, [from?.lat, from?.lng, to?.lat, to?.lng, point?.lat, point?.lng, line]);
 
   return <div ref={box} role="img" aria-label={title} className={`${className} w-full rounded-2xl border border-slate-200 overflow-hidden bg-slate-100`} />;
 };
