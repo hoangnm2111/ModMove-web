@@ -34,6 +34,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   REFUND_ZERO_PROPOSAL: 'Điều phối viên đề xuất hoàn 0đ: khoản này chỉ có thể từ chối.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   CONFLICT: 'Dữ liệu vừa bị thay đổi hoặc bị trùng. Vui lòng tải lại rồi thử lại.',
+  // MSG18 (GB-01): BE nói rõ trường nào bị trùng
+  EMAIL_TAKEN: 'Email này đã được đăng ký.',
+  PHONE_TAKEN: 'Số điện thoại này đã được đăng ký.',
   TOO_MANY_REQUESTS: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.',
   BUSINESS_RULE: 'Thao tác không được phép ở trạng thái hiện tại.',
   OTP_INVALID: 'Mã OTP sai, hết hạn hoặc đã dùng. Hãy xin mã mới.',
