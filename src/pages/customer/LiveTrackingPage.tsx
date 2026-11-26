@@ -7,7 +7,7 @@ import { Button } from '../../components/Button';
 import { Card, DataState, Empty, KV, PageShell, StatusPill, cx } from '../../components/ui/kit';
 import { customerApi } from '../../api/endpoints';
 import { useQuery } from '../../api/useQuery';
-import { useDriverLocations, useOrderRealtime } from '../../hooks/useRealtime';
+import { useDriverLocations } from '../../hooks/useRealtime';
 import { TrackingCard } from './OrderDetailPage';
 import { formatCurrency } from '../../utils/format';
 
@@ -71,8 +71,6 @@ export const LiveTrackingPage: React.FC = () => {
 const Tracked: React.FC<{ id: number }> = ({ id }) => {
   const navigate = useNavigate();
   const order = useQuery(() => customerApi.order(id), [id], { refreshMs: 20_000 });
-  // Tài xế đổi trạng thái đơn → tải lại ngay (tracking tự tải theo `orderStatus`), không chờ 20 giây
-  useOrderRealtime(() => void order.reload(), id);
   const o = order.data;
   const tracking = useQuery(() => customerApi.tracking(id), [id, o?.orderStatus], { enabled: !!o && TRACKABLE.includes(o.orderStatus), refreshMs: 60_000 });
   // GPS tài xế realtime: ghi đè vị trí trong bản tracking, giữ ETA; REST 60 giây vẫn làm mới ETA

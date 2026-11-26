@@ -554,14 +554,7 @@ export const TrackingCard: React.FC<{ tracking?: import('../../api/types').Order
             const target = tracking.eta?.target === 'Handover' ? null : tracking.eta?.target === 'Pickup' || (!tracking.eta && toPickup) ? pickup : dropoff;
             return (
               <>
-                <MapView
-                  className="h-72"
-                  title="Theo dõi tài xế"
-                  from={d ? (target ? d : null) : pickup}
-                  to={d ? target : dropoff}
-                  point={d && !target ? d : null}
-                  follow={!!d}
-                />
+                <MapView className="h-72" title="Theo dõi tài xế" from={d && target ? d : pickup} to={d && target ? target : d ? null : dropoff} point={d && !target ? d : null} />
                 <p className="text-[11px] text-slate-500">
                   {d
                     ? target
