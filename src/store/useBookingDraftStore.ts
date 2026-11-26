@@ -105,8 +105,15 @@ useBookingDraftStore.subscribe((s, prev) => {
     removeStore(KEY);
     return;
   }
-  writeStore(KEY, { draft: s.draft, step: s.step, savedAt: Date.now() }, false);
+  // shortcut: ảnh chưa tải lên của khách (data URL, tới 5 × 5 MB) vượt giới hạn localStorage nên chỉ giữ trong bộ nhớ;
+  // tải lại trang thì khách chọn lại ảnh. Cần giữ qua lần tải lại thì chuyển sang IndexedDB.
+  const photos = s.draft.cargo.photos.filter((p) => !isLocalPhoto(p));
+  const draft = photos.length === s.draft.cargo.photos.length ? s.draft : { ...s.draft, cargo: { ...s.draft.cargo, photos } };
+  writeStore(KEY, { draft, step: s.step, savedAt: Date.now() }, false);
 });
+
+/** Ảnh khách chọn khi chưa đăng nhập, chưa có trên Cloudinary */
+export const isLocalPhoto = (url: string) => url.startsWith('data:');
 
 /** Đăng xuất: bỏ nháp của phiên trước */
 export function clearBookingDraft() {

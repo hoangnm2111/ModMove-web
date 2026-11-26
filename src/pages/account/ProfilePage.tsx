@@ -43,7 +43,8 @@ export const ProfilePage: React.FC = () => {
       setUser(await authService.updateProfile(user.id, { fullName, phoneNumber }));
       toast.success(msg('MSG04', { record_name: 'hồ sơ' }));
     } catch (err) {
-      setProfileErr({ form: errorMessage(err) });
+      // GB-01: số điện thoại của tài khoản khác → MSG18 dưới ô
+      setProfileErr((err as { code?: string }).code === 'PHONE_TAKEN' ? { phone: msg('MSG18', { field_name: 'Số điện thoại' }) } : { form: errorMessage(err) });
     } finally {
       setSavingProfile(false);
     }

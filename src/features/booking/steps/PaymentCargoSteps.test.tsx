@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PaymentStep } from './PaymentStep';
 import { CargoStep } from './CargoStep';
@@ -36,6 +36,22 @@ describe('bước hàng hoá: loại hàng', () => {
       </MemoryRouter>,
     );
   };
+
+  it('khách chưa đăng nhập thêm được ảnh hàng: ảnh giữ trong nháp, không chuyển sang đăng nhập (GB-28, DEF-009)', async () => {
+    const onChange = vi.fn();
+    const d = filledDraft();
+    const { container } = render(
+      <MemoryRouter>
+        <CargoStep cargo={{ ...d.cargo, photos: [] }} errors={{}} onChange={onChange} />
+      </MemoryRouter>,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['jpg'], 'a.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const photos = onChange.mock.calls[0][0].photos as string[];
+    expect(photos).toHaveLength(1);
+    expect(photos[0].startsWith('data:image/jpeg')).toBe(true);
+  });
 
   it('loại hàng mặc định khác hoa thường với mã của danh mục vẫn được tô sáng', () => {
     renderCargo('Furniture');

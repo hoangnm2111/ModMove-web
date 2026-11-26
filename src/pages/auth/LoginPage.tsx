@@ -126,10 +126,12 @@ export const LoginPage: React.FC = () => {
       await authService.registerCustomer(reg); // GB-01: tạo tài khoản + gửi OTP email
       openOtp('register', email);
     } catch (err) {
-      // 409: email/số điện thoại đã có tài khoản → nói rõ thay vì câu chung "bị trùng, hãy tải lại"
-      const duplicate = (err as { code?: string }).code === 'CONFLICT';
-      // Báo ngay dưới ô Email (cạnh chỗ nhập) để khách thấy mà không phải cuộn xuống; BE chỉ trả một câu chung cho email/SĐT trùng
-      setRegErr(duplicate ? { email: 'Email hoặc số điện thoại này đã được đăng ký. Hãy đăng nhập hoặc dùng thông tin khác.' } : { form: errorMessage(err) });
+      // 409 GB-01: MSG18 ngay dưới ô bị trùng. CONFLICT là BE cũ chưa nói trường nào.
+      const code = (err as { code?: string }).code;
+      if (code === 'EMAIL_TAKEN') setRegErr({ email: msg('MSG18', { field_name: 'Email' }) });
+      else if (code === 'PHONE_TAKEN') setRegErr({ phoneNumber: msg('MSG18', { field_name: 'Số điện thoại' }) });
+      else if (code === 'CONFLICT') setRegErr({ email: 'Email hoặc số điện thoại này đã được đăng ký. Hãy đăng nhập hoặc dùng thông tin khác.' });
+      else setRegErr({ form: errorMessage(err) });
     } finally {
       setRegPending(false);
     }

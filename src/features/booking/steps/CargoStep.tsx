@@ -1,11 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Field, TextArea } from '../../../components/ui/Field';
 import { PhotoUploader } from '../../../components/ui/PhotoUploader';
 import { BUSINESS } from '../../../config/business';
 import { useCargoTypes } from '../../../hooks/useDomainData';
 import { customerUploadService } from '../../../services/customer-upload.service';
-import { ServiceError } from '../../../services/mock/storage';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { CargoDetail } from '../../../types/order.types';
 import { StepErrors } from '../bookingValidation';
@@ -33,16 +31,9 @@ const intOnly = {
 /** Bước 2: khai báo hàng hoá */
 export const CargoStep: React.FC<Props> = ({ cargo, errors, onChange }) => {
   const cargoTypes = useCargoTypes();
-  const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  /** Ảnh được tải lên tài khoản khách: chưa đăng nhập thì mời đăng nhập, nháp vẫn giữ nguyên */
-  const upload = async (file: File) => {
-    if (!isAuthenticated) {
-      navigate('/login?redirect=/booking');
-      throw new ServiceError('Vui lòng đăng nhập để thêm ảnh hàng hoá. Đơn nháp của bạn được giữ nguyên.', 'SIGN_IN_REQUIRED');
-    }
-    return customerUploadService.uploadImage(file);
-  };
+  // GB-28 / UC-GST-05 bước 5: khách chưa đăng nhập vẫn thêm ảnh; ảnh nằm trong nháp (data URL) và được tải lên khi gửi đơn
+  const upload = isAuthenticated ? customerUploadService.uploadImage : undefined;
   return (
   <div className="space-y-4">
     <section className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
